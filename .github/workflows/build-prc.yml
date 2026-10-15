@@ -1,0 +1,63 @@
+name: Build PRC
+
+# 소스를 푸시하면 GitHub 서버에서 PRC를 빌드해 Artifacts로 올린다.
+# 도구 체인은 prc-tools-remix가 배포하는 미리 빌드된 Ubuntu 20.04(focal) 패키지를 쓴다.
+
+on:
+  push:
+    paths:
+      - 'src/**'
+      - 'tools/build-*.sh'
+      - '.github/workflows/build-prc.yml'
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: ubuntu:20.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Install base packages
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq curl ca-certificates unzip git > /dev/null
+
+      - uses: actions/checkout@v4
+
+      - name: Install prc-tools-remix and PilRC (prebuilt focal packages)
+        run: |
+          set -e
+          for repo in prc-tools-remix pilrc; do
+            url=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+                    "https://api.github.com/repos/jichu4n/$repo/releases/latest" \
+                  | grep '"browser_download_url"' | grep 'focal' | grep '\.deb"' \
+                  | cut -d'"' -f4 | head -1)
+            echo "$repo: $url"
+            test -n "$url"
+            curl -sL -o "/tmp/$repo.deb" "$url"
+            apt-get install -y -qq "/tmp/$repo.deb" > /dev/null
+          done
+          m68k-palmos-gcc --version | head -1
+
+      - name: Install Palm OS SDK
+        run: |
+          set -e
+          curl -sL -o /tmp/sdk.zip https://github.com/jichu4n/palm-os-sdk/archive/master.zip
+          unzip -q -d /tmp /tmp/sdk.zip
+          rm -rf /opt/palmdev
+          mv /tmp/palm-os-sdk-master /opt/palmdev
+          palmdev-prep -d sdk-4
+
+      - name: Build PRCs
+        run: |
+          set -e
+          ./tools/build-diag.sh
+          ls -l bin/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prc
+          path: bin/*.prc
