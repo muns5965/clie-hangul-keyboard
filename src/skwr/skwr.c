@@ -52,6 +52,9 @@
  *   고해상도 여부는 Start/DispChange +14 표시로 판단(런처 1, 저해상도 앱 0).
  * 10단계 실측: 로더로 본체 실행, 고해상도 그리기·한글 키 이름 정상. 아랫줄 오른쪽(space·.·Ent)이 안 그려짐
  *   → 11: 아랫줄 경계 계산의 16비트 곱셈 넘침 수정(Scale).
+ * 11 실측: 영문·숫자는 저해상도로도 원래 선명(시스템이 고해상도 글꼴로 그림), 한글 키 이름은 CJKOS 저해상도 글꼴이라 굵다.
+ * 12: 고해상도일 때 한글 자모 키 이름을 선(벡터)으로 그린다(12x12 격자, 2픽셀 굵기, HRWinDrawLine).
+ *   글꼴 데이터는 tools/gen-jamo-glyphs.py → jamo_glyphs.h (.text 끝, PC 상대로 읽음).
  */
 
 #ifdef MNSK_HOST_TEST
@@ -62,7 +65,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      11
+#define kSkBuild      12
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -414,6 +417,7 @@ static inline UInt16 KeyLabel(UInt16 code, Char *s)
 #define HRT(n)        SYS_TRAP(sysLibTrapCustom + (n))
 #define kHrStdFont    8
 void   HRWinDrawChars(UInt16 ref, const Char *s, Int16 len, Coord x, Coord y) HRT(9);
+void   HRWinDrawLine(UInt16 ref, Coord x1, Coord y1, Coord x2, Coord y2) HRT(13);
 void   HRWinDrawRectangleFrame(UInt16 ref, FrameType f, RectangleType *r) HRT(16);
 void   HRWinEraseRectangle(UInt16 ref, RectangleType *r, UInt16 corner) HRT(21);
 void   HRWinGetWindowExtent(UInt16 ref, Coord *w, Coord *h) HRT(30);
@@ -434,6 +438,53 @@ static inline UInt16 HrRef(void)
     err = SysLibFind(nm, &ref);
     FtrSet(kSkCreator, kFtrHrRef, ((UInt32)err << 16) | ref);
     return err ? 0xFFFF : ref;
+}
+
+#ifndef MNSK_HOST_TEST
+static inline const UInt8 *JamoOffPtr(void)
+{
+    const UInt8 *p;
+
+    asm("lea JamoOff(%%pc),%0" : "=a" (p));
+    return p;
+}
+
+static inline const UInt8 *JamoSegPtr(void)
+{
+    const UInt8 *p;
+
+    asm("lea JamoSeg(%%pc),%0" : "=a" (p));
+    return p;
+}
+#endif
+
+/* 자모(호환 자모 번호 o)를 선으로 그린다. 12x12 상자 왼쪽 위 (ox,oy), 굵기 2픽셀. 글꼴에 없으면 false */
+static inline Boolean DrawJamo(UInt16 hr, UInt16 o, Coord ox, Coord oy)
+{
+    const UInt8 *off = JamoOffPtr();
+    const UInt8 *g;
+    UInt16       at, n, i;
+
+    if (o == 0 || o > 51)
+        return false;
+    at = ((UInt16)off[o * 2] << 8) | off[o * 2 + 1];
+    if (at == 0xFFFF)
+        return false;
+    g = JamoSegPtr() + at;
+    n = g[0];
+    for (i = 0; i < n; i++) {
+        Coord x1 = ox + (g[1 + i * 2] >> 4), y1 = oy + (g[1 + i * 2] & 15);
+        Coord x2 = ox + (g[2 + i * 2] >> 4), y2 = oy + (g[2 + i * 2] & 15);
+        Coord dx = (x2 > x1) ? x2 - x1 : x1 - x2;
+        Coord dy = (y2 > y1) ? y2 - y1 : y1 - y2;
+
+        HRWinDrawLine(hr, x1, y1, x2, y2);
+        if (dx >= dy)
+            HRWinDrawLine(hr, x1, y1 + 1, x2, y2 + 1);
+        else
+            HRWinDrawLine(hr, x1 + 1, y1, x2 + 1, y2);
+    }
+    return true;
 }
 
 /* 그리기 준비(현재 그리기 창이 실크 창일 때). HR로 그리면 참조 번호, 아니면 0xFFFF.
@@ -520,7 +571,11 @@ static inline void DrawKeys(UInt32 hwin)
                 HRWinDrawRectangleFrame(hr, roundFrame, &r);
             else
                 WinDrawRectangleFrame(roundFrame, &r);
-            if (len > 0) {
+            if (hr != 0xFFFF && (code >> 8) == 0xA4 &&
+                DrawJamo(hr, code - 0xA4A1 + 1,
+                         r.topLeft.x + r.extent.x / 2 - 6, r.topLeft.y + r.extent.y / 2 - 6))
+                ;                                        /* 고해상도: 자모를 선으로 */
+            else if (len > 0) {
                 Coord tx = r.topLeft.x + (r.extent.x - FntCharsWidth(lab, len)) / 2;
                 Coord ty = r.topLeft.y + (r.extent.y - FntLineHeight()) / 2;
 
@@ -1024,4 +1079,5 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
 
 #ifndef MNSK_HOST_TEST
 #include "ksc_table.h"
+#include "jamo_glyphs.h"
 #endif

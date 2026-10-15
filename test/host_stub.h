@@ -24,6 +24,8 @@ Err EvtEnqueueKey(WChar c, UInt16 k, UInt16 m);
 Err SysCurAppDatabase(UInt16 *card, LocalID *id);
 const UInt8 *KscBitsPtr(void);
 const UInt8 *KscCumPtr(void);
+const UInt8 *JamoOffPtr(void);
+const UInt8 *JamoSegPtr(void);
 static inline WinHandle WinSetDrawWindow(WinHandle h) { return h; }
 static inline void WinGetWindowExtent(Coord *w, Coord *h) { *w = 160; *h = 65; }
 static inline void WinEraseRectangle(RectangleType *r, UInt16 c) { (void)r; (void)c; }

@@ -19,6 +19,10 @@ void HRWinEraseRectangle(UInt16 a, RectangleType *r, UInt16 c) { (void)a; (void)
 void HRWinGetWindowExtent(UInt16 a, Coord *w, Coord *h) { (void)a; *w = 320; *h = 130; }
 void HRWinInvertRectangle(UInt16 a, RectangleType *r, UInt16 c) { (void)a; (void)r; (void)c; }
 FontID HRFntSetFont(UInt16 a, FontID f) { (void)a; return f; }
+void HRWinDrawLine(UInt16 a, Coord x1, Coord y1, Coord x2, Coord y2) { (void)a; (void)x1; (void)y1; (void)x2; (void)y2; }
+static const UInt8 gNoJamo[104] = { 0 };
+const UInt8 *JamoOffPtr(void) { return gNoJamo; }
+const UInt8 *JamoSegPtr(void) { return gNoJamo; }
 const UInt8 *KscBitsPtr(void) { return gBits; }
 const UInt8 *KscCumPtr(void) { return gCum; }
 
