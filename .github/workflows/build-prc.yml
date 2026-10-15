@@ -9,6 +9,7 @@ on:
     paths:
       - 'src/**'
       - 'tools/build-*.sh'
+      - 'tools/prc-info.sh'
       - '.github/workflows/build-prc.yml'
   pull_request:
   workflow_dispatch:
@@ -50,19 +51,50 @@ jobs:
           mv /tmp/palm-os-sdk-master /opt/palmdev
           palmdev-prep -d sdk-4 || { echo "::error::palmdev-prep failed"; exit 1; }
 
+      # tools/build-*.sh 를 파일명 순서로 모두 실행한다 (build-hello.sh 는 외부 경로가 필요해 제외).
+      # 저장소에 커밋된 bin/*.prc 가 새 결과로 오인되지 않도록 빌드 전에 지운다.
       - name: Build PRCs
+        shell: bash
         run: |
-          set -e
-          if ! ./tools/build-diag.sh > build-diag.log 2>&1; then
-            echo "::error::build-diag failed: $(tail -5 build-diag.log | tr '\n' ' ')"
+          set -euo pipefail
+          shopt -s nullglob
+          rm -f bin/*.prc
+          mkdir -p build/logs
+          count=0
+          for script in tools/build-*.sh; do
+            name=$(basename "$script" .sh)
+            [ "$name" = "build-hello" ] && continue
+            echo "::group::$script"
+            if bash "$script" > "build/logs/$name.log" 2>&1; then
+              cat "build/logs/$name.log"
+              echo "::endgroup::"
+            else
+              cat "build/logs/$name.log"
+              echo "::endgroup::"
+              echo "::error::$script failed: $(tail -3 "build/logs/$name.log" | tr '\n' ' ')"
+              exit 1
+            fi
+            count=$((count + 1))
+          done
+          if [ "$count" -eq 0 ]; then
+            echo "::error::no build scripts found (tools/build-*.sh)"
             exit 1
           fi
-          cat build-diag.log
-          ls -l bin/
-          # PRC 헤더의 날짜(36~47바이트)를 0으로 바꾼 해시: 로컬 빌드와 동일한지 비교용
+          prcs=(bin/*.prc)
+          if [ "${#prcs[@]}" -eq 0 ]; then
+            echo "::error::no PRC produced"
+            exit 1
+          fi
+
+      # PRC 구조(DB 이름·타입·크리에이터·리소스)와 날짜를 뺀 해시를 실행 요약에 표시
+      - name: Inspect PRCs
+        shell: bash
+        run: |
+          set -euo pipefail
           for f in bin/*.prc; do
+            echo "::notice::$(tools/prc-info.sh "$f")"
             h=$({ head -c 36 "$f"; head -c 12 /dev/zero; tail -c +49 "$f"; } | sha256sum | cut -c1-16)
-            echo "::notice::$(basename "$f") size=$(stat -c %s "$f") hash(no-date)=$h"
+            echo "::notice::$(basename "$f") hash(no-date)=$h"
           done
 
       - uses: actions/upload-artifact@v4
@@ -71,6 +103,5 @@ jobs:
           name: prc
           path: |
             bin/*.prc
-            build-diag.log
-            build/diag/build.log
+            build/logs/*.log
           if-no-files-found: ignore
