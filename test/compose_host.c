@@ -1,0 +1,40 @@
+/* skwr.c 를 PC용으로 묶는 시험 하네스 (tools/test-compose.sh) */
+#define MNSK_HOST_TEST
+#include "../src/skwr/skwr.c"
+#include <string.h>
+
+static UInt32 gFtr[64];
+static unsigned char gText[4096];
+static int gLen;
+static unsigned char gBits[1397];
+static unsigned char gCum[88];
+
+Err FtrGet(UInt32 c, UInt16 n, UInt32 *v) { (void)c; *v = gFtr[n]; return 0; }
+Err FtrSet(UInt32 c, UInt16 n, UInt32 v) { (void)c; gFtr[n] = v; return 0; }
+Err SysCurAppDatabase(UInt16 *card, LocalID *id) { *card = 0; *id = 0x1234; return 0; }
+const UInt8 *KscBitsPtr(void) { return gBits; }
+const UInt8 *KscCumPtr(void) { return gCum; }
+
+/* 메모 필드 흉내: 2바이트 한글은 한 글자로 지운다 */
+Err EvtEnqueueKey(WChar c, UInt16 k, UInt16 m)
+{
+    (void)k; (void)m;
+    if (c == chrBackspace) {
+        if (gLen == 0) return 0;
+        /* 앞에서부터 글자 경계를 따라가 마지막 글자 길이를 구한다 */
+        { int i = 0, last = 0;
+          while (i < gLen) { last = i; i += (gText[i] >= 0xA1) ? 2 : 1; }
+          gLen = last; }
+    } else if (c > 0xFF) {
+        gText[gLen++] = c >> 8; gText[gLen++] = c & 0xFF;
+    } else
+        gText[gLen++] = (unsigned char)c;
+    gText[gLen] = 0;
+    return 0;
+}
+
+void T_Load(const unsigned char *bits, const unsigned char *cum)
+{ memcpy(gBits, bits, sizeof gBits); memcpy(gCum, cum, sizeof gCum); }
+void T_Reset(void) { memset(gFtr, 0, sizeof gFtr); gLen = 0; gText[0] = 0; }
+void T_Key(int k) { if (DoKey((UInt16)k)) { /* 다시 그리기 없음 */ } }
+const char *T_Text(void) { return (const char *)gText; }

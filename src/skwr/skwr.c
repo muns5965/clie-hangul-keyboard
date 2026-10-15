@@ -1,5 +1,5 @@
 /*
- * MnSk - NR70V SilkWare(SkWr) 플러그인 7단계: 4줄 자판(안 B) + 자모 단독 출력(조합 없음)
+ * MnSk - NR70V SilkWare(SkWr) 플러그인 8단계: 4줄 자판(안 B) + 한글 조합
  *
  * 확정 사항 (ROM SilkExtn 역분석 + 1~6단계 실측, 2026-10-16):
  *   - 호출: Err entry(UInt32 *slotOrValue, UInt8 *event, void *out)
@@ -13,14 +13,22 @@
  *     백스페이스 한 번에 한글 한 글자가 지워진다.
  *
  * 7단계 자판 (4줄, 한 줄 높이 16):
- *   한글:  ㅂ ㅈ ㄷ ㄱ ㅅ ㅗ ㅐ ㅔ   (Shift: ㅃ ㅉ ㄸ ㄲ ㅆ ㅗ ㅒ ㅖ)
+ *   한글:  ㅂ ㅈ ㄷ ㄱ ㅅ ㅗ ㅐ ㅔ   (Shift: ㅃ ㅉ ㄸ ㄲ ㅆ, 모음은 그대로)
  *          ㅁ ㄴ ㅇ ㄹ ㅎ ㅓ ㅏ ㅣ
  *          ^  ㅋ ㅌ ㅊ ㅍ ㅜ ㅡ BS
  *   영문:  q w e r t y u i o p / a s d f g h j k l / ^ z x c v b n m BS   (Shift: 대문자)
  *   숫자:  1 2 3 4 5 6 7 8 9 0 / - / : ; ( ) $ & @ " / # % * + = ' ? ! BS
  *   공통 아랫줄: [한/A] [123] [,] [  space  ] [.] [Ent]
- *   - 자모는 KSC5601 호환 자모(0xA4A1~)로 하나씩 보낸다. 조합은 다음 단계.
  *   - Shift는 글자 하나를 보내면 풀린다. Shift·123이 켜져 있으면 그 키를 반전 표시.
+ *   - 7단계 실측: 자판 그리기(자모 이름 포함)와 자모·영문·숫자 단독 출력 정상.
+ *
+ * 8단계 조합 (두벌식 규칙 + 단모음 연타):
+ *   - 조합 중인 글자는 화면에 나간 글자 수(shown)만큼 BS로 지우고 새로 보낸다.
+ *   - 연타: ㅏㅏ→ㅑ ㅓㅓ→ㅕ ㅗㅗ→ㅛ ㅜㅜ→ㅠ ㅐㅐ→ㅒ ㅔㅔ→ㅖ. 복합모음 ㅘㅙㅚㅝㅞㅟㅢ, 겹받침 11개.
+ *   - 받침 넘김(닭+ㅏ → 달가). KSC5601에 없는 음절이 되면 앞 글자를 확정하고 새로 시작.
+ *   - BS: 조합 중이면 자모 하나씩(각→가→ㄱ→없음), 아니면 보통 BS.
+ *   - 조합 끝: 한글 자모 외의 키, 한/A·123, Start/Stop, 현재 앱이 바뀜.
+ *   - 한계: 조합 중 본문을 탭해 커서를 옮기는 것은 알 수 없다.
  *
  * 기록 (feature 'MnSk'):
  *   #0 Open 표시, #1~#16 이벤트 0~15 횟수, #17 마지막 이벤트, #18 번호≥16 횟수, #19 out≠NULL 횟수
@@ -29,13 +37,19 @@
  *   #39~#42 마지막 DispChange, #45 그리기 판정(1 그림, 2 핸들 이상, 3 크기 이상),
  *   #46 눌린 키(0 없음, 줄*16+칸+1), #47 보낸 키 횟수, #48 마지막 전송(31~16 키 번호, 15~0 코드),
  *   #49 자판 상태(비트0 영문, 비트1 숫자, 비트8 Shift)
+ *   #50 조합 상태(31~24 초성, 23~16 중성, 15~8 종성: 호환 자모 - 0x3130, 7~0 화면에 나간 글자 수)
+ *   #51 조합 중인 앱 LocalID
  */
 
+#ifdef MNSK_HOST_TEST
+#include "host_stub.h"      /* test/host_stub.h: PC에서 조합 로직만 시험 */
+#else
 #include <PalmOS.h>
+#endif
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      7
+#define kSkBuild      8
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -60,6 +74,9 @@
 #define kFtrKeyCount  47
 #define kFtrKeyLast   48
 #define kFtrState     49
+#define kFtrComp      50
+#define kFtrCompApp   51
+#define kEvtStop      4
 
 #define kStEng        0x0001
 #define kStNum        0x0002
@@ -228,8 +245,8 @@ static inline UInt16 HanCode(Boolean sh, UInt16 row, UInt16 col)
     case 3:  return sh ? J(0x3132) : J(0x3131);   /* ㄲ ㄱ */
     case 4:  return sh ? J(0x3146) : J(0x3145);   /* ㅆ ㅅ */
     case 5:  return J(0x3157);                    /* ㅗ */
-    case 6:  return sh ? J(0x3152) : J(0x3150);   /* ㅒ ㅐ */
-    case 7:  return sh ? J(0x3156) : J(0x3154);   /* ㅖ ㅔ */
+    case 6:  return J(0x3150);                    /* ㅐ */
+    case 7:  return J(0x3154);                    /* ㅔ */
     case 8:  return J(0x3141);                    /* ㅁ */
     case 9:  return J(0x3134);                    /* ㄴ */
     case 10: return J(0x3147);                    /* ㅇ */
@@ -451,6 +468,344 @@ static inline UInt16 PenKey(UInt32 hwin, const UInt8 *event)
                   (Coord)Be16(event + 2), (Coord)Be16(event + 4), w, h);
 }
 
+/* ---------------- 한글 조합 ---------------- */
+/* 자모는 호환 자모 번호 o = 유니코드 - 0x3130 (1~51) 로 다룬다 */
+#define O(u)          ((UInt8)((u) - 0x3130))
+#define P(a, b)       (((UInt16)O(a) << 8) | O(b))
+
+static inline UInt16 KscJamo(UInt8 o)
+{
+    return (UInt16)(0xA4A1 + o - 1);
+}
+
+static inline Boolean IsVowel(UInt8 o)
+{
+    return o >= O(0x314F);
+}
+
+/* 초성 번호 0~18, 초성 불가면 -1 */
+static inline Int16 ChoIdx(UInt8 o)
+{
+    switch (o) {
+    case O(0x3131): return 0;   case O(0x3132): return 1;   case O(0x3134): return 2;
+    case O(0x3137): return 3;   case O(0x3138): return 4;   case O(0x3139): return 5;
+    case O(0x3141): return 6;   case O(0x3142): return 7;   case O(0x3143): return 8;
+    case O(0x3145): return 9;   case O(0x3146): return 10;  case O(0x3147): return 11;
+    case O(0x3148): return 12;  case O(0x3149): return 13;  case O(0x314A): return 14;
+    case O(0x314B): return 15;  case O(0x314C): return 16;  case O(0x314D): return 17;
+    case O(0x314E): return 18;
+    default:        return -1;
+    }
+}
+
+/* 종성 번호 1~27, 종성 불가면 0 (ㄸ ㅃ ㅉ 은 종성 불가) */
+static inline UInt16 JongIdx(UInt8 o)
+{
+    if (o == 0 || o > O(0x314E))
+        return 0;
+    switch (o) {
+    case O(0x3138): case O(0x3143): case O(0x3149):
+        return 0;
+    }
+    /* 호환 자모 순서에서 ㄸ ㅃ ㅉ 만 빼면 종성 순서(ㄱ=1 ... ㅎ=27)와 같다 */
+    {
+        UInt16 n = o;
+
+        if (o > O(0x3138)) n--;
+        if (o > O(0x3143)) n--;
+        if (o > O(0x3149)) n--;
+        return n;
+    }
+}
+
+/* 모음 + 모음 (복합모음, 단모음 연타). 안 되면 0 */
+static inline UInt8 VowelPlus(UInt8 a, UInt8 b)
+{
+    switch (((UInt16)a << 8) | b) {
+    case P(0x3157, 0x314F): return O(0x3158);   /* ㅗ+ㅏ ㅘ */
+    case P(0x3157, 0x3150): return O(0x3159);   /* ㅗ+ㅐ ㅙ */
+    case P(0x3157, 0x3163): return O(0x315A);   /* ㅗ+ㅣ ㅚ */
+    case P(0x315C, 0x3153): return O(0x315D);   /* ㅜ+ㅓ ㅝ */
+    case P(0x315C, 0x3154): return O(0x315E);   /* ㅜ+ㅔ ㅞ */
+    case P(0x315C, 0x3163): return O(0x315F);   /* ㅜ+ㅣ ㅟ */
+    case P(0x3161, 0x3163): return O(0x3162);   /* ㅡ+ㅣ ㅢ */
+    case P(0x314F, 0x314F): return O(0x3151);   /* ㅏㅏ ㅑ */
+    case P(0x3153, 0x3153): return O(0x3155);   /* ㅓㅓ ㅕ */
+    case P(0x3157, 0x3157): return O(0x315B);   /* ㅗㅗ ㅛ */
+    case P(0x315C, 0x315C): return O(0x3160);   /* ㅜㅜ ㅠ */
+    case P(0x3150, 0x3150): return O(0x3152);   /* ㅐㅐ ㅒ */
+    case P(0x3154, 0x3154): return O(0x3156);   /* ㅔㅔ ㅖ */
+    default:                return 0;
+    }
+}
+
+/* 모음 되돌리기 (BS). 기본 모음이면 0 */
+static inline UInt8 VowelBase(UInt8 v)
+{
+    switch (v) {
+    case O(0x3158): case O(0x3159): case O(0x315A): case O(0x315B): return O(0x3157);
+    case O(0x315D): case O(0x315E): case O(0x315F): case O(0x3160): return O(0x315C);
+    case O(0x3162): return O(0x3161);
+    case O(0x3151): return O(0x314F);
+    case O(0x3155): return O(0x3153);
+    case O(0x3152): return O(0x3150);
+    case O(0x3156): return O(0x3154);
+    default:        return 0;
+    }
+}
+
+/* 겹받침 만들기. 안 되면 0 */
+static inline UInt8 JongPlus(UInt8 a, UInt8 b)
+{
+    switch (((UInt16)a << 8) | b) {
+    case P(0x3131, 0x3145): return O(0x3133);   /* ㄳ */
+    case P(0x3134, 0x3148): return O(0x3135);   /* ㄵ */
+    case P(0x3134, 0x314E): return O(0x3136);   /* ㄶ */
+    case P(0x3139, 0x3131): return O(0x313A);   /* ㄺ */
+    case P(0x3139, 0x3141): return O(0x313B);   /* ㄻ */
+    case P(0x3139, 0x3142): return O(0x313C);   /* ㄼ */
+    case P(0x3139, 0x3145): return O(0x313D);   /* ㄽ */
+    case P(0x3139, 0x314C): return O(0x313E);   /* ㄾ */
+    case P(0x3139, 0x314D): return O(0x313F);   /* ㄿ */
+    case P(0x3139, 0x314E): return O(0x3140);   /* ㅀ */
+    case P(0x3142, 0x3145): return O(0x3144);   /* ㅄ */
+    default:                return 0;
+    }
+}
+
+/* 겹받침의 앞 자음(홑받침이면 0), 뒤 자음(홑받침이면 자기 자신) */
+static inline UInt8 JongFirst(UInt8 t)
+{
+    switch (t) {
+    case O(0x3133): return O(0x3131);
+    case O(0x3135): case O(0x3136): return O(0x3134);
+    case O(0x313A): case O(0x313B): case O(0x313C): case O(0x313D):
+    case O(0x313E): case O(0x313F): case O(0x3140): return O(0x3139);
+    case O(0x3144): return O(0x3142);
+    default:        return 0;
+    }
+}
+
+static inline UInt8 JongSecond(UInt8 t)
+{
+    switch (t) {
+    case O(0x3133): case O(0x313D): case O(0x3144): return O(0x3145);
+    case O(0x3135): return O(0x3148);
+    case O(0x3136): case O(0x3140): return O(0x314E);
+    case O(0x313A): return O(0x3131);
+    case O(0x313B): return O(0x3141);
+    case O(0x313C): return O(0x3142);
+    case O(0x313E): return O(0x314C);
+    case O(0x313F): return O(0x314D);
+    default:        return t;
+    }
+}
+
+#ifndef MNSK_HOST_TEST
+/* 표(KscBits, KscCum)는 파일 끝에서 .text에 넣는다(진입 함수가 code 0 맨 앞이어야 함) */
+static inline const UInt8 *KscBitsPtr(void)
+{
+    const UInt8 *p;
+
+    asm("lea KscBits(%%pc),%0" : "=a" (p));
+    return p;
+}
+
+static inline const UInt8 *KscCumPtr(void)
+{
+    const UInt8 *p;
+
+    asm("lea KscCum(%%pc),%0" : "=a" (p));
+    return p;
+}
+#endif
+
+static inline UInt16 Pop8(UInt8 b)
+{
+    UInt16 n = 0;
+
+    while (b) {
+        n += b & 1;
+        b >>= 1;
+    }
+    return n;
+}
+
+/* 초성·중성·종성 → KSC5601 코드, 완성형에 없으면 0 */
+static inline UInt16 SylKsc(UInt8 cho, UInt8 jung, UInt8 jong)
+{
+    Int16        ci = ChoIdx(cho);
+    UInt16       ti = 0, i, r, b;
+    const UInt8 *tb, *cum;
+
+    if (ci < 0 || jung == 0 || !IsVowel(jung))
+        return 0;
+    if (jong != 0) {
+        ti = JongIdx(jong);
+        if (ti == 0)
+            return 0;
+    }
+    i = ((UInt16)ci * 21 + (jung - O(0x314F))) * 28 + ti;
+    tb = KscBitsPtr();
+    if (!(tb[i >> 3] & (0x80 >> (i & 7))))
+        return 0;
+    cum = KscCumPtr();
+    r = ((UInt16)cum[(i >> 8) * 2] << 8) | cum[(i >> 8) * 2 + 1];
+    for (b = (i >> 8) << 5; b < (i >> 3); b++)
+        r += Pop8(tb[b]);
+    r += Pop8(tb[i >> 3] & (UInt8)~(0xFF >> (i & 7)));
+    return ((UInt16)(0xB0 + r / 94) << 8) | (0xA1 + r % 94);
+}
+
+static inline void SendKey(UInt16 c)
+{
+    EvtEnqueueKey(c, 0, 0);
+    BumpFtr(kFtrKeyCount);
+}
+
+/* 조합 상태를 화면에 보낸다. 보낸 글자 수 반환 */
+static inline UInt16 Emit(UInt8 cho, UInt8 jung, UInt8 jong)
+{
+    UInt16 n = 0;
+
+    if (cho && jung) {
+        UInt16 k = SylKsc(cho, jung, jong);
+
+        if (k) {
+            SendKey(k);
+            return 1;
+        }
+    }
+    if (cho)  { SendKey(KscJamo(cho));  n++; }
+    if (jung) { SendKey(KscJamo(jung)); n++; }
+    if (jong) { SendKey(KscJamo(jong)); n++; }
+    return n;
+}
+
+static inline LocalID CurApp(void)
+{
+    UInt16  card = 0;
+    LocalID id = 0;
+
+    SysCurAppDatabase(&card, &id);
+    return id;
+}
+
+/* 현재 조합 상태. 다른 앱에서 시작된 조합이면 버린다 */
+static inline UInt32 GetComp(void)
+{
+    UInt32 s = GetFtr(kFtrComp);
+
+    if (s != 0 && GetFtr(kFtrCompApp) != (UInt32)CurApp())
+        s = 0;
+    return s;
+}
+
+static inline void PutComp(UInt8 c, UInt8 v, UInt8 t, UInt16 shown)
+{
+    FtrSet(kSkCreator, kFtrComp,
+           ((UInt32)c << 24) | ((UInt32)v << 16) | ((UInt32)t << 8) | (UInt8)shown);
+    FtrSet(kSkCreator, kFtrCompApp, (UInt32)CurApp());
+}
+
+static inline void Commit(void)
+{
+    FtrSet(kSkCreator, kFtrComp, 0);
+}
+
+/* 자모 하나 입력 */
+static inline void Compose(UInt8 o)
+{
+    UInt32  s = GetComp();
+    UInt8   c0 = (UInt8)(s >> 24), v0 = (UInt8)(s >> 16), t0 = (UInt8)(s >> 8);
+    UInt16  shown = (UInt8)s;
+    UInt8   c = c0, v = v0, t = t0, nc = 0, nv = 0, x;
+    Boolean split = false;
+
+    if (shown == 0)
+        c = v = t = 0;
+
+    if (!IsVowel(o)) {
+        if (c && v && !t && SylKsc(c, v, o))
+            t = o;
+        else if (t && (x = JongPlus(t, o)) != 0 && SylKsc(c, v, x))
+            t = x;
+        else {
+            split = true;
+            nc = o;
+        }
+    } else {
+        if (c && !v) {
+            if (SylKsc(c, o, 0))
+                v = o;
+            else {
+                split = true;
+                nv = o;
+            }
+        } else if (v && !t) {
+            x = VowelPlus(v, o);
+            if (x && (!c || SylKsc(c, x, 0)))
+                v = x;
+            else {
+                split = true;
+                nv = o;
+            }
+        } else if (t) {
+            UInt8 keep = JongFirst(t), mv = JongSecond(t);
+
+            split = true;
+            if (SylKsc(mv, o, 0) && (keep == 0 || SylKsc(c, v, keep))) {
+                t = keep;
+                nc = mv;
+            }
+            nv = o;
+        } else {
+            split = true;
+            nv = o;
+        }
+    }
+
+    if (shown != 0 && (c != c0 || v != v0 || t != t0)) {
+        UInt16 i;
+
+        for (i = 0; i < shown; i++)
+            SendKey(chrBackspace);
+        shown = Emit(c, v, t);
+    }
+    if (split) {
+        shown = Emit(nc, nv, 0);
+        PutComp(nc, nv, 0, shown);
+    } else
+        PutComp(c, v, t, shown);
+}
+
+/* 조합 중 BS: 자모 하나 되돌리기. 조합 중이 아니면 보통 BS */
+static inline void ComposeBack(void)
+{
+    UInt32 s = GetComp();
+    UInt8  c = (UInt8)(s >> 24), v = (UInt8)(s >> 16), t = (UInt8)(s >> 8);
+    UInt16 shown = (UInt8)s, i;
+
+    if (shown == 0) {
+        Commit();
+        SendKey(chrBackspace);
+        return;
+    }
+    if (t)
+        t = JongFirst(t);
+    else if (v)
+        v = VowelBase(v);
+    else
+        c = 0;
+    for (i = 0; i < shown; i++)
+        SendKey(chrBackspace);
+    if (c || v || t) {
+        shown = Emit(c, v, t);
+        PutComp(c, v, t, shown);
+    } else
+        Commit();
+}
+
 /* 키 동작. 다시 그려야 하면 true */
 static inline Boolean DoKey(UInt16 k)
 {
@@ -463,17 +818,26 @@ static inline Boolean DoKey(UInt16 k)
         nst ^= kStShift;
         break;
     case kKHanEng:
+        Commit();
         nst = (st & kStEng) ^ kStEng;            /* 한↔영, 숫자·Shift 해제 */
         break;
     case kKNum:
+        Commit();
         nst = (st ^ kStNum) & ~kStShift;
         break;
-    default:
-        EvtEnqueueKey(code, 0, 0);
-        BumpFtr(kFtrKeyCount);
+    case chrBackspace:
+        ComposeBack();
         FtrSet(kSkCreator, kFtrKeyLast, ((UInt32)k << 16) | code);
-        if (code != chrBackspace)
-            nst &= ~kStShift;                    /* 글자 하나 보내면 Shift 해제 */
+        break;
+    default:
+        if ((code >> 8) == 0xA4) {               /* 한글 자모 → 조합 */
+            Compose((UInt8)(code - 0xA4A1 + 1));
+        } else {
+            Commit();
+            SendKey(code);
+        }
+        FtrSet(kSkCreator, kFtrKeyLast, ((UInt32)k << 16) | code);
+        nst &= ~kStShift;                        /* 글자 하나 보내면 Shift 해제 */
         break;
     }
     if (nst == st)
@@ -511,7 +875,12 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
 
     case kEvtStart:
         RawFtr(kFtrStartRaw, event);
+        Commit();
         DrawKeys((UInt32)slot);
+        break;
+
+    case kEvtStop:
+        Commit();
         break;
 
     case kEvtDraw:
@@ -548,3 +917,7 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
     }
     return 0;
 }
+
+#ifndef MNSK_HOST_TEST
+#include "ksc_table.h"
+#endif
