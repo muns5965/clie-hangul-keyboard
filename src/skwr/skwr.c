@@ -50,6 +50,8 @@
  * 9단계 실측: HRWinGetWindowExtent가 실크 창에서 160x65를 돌려줘 저해상도로 그려짐(선명해지지 않음).
  * 10단계: SilkExtn처럼(ROM 0x0178) 실크 창은 저해상도 크기 그대로 두고 좌표만 2배로 HR 함수에 넘긴다.
  *   고해상도 여부는 Start/DispChange +14 표시로 판단(런처 1, 저해상도 앱 0).
+ * 10단계 실측: 로더로 본체 실행, 고해상도 그리기·한글 키 이름 정상. 아랫줄 오른쪽(space·.·Ent)이 안 그려짐
+ *   → 11: 아랫줄 경계 계산의 16비트 곱셈 넘침 수정(Scale).
  */
 
 #ifdef MNSK_HOST_TEST
@@ -60,7 +62,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      10
+#define kSkBuild      11
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -207,6 +209,13 @@ static inline Coord BottomEdge(UInt16 col)
     }
 }
 
+/* 아랫줄 배율: 저해상도 160 → 1, 고해상도 320 → 2.
+ * (BottomEdge * w / 160 은 w=320일 때 16비트 곱셈이 넘친다 — 10단계 실측에서 space·.·Ent 사라짐) */
+static inline Coord Scale(Coord w)
+{
+    return (w >= 2 * kBaseW) ? 2 : 1;
+}
+
 /* 키 영역(테두리 포함 칸 전체) */
 static inline void KeyCell(UInt16 st, UInt16 row, UInt16 col, Coord w, Coord h, RectangleType *r)
 {
@@ -216,8 +225,8 @@ static inline void KeyCell(UInt16 st, UInt16 row, UInt16 col, Coord w, Coord h, 
     Coord l, rr;
 
     if (row == kRows - 1) {
-        l = BottomEdge(col) * w / kBaseW;
-        rr = BottomEdge(col + 1) * w / kBaseW;
+        l = BottomEdge(col) * Scale(w);
+        rr = BottomEdge(col + 1) * Scale(w);
     } else {
         UInt16 n = RowKeys(st, row);
 
@@ -240,7 +249,7 @@ static inline UInt16 HitKey(UInt16 st, Coord x, Coord y, Coord w, Coord h)
     n = RowKeys(st, row);
     if (row == kRows - 1) {
         for (col = 0; col < n - 1; col++)
-            if (x < BottomEdge(col + 1) * w / kBaseW)
+            if (x < BottomEdge(col + 1) * Scale(w))
                 break;
     } else {
         col = x * n / w;
