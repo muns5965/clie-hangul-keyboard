@@ -1,7 +1,8 @@
 name: Build PRC
 
 # 소스를 푸시하면 GitHub 서버에서 PRC를 빌드해 Artifacts로 올린다.
-# 도구 체인은 prc-tools-remix가 배포하는 미리 빌드된 Ubuntu 20.04(focal) 패키지를 쓴다.
+# 도구 체인은 prc-tools-remix v2.3.6이 배포하는 미리 빌드된 Ubuntu 24.04(noble) 패키지로 고정한다.
+# (로컬 검증 환경도 Ubuntu 24.04 + prc-tools-remix 2.3.6 소스 빌드)
 
 on:
   push:
@@ -15,7 +16,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    container: ubuntu:20.04
+    container: ubuntu:24.04
     env:
       DEBIAN_FRONTEND: noninteractive
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -27,28 +28,18 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      # 결과(받은 패키지 주소, 실패 원인)는 ::notice / ::error 로 남겨 실행 요약 화면에 바로 보이게 한다.
-      - name: Install prc-tools-remix (prebuilt focal package)
+      - name: Install prc-tools-remix 2.3.6 (pinned noble package)
+        env:
+          PRC_TOOLS_URL: https://github.com/jichu4n/prc-tools-remix/releases/download/v2.3.6/prc-tools-remix_2.3.6.noble_amd64.deb
         run: |
           set -e
-          rel=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" \
-                  "https://api.github.com/repos/jichu4n/prc-tools-remix/releases/latest")
-          tag=$(echo "$rel" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
-          assets=$(echo "$rel" | grep '"browser_download_url"' | cut -d'"' -f4 | tr '\n' ' ')
-          echo "::notice::prc-tools-remix release=${tag:-none} assets=${assets:-none}"
-          url=$(echo "$assets" | tr ' ' '\n' | grep 'focal' | grep '\.deb$' | head -1)
-          if [ -z "$url" ]; then
-            echo "::error::no focal .deb in prc-tools-remix release ${tag:-none}"
-            exit 1
-          fi
-          echo "::notice::using $url"
-          curl -sL -o /tmp/prc-tools-remix.deb "$url"
+          curl -sfL -o /tmp/prc-tools-remix.deb "$PRC_TOOLS_URL" \
+            || { echo "::error::download failed: $PRC_TOOLS_URL"; exit 1; }
           if ! apt-get install -y -qq /tmp/prc-tools-remix.deb > /tmp/apt.log 2>&1; then
             echo "::error::apt install failed: $(tail -5 /tmp/apt.log | tr '\n' ' ')"
             exit 1
           fi
-          v=$(m68k-palmos-gcc --version | head -1)
-          echo "::notice::$v"
+          echo "::notice::$(m68k-palmos-gcc --version | head -1)"
 
       - name: Install Palm OS SDK
         run: |
