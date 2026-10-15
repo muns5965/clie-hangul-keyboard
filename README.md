@@ -47,7 +47,14 @@ sudo ./tools/setup-toolchain.sh
 | Palm OS SDK | 4.0, [palm-os-sdk](https://github.com/jichu4n/palm-os-sdk) |
 | PilRC | [jichu4n/pilrc](https://github.com/jichu4n/pilrc) |
 
-주의: 컴파일러 빌드는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
+### GitHub Actions 자동 빌드
+
+`.github/workflows/build-prc.yml`: `src/` 또는 `tools/build-*.sh`가 바뀌어 푸시되면 GitHub 서버에서 PRC를 빌드한다.
+Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고정)와 Palm OS SDK 4를 설치하고 `tools/build-diag.sh`를 실행한다.
+결과 PRC와 빌드 로그는 실행 페이지의 Artifacts(`prc`)에서 받는다. 실행 요약에 날짜를 뺀 PRC 해시가 표시되며,
+로컬 빌드와 동일함을 확인했다(ClieDiag v3: size 4808, hash 1dbacad7e3b57cb0).
+
+주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
 ## bin/ClieDiag.prc (진단, v3)
 
