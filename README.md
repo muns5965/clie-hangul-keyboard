@@ -16,7 +16,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)용 한글 소프트 키보드 입력기 프�
 | 0 | PRC 빌드 도구 체인 구성 | 완료 |
 | 1 | 진단 PRC(`bin/ClieDiag.prc`): OS·기기 정보, 화면 모드, Sony HR/Silk 라이브러리 존재 여부, libr 목록, 펜·키 이벤트 | v4 (SkWr 시험·DisS 스위치) 빌드 완료 |
 | 2 | 입력 시험 PRC (자체 폼 필드): 영문 → KSC 완성형 삽입·삭제 → 조합 중 음절 교체 | 대기 |
-| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 1단계 실측 성공(로드·Open·FtrSet), 2단계(이벤트 카운터) 빌드 완료·실측 대기 |
+| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 1·2단계 실측 성공(로드, 전환 버튼, 펜 이벤트 수신), 3단계(그리기) 실측 대기 |
 
 ## 설계 메모
 
@@ -59,7 +59,7 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 
 주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
-## bin/ClieDiag.prc (진단, v5)
+## bin/ClieDiag.prc (진단, v6)
 
 소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. 160×160 호환 모드로 실행된다. 소니 라이브러리 함수는 호출하지 않는다.
 
@@ -68,13 +68,14 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 | Info | ROM 버전, OEM/기기 ID, 화면 모드, `SoNy` 기능 번호, HR/Silk 라이브러리 탐색 결과 |
 | Libr | 설치된 공유 라이브러리(`libr`) DB 목록 |
 | SkWr | 설치된 `SkWr` 플러그인 목록, 플러그인 기록(feature `MnSk` #0) 해석, `[clear record]` 기록 삭제, `[DisS ...]` 실크 비활성화 스위치 전환(리셋 후 적용) |
-| SkEv | SkWr 플러그인 2단계 이벤트 카운터: 이벤트 번호 0~15별 수신 횟수, 16 이상, out≠NULL 횟수, 마지막 이벤트 |
+| SkEv | SkWr 플러그인 이벤트 카운터: 이벤트 번호 0~15별 수신 횟수, 16 이상, out≠NULL 횟수, 마지막 이벤트 |
+| SkRaw | SkWr 플러그인 3단계 기록: Open/Start/PenDown/PenUp/DispChange 이벤트 앞 16바이트(16진수), Start 때 받은 슬롯 값, 그리기 창 크기, 직전 그리기 창 |
 | Events | 펜·키 이벤트 기록, Graffiti 영역 가로채기(INT) 토글. `*`는 시스템에 넘기지 않은 이벤트 |
 
 조작: 위/아래 버튼 → 이전/다음 페이지. 그 외 페이지별 탭 동작은 소스 주석 참고.
 v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception을 일으켜 제거했다.
 
-## bin/MnSkPlugin.prc (SilkWare 플러그인, 현재 2단계: 무동작 + 이벤트 카운터)
+## bin/MnSkPlugin.prc (SilkWare 플러그인, 현재 3단계: 이벤트 내용 기록 + 사각형 그리기 시험)
 
 소스: `src/skwr/skwr.c`, 빌드: `./tools/build-skwr.sh`. DB 타입 `SkWr`, 크리에이터 `MnSk`, 리소스는 `code 0` 하나.
 시작 코드·데이터 세그먼트 없이 진입 함수 `SkwrEntry`만 `code 0` 맨 앞에 둔다. 빌드 스크립트가 전역변수 없음, 진입점 오프셋 0, `%a5` 참조 없음을 검사한다.
@@ -82,6 +83,11 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
 - 1단계(빌드 1): Open(이벤트 1)을 받으면 `FtrSet('MnSk', 0, 0x534B0101)` 한 번만 호출. 모든 이벤트에 0 반환.
 - 2단계(빌드 2): 그리기 없음. 모든 이벤트를 기록한다. #0 Open 표시(`0x534B0102`), #1~#16 이벤트 번호 0~15별 횟수(포화 증가),
   #17 마지막 이벤트(31~16 out≠NULL, 7~0 번호), #18 번호 16 이상 횟수, #19 out≠NULL 횟수.
+- 2단계 실측(2026-10-16): 상태바 5번째 아이콘(□→, 외부 플러그인이 있을 때만 표시)이 **플러그인 전환 버튼**. 전환 후 카운터
+  Open 1, Start 14, Stop 13, DispChange 5, PenDown 10, PenMove 4006, PenUp 10, Draw 0. 활성 플러그인은 Graffiti 영역의 펜 이동까지 받는다.
+  상태바 4번째(흐린 ↓)는 Graffiti 영역 접기 버튼으로, 허용 플래그가 꺼져 있어 비활성.
+- 3단계(빌드 3): 가설 — Open 이벤트 +10의 32비트 값이 실크 화면 창(SilkExtn 전역 172, SilkWareLib GetScrWindow와 같은 값).
+  Open 때 이 값을 슬롯에 넣고, Start 때 돌려받아 그 창에 지우기·테두리·채운 사각형을 그린다. 이벤트 앞 16바이트를 #20~#42에 기록.
 - 플러그인 교체 시: 기존 플러그인은 부팅 때 삭제 보호가 걸리므로, ClieDiag `[DisS]` 켜기 → 리셋 → 새 PRC 설치(덮어쓰기) → `[DisS]` 끄기 → 리셋.
 - 기록 형식: 31~16 식별값 `0x534B`('SK'), 15~8 이벤트 번호, 7~0 빌드 번호.
 - 판정: ClieDiag SkWr 페이지에 `OK evt=1 build=1`이 나오면 로드·Open 수신·기록 성공. `record: none`이면 로드 안 됨/Open 미수신/기록 실패 중 하나(구분 불가).

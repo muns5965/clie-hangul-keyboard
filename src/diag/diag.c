@@ -1,12 +1,14 @@
 /*
- * ClieDiag v5 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v6 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
  *
  * 페이지
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
  *   Libr   : 설치된 공유 라이브러리('libr') DB 목록
  *   SkWr   : SilkWare 플러그인 시험. 설치된 'SkWr' DB 목록, 플러그인 기록
  *            (feature 'MnSk' #0) 해석, 기록 초기화, 실크 비활성화 스위치(DisS) 켜기/끄기
- *   SkEv   : SkWr 플러그인 2단계 이벤트 카운터 (feature 'MnSk' #1~#19) 표시
+ *   SkEv   : SkWr 플러그인 이벤트 카운터 (feature 'MnSk' #1~#19) 표시
+ *   SkRaw  : SkWr 플러그인 3단계 기록 - 이벤트 앞 16바이트(Open/Start/PenDown/PenUp/DispChange),
+ *            Start 때 받은 슬롯 값, 그리기 창 크기, 직전 그리기 창 (feature 'MnSk' #20~#42)
  *   Events : 이벤트 기록, Graffiti 영역(y>=160) 펜 이벤트 가로채기(INT) 토글
  *
  * 조작
@@ -37,6 +39,7 @@
 #define kSkFtrLast     17
 #define kSkFtrOver     18
 #define kSkFtrOut      19
+#define kSkFtrMax      42     /* 3단계 기록 마지막 번호 */
 #define kSkMagic       0x534BUL
 #define kDisSType      'DisS'
 #define kDisSCreator   'SeSi'
@@ -67,7 +70,7 @@ typedef struct {
     Char   name[dmDBNameLength];
 } SkwrInfo;
 
-enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgEvents };
+enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents };
 
 static LineBuf  gInfo, gLibr, gLog;
 static Char     gLast[kLineLen] = "-";
@@ -117,7 +120,7 @@ static UInt16 PagesOf(LineBuf *b)
 
 static UInt16 TotalPages(void)
 {
-    return PagesOf(&gInfo) + PagesOf(&gLibr) + 3;   /* + SkWr + SkEv + Events */
+    return PagesOf(&gInfo) + PagesOf(&gLibr) + 4;   /* + SkWr + SkEv + SkRaw + Events */
 }
 
 /* 현재 페이지 종류와, Info/Libr이면 버퍼와 하위 페이지 번호 */
@@ -139,6 +142,8 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
         return kPgSkwr;
     if (gPage == pi + pl + 1)
         return kPgSkev;
+    if (gPage == pi + pl + 2)
+        return kPgSkraw;
     return kPgEvents;
 }
 
@@ -274,7 +279,7 @@ static void ClearRecord(void)
     UInt16 i;
     Char   s[kLineLen];
 
-    for (i = kSkFtrCount0; i <= kSkFtrOut; i++)
+    for (i = kSkFtrCount0; i <= kSkFtrMax; i++)
         FtrUnregister(kSkCreator, i);
     StrPrintF(s, "clear record e=%x (+counters)", (UInt16)err);
     SetLast(s);
@@ -399,6 +404,52 @@ static void DrawSkevPage(void)
     DrawRow(10, "tap = refresh/next page");
 }
 
+/* 32비트 값을 항상 8자리 16진수로 (StrPrintF의 자릿수 지정에 의존하지 않음) */
+static void Hex8(UInt32 v, Char *o)
+{
+    Int16 i;
+
+    for (i = 7; i >= 0; i--) {
+        UInt8 d = (UInt8)(v & 0xF);
+        o[i] = (Char)(d < 10 ? '0' + d : 'A' + d - 10);
+        v >>= 4;
+    }
+    o[8] = 0;
+}
+
+/* 이벤트 앞 16바이트(기능 번호 base~base+3)를 두 줄로 표시 */
+static void DrawRaw(UInt16 row, const Char *tag, UInt16 base)
+{
+    Char s[kLineLen], a[9], b[9];
+
+    Hex8(SkFtr(base), a);
+    Hex8(SkFtr(base + 1), b);
+    StrPrintF(s, "%s %s %s", tag, a, b);
+    DrawRow(row, s);
+    Hex8(SkFtr(base + 2), a);
+    Hex8(SkFtr(base + 3), b);
+    StrPrintF(s, "   %s %s", a, b);
+    DrawRow(row + 1, s);
+}
+
+static void DrawSkrawPage(void)
+{
+    Char   s[kLineLen], a[9], b[9];
+    UInt32 wh = SkFtr(29);
+
+    DrawRaw(0, "Op", 20);
+    DrawRaw(2, "St", 24);
+    Hex8(SkFtr(28), a);
+    Hex8(SkFtr(30), b);
+    StrPrintF(s, "arg=%s prv=%s", a, b);
+    DrawRow(4, s);
+    StrPrintF(s, "win %u x %u", (UInt16)(wh >> 16), (UInt16)(wh & 0xFFFF));
+    DrawRow(5, s);
+    DrawRaw(6, "Dn", 31);
+    DrawRaw(8, "Up", 35);
+    DrawRaw(10, "Dc", 39);
+}
+
 static void Draw(void)
 {
     RectangleType r;
@@ -428,6 +479,10 @@ static void Draw(void)
     case kPgSkev:
         StrPrintF(title, "%u/%u SkEv", gPage + 1, TotalPages());
         DrawSkevPage();
+        break;
+    case kPgSkraw:
+        StrPrintF(title, "%u/%u SkRaw", gPage + 1, TotalPages());
+        DrawSkrawPage();
         break;
     default:
         StrPrintF(title, "%u/%u Events INT:%s", gPage + 1, TotalPages(),
