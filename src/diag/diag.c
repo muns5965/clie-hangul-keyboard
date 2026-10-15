@@ -1,17 +1,18 @@
 /*
- * ClieDiag v4 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v5 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
  *
  * 페이지
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
  *   Libr   : 설치된 공유 라이브러리('libr') DB 목록
  *   SkWr   : SilkWare 플러그인 시험. 설치된 'SkWr' DB 목록, 플러그인 기록
  *            (feature 'MnSk' #0) 해석, 기록 초기화, 실크 비활성화 스위치(DisS) 켜기/끄기
+ *   SkEv   : SkWr 플러그인 2단계 이벤트 카운터 (feature 'MnSk' #1~#19) 표시
  *   Events : 이벤트 기록, Graffiti 영역(y>=160) 펜 이벤트 가로채기(INT) 토글
  *
  * 조작
  *   - 위/아래 버튼: 이전/다음 페이지
  *   - Info/Libr: 앱 영역 탭 → 다음 페이지
- *   - SkWr: "[clear record]" 줄 탭 → 기록 삭제, "[DisS ...]" 줄 탭 → 스위치 전환,
+ *   - SkWr: "[clear record]" 줄 탭 → 기록·카운터 모두 삭제, "[DisS ...]" 줄 탭 → 스위치 전환,
  *           그 외 영역 탭 → 다음 페이지
  *   - Events: 위쪽 절반 탭 → 다음 페이지, 아래쪽 절반 탭 → INT 토글
  *   - 맨 아래 줄: 마지막 이벤트 / 마지막 조작 결과
@@ -32,6 +33,10 @@
 #define kSkwrDBType    'SkWr'
 #define kSkCreator     'MnSk'
 #define kSkFtrNum      0
+#define kSkFtrCount0   1      /* +이벤트 번호 0~15 */
+#define kSkFtrLast     17
+#define kSkFtrOver     18
+#define kSkFtrOut      19
 #define kSkMagic       0x534BUL
 #define kDisSType      'DisS'
 #define kDisSCreator   'SeSi'
@@ -62,7 +67,7 @@ typedef struct {
     Char   name[dmDBNameLength];
 } SkwrInfo;
 
-enum { kPgInfo, kPgLibr, kPgSkwr, kPgEvents };
+enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgEvents };
 
 static LineBuf  gInfo, gLibr, gLog;
 static Char     gLast[kLineLen] = "-";
@@ -112,7 +117,7 @@ static UInt16 PagesOf(LineBuf *b)
 
 static UInt16 TotalPages(void)
 {
-    return PagesOf(&gInfo) + PagesOf(&gLibr) + 2;   /* + SkWr + Events */
+    return PagesOf(&gInfo) + PagesOf(&gLibr) + 3;   /* + SkWr + SkEv + Events */
 }
 
 /* 현재 페이지 종류와, Info/Libr이면 버퍼와 하위 페이지 번호 */
@@ -132,6 +137,8 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
     }
     if (gPage == pi + pl)
         return kPgSkwr;
+    if (gPage == pi + pl + 1)
+        return kPgSkev;
     return kPgEvents;
 }
 
@@ -263,10 +270,13 @@ static void ToggleDisS(void)
 
 static void ClearRecord(void)
 {
-    Err  err = FtrUnregister(kSkCreator, kSkFtrNum);
-    Char s[kLineLen];
+    Err    err = FtrUnregister(kSkCreator, kSkFtrNum);
+    UInt16 i;
+    Char   s[kLineLen];
 
-    StrPrintF(s, "clear record e=%x", (UInt16)err);
+    for (i = kSkFtrCount0; i <= kSkFtrOut; i++)
+        FtrUnregister(kSkCreator, i);
+    StrPrintF(s, "clear record e=%x (+counters)", (UInt16)err);
     SetLast(s);
     StrCopy(NextLine(&gLog), s);
 }
@@ -356,6 +366,39 @@ static void DrawSkwrPage(void)
     }
 }
 
+static UInt32 SkFtr(UInt16 num)
+{
+    UInt32 v = 0;
+
+    if (FtrGet(kSkCreator, num, &v) != errNone)
+        v = 0;
+    return v;
+}
+
+/* 이벤트 번호 0~15별 수신 횟수: 한 줄에 4개씩 */
+static void DrawSkevPage(void)
+{
+    Char   s[kLineLen];
+    UInt16 r, i;
+    UInt32 last;
+
+    DrawRow(0, "evt: count  (0~15)");
+    for (r = 0; r < 4; r++) {
+        i = r * 4;
+        StrPrintF(s, "%u:%lu %u:%lu %u:%lu %u:%lu",
+                  i, SkFtr(kSkFtrCount0 + i), i + 1, SkFtr(kSkFtrCount0 + i + 1),
+                  i + 2, SkFtr(kSkFtrCount0 + i + 2), i + 3, SkFtr(kSkFtrCount0 + i + 3));
+        DrawRow(1 + r, s);
+    }
+    StrPrintF(s, ">=16: %lu  out!=0: %lu", SkFtr(kSkFtrOver), SkFtr(kSkFtrOut));
+    DrawRow(6, s);
+    last = SkFtr(kSkFtrLast);
+    StrPrintF(s, "last evt=%u out=%u", (UInt16)(last & 0xFF), (UInt16)(last >> 16));
+    DrawRow(7, s);
+    DrawRow(9, "1=Open (others: see SonySlkw)");
+    DrawRow(10, "tap = refresh/next page");
+}
+
 static void Draw(void)
 {
     RectangleType r;
@@ -381,6 +424,10 @@ static void Draw(void)
     case kPgSkwr:
         StrPrintF(title, "%u/%u SkWr", gPage + 1, TotalPages());
         DrawSkwrPage();
+        break;
+    case kPgSkev:
+        StrPrintF(title, "%u/%u SkEv", gPage + 1, TotalPages());
+        DrawSkevPage();
         break;
     default:
         StrPrintF(title, "%u/%u Events INT:%s", gPage + 1, TotalPages(),
