@@ -1,5 +1,5 @@
 /*
- * ClieDiag v9 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v10 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
  *
  * 페이지
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
@@ -39,7 +39,7 @@
 #define kSkFtrLast     17
 #define kSkFtrOver     18
 #define kSkFtrOut      19
-#define kSkFtrMax      48     /* 플러그인 기록 마지막 번호 */
+#define kSkFtrMax      49     /* 플러그인 기록 마지막 번호 */
 #define kSkMagic       0x534BUL
 #define kDisSType      'DisS'
 #define kDisSCreator   'SeSi'
@@ -405,12 +405,13 @@ static void DrawSkevPage(void)
     StrPrintF(s, "last evt=%u out=%u", (UInt16)(last & 0xFF), (UInt16)(last >> 16));
     DrawRow(7, s);
     {
-        /* 6단계: #48 = (방식 << 16) | 코드.  방식 1 = 키 하나, 2 = 바이트 두 개 */
+        /* 7단계: #48 = (키 번호 << 16) | 코드.  키 번호 = 줄*16+칸+1, st = #49 자판 상태 */
         UInt32 kl = SkFtr(48);
         Char   h4[12];
 
         Hex8(kl & 0xFFFF, h4);
-        StrPrintF(s, "keys: %lu  m=%u code=%s", SkFtr(47), (UInt16)(kl >> 16), h4 + 4);
+        StrPrintF(s, "keys:%lu k=%u c=%s st=%x", SkFtr(47), (UInt16)(kl >> 16), h4 + 4,
+                  (UInt16)SkFtr(49));
         DrawRow(9, s);
     }
     DrawRow(10, "1 Open 3 Start 4 Stop 5 Draw");
