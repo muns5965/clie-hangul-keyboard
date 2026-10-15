@@ -59,7 +59,7 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 
 주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
-## bin/ClieDiag.prc (진단, v6)
+## bin/ClieDiag.prc (진단, v7)
 
 소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. 160×160 호환 모드로 실행된다. 소니 라이브러리 함수는 호출하지 않는다.
 
@@ -75,7 +75,7 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 조작: 위/아래 버튼 → 이전/다음 페이지. 그 외 페이지별 탭 동작은 소스 주석 참고.
 v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception을 일으켜 제거했다.
 
-## bin/MnSkPlugin.prc (SilkWare 플러그인, 현재 3단계: 이벤트 내용 기록 + 사각형 그리기 시험)
+## bin/MnSkPlugin.prc (SilkWare 플러그인, 현재 4단계: 사각형 그리기 시험, 창 수정판)
 
 소스: `src/skwr/skwr.c`, 빌드: `./tools/build-skwr.sh`. DB 타입 `SkWr`, 크리에이터 `MnSk`, 리소스는 `code 0` 하나.
 시작 코드·데이터 세그먼트 없이 진입 함수 `SkwrEntry`만 `code 0` 맨 앞에 둔다. 빌드 스크립트가 전역변수 없음, 진입점 오프셋 0, `%a5` 참조 없음을 검사한다.
@@ -88,6 +88,10 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
   상태바 4번째(흐린 ↓)는 Graffiti 영역 접기 버튼으로, 허용 플래그가 꺼져 있어 비활성.
 - 3단계(빌드 3): 가설 — Open 이벤트 +10의 32비트 값이 실크 화면 창(SilkExtn 전역 172, SilkWareLib GetScrWindow와 같은 값).
   Open 때 이 값을 슬롯에 넣고, Start 때 돌려받아 그 창에 지우기·테두리·채운 사각형을 그린다. 이벤트 앞 16바이트를 #20~#42에 기록.
+- 3단계 실측: 전환 버튼을 누르자 리부팅(그리기에서 예외). 부팅 후 Open 원본 `01 0F 00 00 48 AA 00 00 49 0A 00 00 00 17 00 06`.
+  +10 값은 `0x17`로 창이 아니었다. +2 값 `0x000048AA`는 SilkExtn 전역 84(전환 직후 WinSetDrawWindow로 실크 영역을 지우는 창)와 일치.
+- 4단계(빌드 4): Open +2 값을 창으로 사용. 그리기 전 핸들 범위(0 아님, 짝수, 0x400000 미만)와 창 구조체 windowBounds(오프셋 10)
+  크기(너비 160/320, 높이 1~240)를 검사해 통과할 때만 그린다. #43 창 위치, #44 창 크기, #45 판정(1 그림, 2 핸들 이상, 3 크기 이상).
 - 플러그인 교체 시: 기존 플러그인은 부팅 때 삭제 보호가 걸리므로, ClieDiag `[DisS]` 켜기 → 리셋 → 새 PRC 설치(덮어쓰기) → `[DisS]` 끄기 → 리셋.
   DisS가 켜지면 실크 영역(홈 아이콘 포함)이 없어 런처를 못 연다. 이때는 `bin/DiagRescue.prc`(빌드: `tools/build-rescue.sh`)를 설치하고
   하드웨어 To Do 버튼으로 진단 앱을 연다. ClieDiag와 같은 코드를 크리에이터 `todo`, 버전 2로 빌드한 것으로, ROM To Do(버전 1)보다 우선 실행된다.

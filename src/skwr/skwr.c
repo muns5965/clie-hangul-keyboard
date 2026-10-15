@@ -1,5 +1,5 @@
 /*
- * MnSk - NR70V SilkWare(SkWr) 플러그인 3단계: 이벤트 내용 기록 + 사각형 그리기 시험
+ * MnSk - NR70V SilkWare(SkWr) 플러그인 4단계: 이벤트 내용 기록 + 사각형 그리기 시험(창 수정판)
  *
  * 확정 사항 (ROM SilkExtn 역분석 + 1·2단계 실측):
  *   - 호출: Err entry(UInt32 *slotOrValue, UInt8 *event, void *out)
@@ -8,10 +8,13 @@
  *   - 활성화: 상태바의 전환 버튼(외부 플러그인이 있을 때만 표시)
  *   - 반환값 16비트 0. 호출 전 A5 미설정 → 전역변수·문자열 상수 금지.
  *
- * 3단계 가설 (실측으로 확인할 것):
- *   - Open 이벤트의 +10 위치 32비트 값 = SilkExtn 전역의 실크 화면 창(WinHandle).
- *     (SilkExtn 0x2E5C, SilkWareLib GetScrWindow 0x34E 가 같은 전역 필드 172를 쓴다.)
+ * 3단계 결과: Open +10 값은 0x00000017로 창이 아니었다(그 값으로 그리다 리부팅).
+ * 4단계 가설:
+ *   - Open 이벤트 +2 위치 32비트 값(실측 0x000048AA) = SilkExtn 전역 필드 84 = 실크 영역 창.
+ *     SilkExtn은 플러그인 전환 직후 WinSetDrawWindow(전역 84)로 실크 영역을 지운다(0x3DA6).
  *   - 이 값을 Open 때 슬롯에 넣어 두면, Start 때 첫 인자로 돌려받는다.
+ *   - 그리기 전 안전 검사: 0이 아니고 짝수이며 0x00400000 미만(동적 힙 범위)이고,
+ *     창 구조체의 windowBounds(오프셋 10) 너비가 160 또는 320, 높이가 1~240일 때만 그린다.
  *
  * 기록 (feature 'MnSk'):
  *   #0       Open 표시 (0x534B 01 빌드)
@@ -24,6 +27,9 @@
  *   #31~#34  마지막 PenDown 이벤트 앞 16바이트
  *   #35~#38  마지막 PenUp 이벤트 앞 16바이트
  *   #39~#42  마지막 DispChange 이벤트 앞 16바이트
+ *   #43      Start 때 읽은 창 windowBounds 왼쪽 위 (31~16 x, 15~0 y)
+ *   #44      Start 때 읽은 창 windowBounds 크기 (31~16 너비, 15~0 높이)
+ *   #45      Start 그리기 판정: 1 그림, 2 핸들 범위 밖, 3 창 크기 이상 (0 = Start 미수신)
  *
  * 그리기 (Start 때만): 슬롯 값이 NULL이 아니면 그 창을 그리기 창으로 잠시 바꾸고
  * 창 전체를 지운 뒤 테두리와 왼쪽 위 채운 사각형을 그리고, 원래 그리기 창으로 되돌린다.
@@ -33,7 +39,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      3
+#define kSkBuild      4
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -54,6 +60,11 @@
 #define kFtrDownRaw   31
 #define kFtrUpRaw     35
 #define kFtrDispRaw   39
+#define kFtrWinPos    43
+#define kFtrWinExt    44
+#define kFtrDrawRes   45
+
+#define kWinBoundsOff 10      /* WindowType.windowBounds 오프셋 (SDK 4 Window.h) */
 
 static inline void BumpFtr(UInt16 num)
 {
@@ -119,10 +130,10 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
         FtrSet(kSkCreator, kFtrOpen,
                (kSkMagic << 16) | ((UInt32)kEvtOpen << 8) | kSkBuild);
         RawFtr(kFtrOpenRaw, event);
-        /* 가설: event+10 = 실크 화면 창. 슬롯에 넣어 두면 이후 이벤트의 첫 인자로 돌아온다. */
+        /* 가설: event+2 = 실크 영역 창(SilkExtn 전역 84). 슬롯에 넣어 두면 이후 첫 인자로 돌아온다. */
         if (slot != NULL)
-            *slot = ((UInt32)event[10] << 24) | ((UInt32)event[11] << 16) |
-                    ((UInt32)event[12] << 8) | event[13];
+            *slot = ((UInt32)event[2] << 24) | ((UInt32)event[3] << 16) |
+                    ((UInt32)event[4] << 8) | event[5];
         break;
 
     case kEvtStart:
@@ -130,8 +141,29 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
         FtrSet(kSkCreator, kFtrStartArg, (UInt32)slot);
         FtrSet(kSkCreator, kFtrStartPrev, (UInt32)WinGetDrawWindow());
         FtrSet(kSkCreator, kFtrStartWin, 0);
-        if (slot != NULL)
-            DrawTest((WinHandle)slot);
+        {
+            UInt32 h = (UInt32)slot;
+            const UInt8 *wb;
+            UInt16 wx, wy, ww, wh;
+
+            if (h == 0 || (h & 1) || h >= 0x00400000UL) {
+                FtrSet(kSkCreator, kFtrDrawRes, 2);
+                break;
+            }
+            wb = (const UInt8 *)h + kWinBoundsOff;
+            wx = ((UInt16)wb[0] << 8) | wb[1];
+            wy = ((UInt16)wb[2] << 8) | wb[3];
+            ww = ((UInt16)wb[4] << 8) | wb[5];
+            wh = ((UInt16)wb[6] << 8) | wb[7];
+            FtrSet(kSkCreator, kFtrWinPos, ((UInt32)wx << 16) | wy);
+            FtrSet(kSkCreator, kFtrWinExt, ((UInt32)ww << 16) | wh);
+            if ((ww != 160 && ww != 320) || wh == 0 || wh > 240) {
+                FtrSet(kSkCreator, kFtrDrawRes, 3);
+                break;
+            }
+            FtrSet(kSkCreator, kFtrDrawRes, 1);
+            DrawTest((WinHandle)h);
+        }
         break;
 
     case kEvtPenDown:

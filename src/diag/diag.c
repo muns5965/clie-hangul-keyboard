@@ -1,5 +1,5 @@
 /*
- * ClieDiag v6 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v7 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
  *
  * 페이지
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
@@ -39,7 +39,7 @@
 #define kSkFtrLast     17
 #define kSkFtrOver     18
 #define kSkFtrOut      19
-#define kSkFtrMax      42     /* 3단계 기록 마지막 번호 */
+#define kSkFtrMax      45     /* 플러그인 기록 마지막 번호 */
 #define kSkMagic       0x534BUL
 #define kDisSType      'DisS'
 #define kDisSCreator   'SeSi'
@@ -77,6 +77,7 @@ static Char     gLast[kLineLen] = "-";
 static UInt16   gPage = 0;
 static Boolean  gIntercept = false;
 static UInt32   gPenMoves = 0;
+static Boolean  gHoldLast = false;  /* 조작 결과를 바로 뒤 penUp이 덮어쓰지 않게 */
 
 static SkwrInfo gSkwr[kMaxSkwr];
 static UInt16   gSkwrN = 0;
@@ -109,6 +110,7 @@ static void FourCC(UInt32 v, Char *o)
 
 static void SetLast(const Char *s)
 {
+    gHoldLast = true;
     StrNCopy(gLast, s, kLineLen - 1);
     gLast[kLineLen - 1] = 0;
 }
@@ -443,7 +445,9 @@ static void DrawSkrawPage(void)
     Hex8(SkFtr(30), b);
     StrPrintF(s, "arg=%s prv=%s", a, b);
     DrawRow(4, s);
-    StrPrintF(s, "win %u x %u", (UInt16)(wh >> 16), (UInt16)(wh & 0xFFFF));
+    StrPrintF(s, "win %u x %u  bnd %u,%u %ux%u r=%lu", (UInt16)(wh >> 16), (UInt16)(wh & 0xFFFF),
+              (UInt16)(SkFtr(43) >> 16), (UInt16)(SkFtr(43) & 0xFFFF),
+              (UInt16)(SkFtr(44) >> 16), (UInt16)(SkFtr(44) & 0xFFFF), SkFtr(45));
     DrawRow(5, s);
     DrawRaw(6, "Dn", 31);
     DrawRaw(8, "Up", 35);
@@ -568,7 +572,14 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         logged = FormatEvent(&e, blocked, line);
         if (logged) {
             StrCopy(NextLine(&gLog), line);
-            SetLast(line);
+            if (gHoldLast && (e.eType == penUpEvent || e.eType == penDownEvent)) {
+                if (e.eType == penUpEvent)
+                    gHoldLast = false;
+            } else {
+                StrNCopy(gLast, line, kLineLen - 1);
+                gLast[kLineLen - 1] = 0;
+                gHoldLast = false;
+            }
         }
 
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < kSilkTopY
