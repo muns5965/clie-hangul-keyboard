@@ -27,20 +27,28 @@ jobs:
 
       - uses: actions/checkout@v4
 
-      - name: Install prc-tools-remix and PilRC (prebuilt focal packages)
+      # 결과(받은 패키지 주소, 실패 원인)는 ::notice / ::error 로 남겨 실행 요약 화면에 바로 보이게 한다.
+      - name: Install prc-tools-remix (prebuilt focal package)
         run: |
           set -e
-          for repo in prc-tools-remix pilrc; do
-            url=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" \
-                    "https://api.github.com/repos/jichu4n/$repo/releases/latest" \
-                  | grep '"browser_download_url"' | grep 'focal' | grep '\.deb"' \
-                  | cut -d'"' -f4 | head -1)
-            echo "$repo: $url"
-            test -n "$url"
-            curl -sL -o "/tmp/$repo.deb" "$url"
-            apt-get install -y -qq "/tmp/$repo.deb" > /dev/null
-          done
-          m68k-palmos-gcc --version | head -1
+          rel=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" \
+                  "https://api.github.com/repos/jichu4n/prc-tools-remix/releases/latest")
+          tag=$(echo "$rel" | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+          assets=$(echo "$rel" | grep '"browser_download_url"' | cut -d'"' -f4 | tr '\n' ' ')
+          echo "::notice::prc-tools-remix release=${tag:-none} assets=${assets:-none}"
+          url=$(echo "$assets" | tr ' ' '\n' | grep 'focal' | grep '\.deb$' | head -1)
+          if [ -z "$url" ]; then
+            echo "::error::no focal .deb in prc-tools-remix release ${tag:-none}"
+            exit 1
+          fi
+          echo "::notice::using $url"
+          curl -sL -o /tmp/prc-tools-remix.deb "$url"
+          if ! apt-get install -y -qq /tmp/prc-tools-remix.deb > /tmp/apt.log 2>&1; then
+            echo "::error::apt install failed: $(tail -5 /tmp/apt.log | tr '\n' ' ')"
+            exit 1
+          fi
+          v=$(m68k-palmos-gcc --version | head -1)
+          echo "::notice::$v"
 
       - name: Install Palm OS SDK
         run: |
@@ -49,15 +57,24 @@ jobs:
           unzip -q -d /tmp /tmp/sdk.zip
           rm -rf /opt/palmdev
           mv /tmp/palm-os-sdk-master /opt/palmdev
-          palmdev-prep -d sdk-4
+          palmdev-prep -d sdk-4 || { echo "::error::palmdev-prep failed"; exit 1; }
 
       - name: Build PRCs
         run: |
           set -e
-          ./tools/build-diag.sh
+          if ! ./tools/build-diag.sh > build-diag.log 2>&1; then
+            echo "::error::build-diag failed: $(tail -5 build-diag.log | tr '\n' ' ')"
+            exit 1
+          fi
+          cat build-diag.log
           ls -l bin/
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: prc
-          path: bin/*.prc
+          path: |
+            bin/*.prc
+            build-diag.log
+            build/diag/build.log
+          if-no-files-found: ignore
