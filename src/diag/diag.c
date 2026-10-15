@@ -1,7 +1,12 @@
 /*
- * ClieDiag v13 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v14 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
- * 페이지
+ * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
+ *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
+ *
+ *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
+ *
+ * 진단 페이지 (debug 체크 시)
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
  *   Libr   : 설치된 공유 라이브러리('libr') DB 목록
  *   SkWr   : SilkWare 플러그인 시험. 설치된 'SkWr' DB 목록, 플러그인 기록
@@ -70,7 +75,12 @@ typedef struct {
     Char   name[dmDBNameLength];
 } SkwrInfo;
 
-enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents };
+enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain };
+
+#define kAppCreator    'MnDg'
+#define kPrefDebug     0
+#define kMainRowDebug  9
+#define kCoreType      'SkCo'
 
 static LineBuf  gInfo, gLibr, gLog;
 static Char     gLast[kLineLen] = "-";
@@ -78,6 +88,7 @@ static UInt16   gPage = 0;
 static Boolean  gIntercept = false;
 static UInt32   gPenMoves = 0;
 static Boolean  gHoldLast = false;  /* 조작 결과를 바로 뒤 penUp이 덮어쓰지 않게 */
+static Boolean  gDebug = false;     /* 진단 페이지 표시 (앱 설정 kPrefDebug) */
 
 static SkwrInfo gSkwr[kMaxSkwr];
 static UInt16   gSkwrN = 0;
@@ -122,7 +133,9 @@ static UInt16 PagesOf(LineBuf *b)
 
 static UInt16 TotalPages(void)
 {
-    return PagesOf(&gInfo) + PagesOf(&gLibr) + 4;   /* + SkWr + SkEv + SkRaw + Events */
+    if (!gDebug)
+        return 1;                                    /* Main만 */
+    return 1 + PagesOf(&gInfo) + PagesOf(&gLibr) + 4; /* Main + Info + Libr + SkWr + SkEv + SkRaw + Events */
 }
 
 /* 현재 페이지 종류와, Info/Libr이면 버퍼와 하위 페이지 번호 */
@@ -130,21 +143,25 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
 {
     UInt16 pi = PagesOf(&gInfo);
     UInt16 pl = PagesOf(&gLibr);
+    UInt16 pg;
 
     *bufP = NULL; *subP = 0; *subNP = 1;
-    if (gPage < pi) {
-        *bufP = &gInfo; *subP = gPage; *subNP = pi;
+    if (gPage == 0 || !gDebug)
+        return kPgMain;
+    pg = gPage - 1;
+    if (pg < pi) {
+        *bufP = &gInfo; *subP = pg; *subNP = pi;
         return kPgInfo;
     }
-    if (gPage < pi + pl) {
-        *bufP = &gLibr; *subP = gPage - pi; *subNP = pl;
+    if (pg < pi + pl) {
+        *bufP = &gLibr; *subP = pg - pi; *subNP = pl;
         return kPgLibr;
     }
-    if (gPage == pi + pl)
+    if (pg == pi + pl)
         return kPgSkwr;
-    if (gPage == pi + pl + 1)
+    if (pg == pi + pl + 1)
         return kPgSkev;
-    if (gPage == pi + pl + 2)
+    if (pg == pi + pl + 2)
         return kPgSkraw;
     return kPgEvents;
 }
@@ -486,6 +503,82 @@ static void DrawSkrawPage(void)
     DrawRaw(10, "Dc", 39);
 }
 
+/* 본체 DB(SkCo/MnSk)가 있으면 true, 버전 */
+static Boolean CoreDB(UInt16 *verP)
+{
+    DmSearchStateType st;
+    UInt16  card = 0;
+    LocalID id = 0;
+
+    *verP = 0;
+    if (DmGetNextDatabaseByTypeCreator(true, &st, kCoreType, kSkCreator, true, &card, &id) != errNone ||
+        id == 0)
+        return false;
+    DmDatabaseInfo(card, id, NULL, NULL, verP, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+    return true;
+}
+
+/* 줄 = 앞말 + 뒷말 (gcc 2.95가 문자열 주소를 변수에 골라 담는 코드에서 내부 오류를 내서, 바로 그린다) */
+static void Row2(UInt16 row, const Char *a, const Char *b)
+{
+    Char s[kLineLen];
+
+    StrCopy(s, a);
+    StrCat(s, b);
+    DrawRow(row, s);
+}
+
+static void DrawMainPage(void)
+{
+    Char    s[kLineLen];
+    UInt32  rec = SkFtr(kSkFtrNum), pr = SkFtr(60), ld = SkFtr(56), cb = SkFtr(55);
+    Boolean loaderDB = false;
+    UInt16  i, ver;
+
+    for (i = 0; i < gSkwrN; i++)
+        if (gSkwr[i].creator == kSkCreator)
+            loaderDB = true;
+
+    if (!loaderDB)
+        Row2(1, "loader: ", "not installed");
+    else if ((rec >> 16) != kSkMagic)
+        Row2(1, "loader: ", "installed, reset needed");
+    else {
+        StrPrintF(s, "loader: build %u", (UInt16)(rec & 0xFF));
+        DrawRow(1, s);
+        if ((pr >> 16) != 0x5052)
+            Row2(2, "  protect: ", "on (old loader)");
+        else if ((pr & 0xFFFF) == 0)
+            Row2(2, "  protect: ", "released");
+        else if ((pr & 0xFFFF) == 0xFFFF)
+            Row2(2, "  protect: ", "? (db not found)");
+        else
+            Row2(2, "  protect: ", "error");
+    }
+
+    if (!CoreDB(&ver))
+        Row2(4, "core: ", "not installed");
+    else {
+        if ((cb >> 16) == kSkMagic)
+            StrPrintF(s, "core: build %u (abi %u)", (UInt16)(cb & 0xFF), ver);
+        else
+            StrPrintF(s, "core: installed (abi %u)", ver);
+        DrawRow(4, s);
+    }
+
+    if (ld == 0)      Row2(5, "  load: ", "- (turn keyboard on)");
+    else if (ld == 1) Row2(5, "  load: ", "ok");
+    else if (ld == 2) Row2(5, "  load: ", "core not found");
+    else if (ld == 3) Row2(5, "  load: ", "core resource missing");
+    else if (ld == 4) Row2(5, "  load: ", "core version mismatch");
+    else              Row2(5, "  load: ", "lock failed");
+
+    Row2(6, "keyboard: ", SkFtr(58) ? "on" : "off");
+    Row2(kMainRowDebug, gDebug ? "[x]" : "[ ]", " debug");
+    DrawRow(10, "core update: off > install > on");
+    DrawRow(11, "loader update: off > install > reset");
+}
+
 static void Draw(void)
 {
     RectangleType r;
@@ -500,6 +593,10 @@ static void Draw(void)
     WinEraseRectangle(&r, 0);
 
     switch (kind) {
+    case kPgMain:
+        StrPrintF(title, "%u/%u MnSk keyboard", gPage + 1, TotalPages());
+        DrawMainPage();
+        break;
     case kPgInfo:
     case kPgLibr:
         StrPrintF(title, "%u/%u %s %u/%u", gPage + 1, TotalPages(),
@@ -555,6 +652,18 @@ static void HandleAppTap(Int16 x, Int16 y)
     UInt16   kind = PageKind(&b, &sub, &subN);
     Int16    row = y / kLineH - 1;     /* 내용 영역 줄 번호 */
 
+    if (kind == kPgMain) {
+        if (row == kMainRowDebug) {
+            gDebug = !gDebug;
+            PrefSetAppPreferences(kAppCreator, kPrefDebug, 1, &gDebug, sizeof(gDebug), true);
+            gPage = 0;
+            Draw();
+        } else if (gDebug) {
+            GoPage(1);
+        }
+        return;
+    }
+
     if (kind == kPgEvents) {
         if (y >= kScreenW / 2) {
             gIntercept = !gIntercept;
@@ -592,6 +701,12 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
 
+    {
+        UInt16 size = sizeof(gDebug);
+
+        if (PrefGetAppPreferences(kAppCreator, kPrefDebug, &gDebug, &size, true) == noPreferenceFound)
+            gDebug = false;
+    }
     CollectInfo();
     CollectLibr();
     CollectSkwr();
