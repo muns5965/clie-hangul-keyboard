@@ -59,6 +59,11 @@ jobs:
           fi
           cat build-diag.log
           ls -l bin/
+          # PRC 헤더의 날짜(36~47바이트)를 0으로 바꾼 해시: 로컬 빌드와 동일한지 비교용
+          for f in bin/*.prc; do
+            h=$({ head -c 36 "$f"; head -c 12 /dev/zero; tail -c +49 "$f"; } | sha256sum | cut -c1-16)
+            echo "::notice::$(basename "$f") size=$(stat -c %s "$f") hash(no-date)=$h"
+          done
 
       - uses: actions/upload-artifact@v4
         if: always()
