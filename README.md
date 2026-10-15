@@ -16,7 +16,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)용 한글 소프트 키보드 입력기 프�
 | 0 | PRC 빌드 도구 체인 구성 | 완료 |
 | 1 | 진단 PRC(`bin/ClieDiag.prc`): OS·기기 정보, 화면 모드, Sony HR/Silk 라이브러리 존재 여부, libr 목록, 펜·키 이벤트 | v4 (SkWr 시험·DisS 스위치) 빌드 완료 |
 | 2 | 입력 시험 PRC (자체 폼 필드): 영문 → KSC 완성형 삽입·삭제 → 조합 중 음절 교체 | 대기 |
-| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 1단계 플러그인 빌드 완료, 실측 대기 |
+| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 1단계 실측 성공(로드·Open·FtrSet), 2단계(이벤트 카운터) 대기 |
 
 ## 설계 메모
 
@@ -82,6 +82,9 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
 - 기록 형식: 31~16 식별값 `0x534B`('SK'), 15~8 이벤트 번호, 7~0 빌드 번호.
 - 판정: ClieDiag SkWr 페이지에 `OK evt=1 build=1`이 나오면 로드·Open 수신·기록 성공. `record: none`이면 로드 안 됨/Open 미수신/기록 실패 중 하나(구분 불가).
 - **시험은 CloudpilotEmu 복사본 세션에서만.** 설치 후 리셋해야 로드된다(부팅 시 로딩).
+- **실측 결과 (2026-10-16, CloudpilotEmu 복사본 세션)**: 설치 전 `record: none (e=0C02)`·`SkWr installed: 0` →
+  설치·리셋 후 부팅 정상, `record: 534B0101`·`OK evt=1 build=1`·`MnSk MnSkPlugin` 표시.
+  자체 제작 `SkWr` 플러그인이 SilkExtn에 로드되고 Open(1)을 받으며, 부팅 중 `FtrSet`이 동작함을 확인.
 - 복구 수단(신뢰도 순): ① 세션 백업 복원 ② ClieDiag `[DisS]` 스위치 켜고 리셋 → 플러그인 미로딩·미보호 → 삭제 (코드상 확인, 실측 전) ③ 확장 없이 리셋 후 삭제 (미검증).
 
 ## 실리클릿(Slkw) 분석 메모
