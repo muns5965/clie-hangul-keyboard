@@ -1,5 +1,5 @@
 /*
- * ClieDiag v12 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v13 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
  *
  * 페이지
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
@@ -39,7 +39,7 @@
 #define kSkFtrLast     17
 #define kSkFtrOver     18
 #define kSkFtrOut      19
-#define kSkFtrMax      53     /* 플러그인 기록 마지막 번호 */
+#define kSkFtrMax      56     /* 지울 플러그인 기록 마지막 번호. #57·#58(본체 핸들·주소)은 지우지 않는다 */
 #define kSkMagic       0x534BUL
 #define kDisSType      'DisS'
 #define kDisSCreator   'SeSi'
@@ -329,6 +329,7 @@ static Boolean IsSilkPen(EventType *e)
 /* ---------------------------------------------------------------- 화면 */
 
 static void Hex8(UInt32 v, Char *o);
+static UInt32 SkFtr(UInt16 num);
 
 static void DrawRow(UInt16 row, const Char *s)
 {
@@ -353,8 +354,9 @@ static void DrawSkwrPage(void)
     } else {
         StrPrintF(s, "record: %lx", v);
         DrawRow(0, s);
-        StrPrintF(s, "OK evt=%u build=%u", (UInt16)((v >> 8) & 0xFF),
-                  (UInt16)(v & 0xFF));
+        /* build = 로더(SkWr) 빌드, core = 본체 빌드(자판을 한 번 켠 뒤 기록, #55) */
+        StrPrintF(s, "OK evt=%u build=%u core=%u", (UInt16)((v >> 8) & 0xFF),
+                  (UInt16)(v & 0xFF), (UInt16)(SkFtr(55) & 0xFF));
         DrawRow(1, s);
     }
     DrawRow(kSkRowClear, "[clear record]  <- tap");
@@ -419,14 +421,21 @@ static void DrawSkevPage(void)
         DrawRow(8, s);
     }
     {
-        /* 9단계: #52 HR 라이브러리(오류<<16 | 참조 번호), #53 HR 그리기 창 크기 */
+        /* #52 HR 라이브러리(오류<<16 | 참조 번호), #53 HRWinGetWindowExtent 원래 값, #54 고해상도 표시 */
         UInt32 hr = SkFtr(52), ex = SkFtr(53);
 
-        StrPrintF(s, "hr ref=%u e=%x win=%ux%u", (UInt16)hr, (UInt16)(hr >> 16),
-                  (UInt16)(ex >> 16), (UInt16)ex);
+        StrPrintF(s, "hr ref=%u e=%x raw=%ux%u hi=%lu", (UInt16)hr, (UInt16)(hr >> 16),
+                  (UInt16)(ex >> 16), (UInt16)ex, SkFtr(54));
         DrawRow(10, s);
     }
-    DrawRow(11, "6 Disp 7 Dn 8 Move 9 Up");
+    {
+        /* 10단계: 로더가 불러온 본체. #55 본체 빌드, #56 불러오기 결과(1 성공 2 DB없음 3 리소스없음 4 버전 5 잠금) */
+        UInt32 cb = SkFtr(55);
+
+        StrPrintF(s, "core build=%u load=%lu %s", (UInt16)(cb & 0xFF), SkFtr(56),
+                  SkFtr(58) ? "on" : "off");
+        DrawRow(11, s);
+    }
 }
 
 /* 32비트 값을 항상 8자리 16진수로 (StrPrintF의 자릿수 지정에 의존하지 않음) */

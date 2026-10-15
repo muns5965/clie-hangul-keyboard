@@ -1,5 +1,10 @@
 /*
- * MnSk - NR70V SilkWare(SkWr) 플러그인 9단계: 4줄 자판 + 한글 조합 + 고해상도(HR 라이브러리) 그리기 시험
+ * MnSk 본체(MnSkCore.prc) - 10단계: 4줄 자판 + 한글 조합 + 고해상도 그리기
+ *
+ * 10단계부터 SkWr 플러그인은 작은 로더(src/skwr/loader.c → MnSkPlugin.prc)이고, 이 파일은 본체다.
+ * 로더가 Open을 처리하고, 자판이 켜질 때(Start 등) 본체 DB(타입 SkCo, 리소스 MnCo 0)의 코드를 잠가
+ * 이 진입 함수를 부른다. 첫 인자는 SilkExtn이 넘긴 슬롯 값(실크 창) 그대로다.
+ * 본체는 위치 독립 코드여야 한다(전역·A5·재배치 없음, 점프표·KSC 표는 PC 상대) — 빌드 스크립트가 검사.
  *
  * 확정 사항 (ROM SilkExtn 역분석 + 1~6단계 실측, 2026-10-16):
  *   - 호출: Err entry(UInt32 *slotOrValue, UInt8 *event, void *out)
@@ -39,11 +44,12 @@
  *   #49 자판 상태(비트0 영문, 비트1 숫자, 비트8 Shift)
  *   #50 조합 상태(31~24 초성, 23~16 중성, 15~8 종성: 호환 자모 - 0x3130, 7~0 화면에 나간 글자 수)
  *   #51 조합 중인 앱 LocalID
- *   #52 HR 라이브러리 (31~16 SysLibFind 오류, 15~0 참조 번호), #53 HR 그리기 창 크기(31~16 너비, 15~0 높이)
+ *   #52 HR 라이브러리 (31~16 SysLibFind 오류, 15~0 참조 번호), #53 HRWinGetWindowExtent 원래 값(참고용)
+ *   #54 고해상도 표시(Start/DispChange +14), #55 본체 기록(31~16 'SK', 7~0 빌드)
  *
- * 9단계: 자판을 HR 라이브러리로 320x130 고해상도에 그린다(hrStdFont). 펜 좌표·판정은 저해상도 그대로.
- *   HR을 못 찾거나 창 크기가 고해상도가 아니면 저해상도로 그린다.
- *   확인할 것: HRWinDrawChars가 CJKOS를 거쳐 한글 2바이트 키 이름을 제대로 그리는지.
+ * 9단계 실측: HRWinGetWindowExtent가 실크 창에서 160x65를 돌려줘 저해상도로 그려짐(선명해지지 않음).
+ * 10단계: SilkExtn처럼(ROM 0x0178) 실크 창은 저해상도 크기 그대로 두고 좌표만 2배로 HR 함수에 넘긴다.
+ *   고해상도 여부는 Start/DispChange +14 표시로 판단(런처 1, 저해상도 앱 0).
  */
 
 #ifdef MNSK_HOST_TEST
@@ -54,7 +60,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      9
+#define kSkBuild      10
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -83,6 +89,8 @@
 #define kFtrCompApp   51
 #define kFtrHrRef     52
 #define kFtrHrExt     53
+#define kFtrHires     54
+#define kFtrCoreBuild 55
 #define kEvtStop      4
 
 #define kStEng        0x0001
@@ -419,15 +427,27 @@ static inline UInt16 HrRef(void)
     return err ? 0xFFFF : ref;
 }
 
-/* 그리기 창 크기. hr이면 고해상도 좌표 */
-static inline void DrawExt(UInt16 hr, Coord *w, Coord *h)
+/* 그리기 준비(현재 그리기 창이 실크 창일 때). HR로 그리면 참조 번호, 아니면 0xFFFF.
+ * w,h = 배치 계산 크기: 저해상도 창 크기, HR이면 그 2배(고해상도 좌표) */
+static inline UInt16 DrawSetup(Coord *w, Coord *h)
 {
+    UInt16 hr = 0xFFFF;
+
     *w = 0;
     *h = 0;
-    if (hr != 0xFFFF)
-        HRWinGetWindowExtent(hr, w, h);
-    else
-        WinGetWindowExtent(w, h);
+    WinGetWindowExtent(w, h);
+    if (GetFtr(kFtrHires) != 0) {
+        hr = HrRef();
+        if (hr != 0xFFFF) {
+            Coord hw = 0, hh = 0;
+
+            HRWinGetWindowExtent(hr, &hw, &hh);
+            FtrSet(kSkCreator, kFtrHrExt, ((UInt32)(UInt16)hw << 16) | (UInt16)hh);
+            *w *= 2;
+            *h *= 2;
+        }
+    }
+    return hr;
 }
 
 static inline void KeyInner(UInt16 hr, RectangleType *r)
@@ -467,13 +487,7 @@ static inline void DrawKeys(UInt32 hwin)
     if (!WinOk(hwin))
         return;
     prev = WinSetDrawWindow((WinHandle)hwin);
-    hr = HrRef();
-    DrawExt(hr, &w, &h);
-    if (hr != 0xFFFF && (w < 200 || h < 80)) {   /* 고해상도 크기가 아니면 저해상도로 */
-        hr = 0xFFFF;
-        WinGetWindowExtent(&w, &h);
-    }
-    FtrSet(kSkCreator, kFtrHrExt, ((UInt32)(UInt16)w << 16) | (UInt16)h);
+    hr = DrawSetup(&w, &h);
 
     RctSetRectangle(&r, 0, 0, w, h);
     if (hr != 0xFFFF) {
@@ -530,12 +544,7 @@ static inline void InvertKey(UInt32 hwin, UInt16 k)
     if (k == 0 || !WinOk(hwin))
         return;
     prev = WinSetDrawWindow((WinHandle)hwin);
-    hr = HrRef();
-    DrawExt(hr, &w, &h);
-    if (hr != 0xFFFF && (w < 200 || h < 80)) {
-        hr = 0xFFFF;
-        WinGetWindowExtent(&w, &h);
-    }
+    hr = DrawSetup(&w, &h);
     InvertCell(hr, (UInt16)GetFtr(kFtrState), k, w, h);
     WinSetDrawWindow(prev);
 }
@@ -958,6 +967,8 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
 
     case kEvtStart:
         RawFtr(kFtrStartRaw, event);
+        FtrSet(kSkCreator, kFtrCoreBuild, (kSkMagic << 16) | kSkBuild);
+        FtrSet(kSkCreator, kFtrHires, event[14]);
         Commit();
         DrawKeys((UInt32)slot);
         break;
@@ -995,6 +1006,7 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
 
     case kEvtDisp:
         RawFtr(kFtrDispRaw, event);
+        FtrSet(kSkCreator, kFtrHires, event[14]);
         DrawKeys((UInt32)slot);
         break;
     }

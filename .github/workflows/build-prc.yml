@@ -110,11 +110,11 @@ jobs:
             echo "::notice::$(basename "$f") hash(no-date)=$h"
           done
           # 플러그인 코드 1KB 블록별 해시 (로컬 빌드와 비교용)
-          if [ -f build/skwr/code0000.bin ]; then
-            b=build/skwr/code0000.bin; n=$(( ($(stat -c %s $b) + 1023) / 1024 )); l=""
+          if [ -f build/core/MnCo0000.bin ]; then
+            b=build/core/MnCo0000.bin; n=$(( ($(stat -c %s $b) + 1023) / 1024 )); l=""
             for ((i=0; i<n; i++)); do l="$l $(dd if=$b bs=1024 skip=$i count=1 2>/dev/null | sha256sum | cut -c1-4)"; done
-            echo "::notice::code0000 blocks:$l"
-            echo "::notice::traps: $(grep -A1 'trap #15' build/skwr/skwr.dis | grep -v trap | awk '{print $2}' | sort | uniq -c | tr '\n' ' ')"
+            echo "::notice::core blocks:$l"
+            echo "::notice::traps: $(grep -A1 'trap #15' build/core/skwr.dis | grep -v trap | awk '{print $2}' | sort | uniq -c | tr '\n' ' ')"
           fi
 
       - uses: actions/upload-artifact@v4
