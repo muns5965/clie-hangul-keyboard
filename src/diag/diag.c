@@ -1,5 +1,5 @@
 /*
- * ClieDiag v16 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v17 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -8,6 +8,7 @@
  *      To Do 데이터까지 지울 수 있어서).
  * v16: Main에 "[soft reset: hold 3s]" — 3초 동안 누르고 있으면 SysReset(), 중간에 떼면 취소.
  *      로더 업데이트(설치 → 바로 리셋)를 앱 안에서 끝내기 위해.
+ * v17: 누를 수 있는 줄은 둥근 테두리 버튼, 디버그는 네모 체크박스로 그린다. 누르면 버튼이 반전된다.
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -100,6 +101,7 @@ static Boolean  gIntercept = false;
 static UInt32   gPenMoves = 0;
 static Boolean  gHoldLast = false;  /* 조작 결과를 바로 뒤 penUp이 덮어쓰지 않게 */
 static Boolean  gDebug = false;     /* 진단 페이지 표시 (앱 설정 kPrefDebug) */
+static Int16    gBtnW[kVisible];    /* 줄별 버튼 너비(0 = 버튼 없음). Draw 때마다 새로 정한다 */
 
 static SkwrInfo gSkwr[kMaxSkwr];
 static UInt16   gSkwrN = 0;
@@ -378,6 +380,53 @@ static void DrawRow(UInt16 row, const Char *s)
     WinDrawChars(s, StrLen(s), 0, (row + 1) * kLineH);
 }
 
+/* 버튼 안쪽 영역 (테두리는 이 바깥 1픽셀, 한 줄 높이 안에 들어간다) */
+static void BtnRect(UInt16 row, Int16 w, RectangleType *r)
+{
+    RctSetRectangle(r, 3, (row + 1) * kLineH + 1, w, kLineH - 2);
+}
+
+/* 둥근 테두리 버튼 */
+static void DrawButton(UInt16 row, const Char *label)
+{
+    RectangleType r;
+    Int16         w = FntCharsWidth(label, StrLen(label)) + 6;
+
+    BtnRect(row, w, &r);
+    WinDrawChars(label, StrLen(label), 6, (row + 1) * kLineH);
+    WinDrawRectangleFrame(roundFrame, &r);
+    if (row < kVisible)
+        gBtnW[row] = w;
+}
+
+/* 버튼 반전(누름 표시) */
+static void InvertButton(UInt16 row)
+{
+    RectangleType r;
+
+    if (row >= kVisible || gBtnW[row] == 0)
+        return;
+    BtnRect(row, gBtnW[row], &r);
+    WinInvertRectangle(&r, 0);
+}
+
+/* 네모 체크박스 + 이름 */
+static void DrawCheck(UInt16 row, const Char *label, Boolean on)
+{
+    RectangleType r;
+    Coord         y = (row + 1) * kLineH;
+
+    RctSetRectangle(&r, 3, y + 2, 7, 7);
+    WinDrawRectangleFrame(simpleFrame, &r);
+    if (on) {
+        WinDrawLine(4, y + 5, 5, y + 7);
+        WinDrawLine(5, y + 7, 9, y + 2);
+        WinDrawLine(4, y + 6, 5, y + 8);
+        WinDrawLine(5, y + 8, 9, y + 3);
+    }
+    WinDrawChars(label, StrLen(label), 14, y);
+}
+
 static void DrawSkwrPage(void)
 {
     Char    s[kLineLen], cc[5];
@@ -401,15 +450,15 @@ static void DrawSkwrPage(void)
                   (UInt16)(v & 0xFF), (UInt16)(SkFtr(55) & 0xFF));
         DrawRow(1, s);
     }
-    DrawRow(kSkRowClear, "[clear record]  <- tap");
+    DrawButton(kSkRowClear, "Clear Record");
     if (DmFindDatabase(0, kRescueName))
-        DrawRow(kSkRowRescue, "[delete DiagRescue] <- tap");
+        DrawButton(kSkRowRescue, "Delete DiagRescue");
 
     card = 0;
     if (FindDisS(&card))
-        DrawRow(kSkRowDisS, "[DisS ON: silk off] <- tap");
+        DrawButton(kSkRowDisS, "DisS: ON (silk off)");
     else
-        DrawRow(kSkRowDisS, "[DisS off: normal] <- tap");
+        DrawButton(kSkRowDisS, "DisS: off (normal)");
     DrawRow(kSkRowDisS + 1, "(switch needs reset)");
 
     StrPrintF(s, "-- SkWr installed: %u --", gSkwrN);
@@ -601,10 +650,10 @@ static void DrawMainPage(void)
     else              Row2(5, "  load: ", "lock failed");
 
     Row2(6, "keyboard: ", SkFtr(58) ? "on" : "off");
-    DrawRow(kMainRowReset, "[soft reset: hold 3s]");
-    Row2(kMainRowDebug, gDebug ? "[x]" : "[ ]", " debug");
-    DrawRow(10, "core update: off > install > on");
-    DrawRow(11, "loader update: off > install > reset");
+    DrawButton(kMainRowReset, "Soft Reset (hold 3s)");
+    DrawCheck(kMainRowDebug, "Debug", gDebug);
+    DrawRow(10, "core: off > install > on");
+    DrawRow(11, "loader: off > install > reset");
 }
 
 static void Draw(void)
@@ -616,6 +665,7 @@ static void Draw(void)
     Char     title[kLineLen];
 
     kind = PageKind(&b, &sub, &subN);
+    MemSet(gBtnW, sizeof(gBtnW), 0);
 
     RctSetRectangle(&r, 0, 0, kScreenW, kScreenW);
     WinEraseRectangle(&r, 0);
@@ -651,7 +701,7 @@ static void Draw(void)
         start = (gLog.n > kEvRowInt) ? (Int16)(gLog.n - kEvRowInt) : 0;
         for (i = 0; i < kEvRowInt && start + i < (Int16)gLog.n; i++)
             DrawRow((UInt16)i, gLog.t[start + i]);
-        DrawRow(kEvRowInt, gIntercept ? "[INT ON: silk blocked] <- tap" : "[INT off] <- tap");
+        DrawButton(kEvRowInt, gIntercept ? "INT: ON (silk blocked)" : "INT: off");
         break;
     }
 
@@ -686,14 +736,16 @@ static void HoldReset(void)
         left = (Int16)(kResetHoldSec - (TimGetTicks() - t0) / tps);
         if (left <= 0) {
             WinEraseRectangle(&r, 0);
-            DrawRow(kMainRowReset, "resetting...");
+            DrawButton(kMainRowReset, "Resetting...");
+            InvertButton(kMainRowReset);
             SysReset();
             return;
         }
         if (left != shown) {
             WinEraseRectangle(&r, 0);
-            StrPrintF(s, "reset in %d (release=cancel)", left);
-            DrawRow(kMainRowReset, s);
+            StrPrintF(s, "Reset in %d (release: cancel)", left);
+            DrawButton(kMainRowReset, s);
+            InvertButton(kMainRowReset);
             shown = left;
         }
         SysTaskDelay(tps / 20);
@@ -710,6 +762,12 @@ static void HandleAppTap(Int16 x, Int16 y)
     UInt16   sub, subN;
     UInt16   kind = PageKind(&b, &sub, &subN);
     Int16    row = y / kLineH - 1;     /* 내용 영역 줄 번호 */
+
+    /* 버튼이면 잠깐 반전해 눌린 것을 보여 준다 (리셋 버튼은 HoldReset이 따로 표시) */
+    if (row >= 0 && row < kVisible && gBtnW[row] != 0 && !(kind == kPgMain && row == kMainRowReset)) {
+        InvertButton((UInt16)row);
+        SysTaskDelay(SysTicksPerSecond() / 8);
+    }
 
     if (kind == kPgMain) {
         if (row == kMainRowReset) {
