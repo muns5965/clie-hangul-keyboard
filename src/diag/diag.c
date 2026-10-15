@@ -1,11 +1,13 @@
 /*
- * ClieDiag v15 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v16 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
  * v15: Events의 INT 전환은 맨 아래 "[INT ...]" 줄 탭으로만(아래 절반 탭으로 실수로 켜져 홈 아이콘이 막혔음).
  *      SkWr 페이지에 "[delete DiagRescue]" — 이름으로 그 DB만 지운다(런처 삭제는 같은 크리에이터 'todo'의
  *      To Do 데이터까지 지울 수 있어서).
+ * v16: Main에 "[soft reset: hold 3s]" — 3초 동안 누르고 있으면 SysReset(), 중간에 떼면 취소.
+ *      로더 업데이트(설치 → 바로 리셋)를 앱 안에서 끝내기 위해.
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -87,6 +89,8 @@ enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain };
 #define kAppCreator    'MnDg'
 #define kPrefDebug     0
 #define kMainRowDebug  9
+#define kMainRowReset  8
+#define kResetHoldSec  3
 #define kCoreType      'SkCo'
 
 static LineBuf  gInfo, gLibr, gLog;
@@ -597,6 +601,7 @@ static void DrawMainPage(void)
     else              Row2(5, "  load: ", "lock failed");
 
     Row2(6, "keyboard: ", SkFtr(58) ? "on" : "off");
+    DrawRow(kMainRowReset, "[soft reset: hold 3s]");
     Row2(kMainRowDebug, gDebug ? "[x]" : "[ ]", " debug");
     DrawRow(10, "core update: off > install > on");
     DrawRow(11, "loader update: off > install > reset");
@@ -667,6 +672,37 @@ static void GoPage(Int16 delta)
     Draw();
 }
 
+/* "[soft reset]" 줄을 누르고 있는 동안 남은 초를 보여 주고, 다 채우면 소프트 리셋. 떼면 취소 */
+static void HoldReset(void)
+{
+    UInt32        t0 = TimGetTicks(), tps = SysTicksPerSecond();
+    Int16         x, y, shown = -1, left;
+    Boolean       down = true;
+    RectangleType r;
+    Char          s[kLineLen];
+
+    RctSetRectangle(&r, 0, (kMainRowReset + 1) * kLineH, kScreenW, kLineH);
+    while (down) {
+        left = (Int16)(kResetHoldSec - (TimGetTicks() - t0) / tps);
+        if (left <= 0) {
+            WinEraseRectangle(&r, 0);
+            DrawRow(kMainRowReset, "resetting...");
+            SysReset();
+            return;
+        }
+        if (left != shown) {
+            WinEraseRectangle(&r, 0);
+            StrPrintF(s, "reset in %d (release=cancel)", left);
+            DrawRow(kMainRowReset, s);
+            shown = left;
+        }
+        SysTaskDelay(tps / 20);
+        EvtGetPen(&x, &y, &down);
+    }
+    SetLast("reset cancelled");
+    Draw();
+}
+
 /* 앱 영역 탭 처리 */
 static void HandleAppTap(Int16 x, Int16 y)
 {
@@ -676,6 +712,10 @@ static void HandleAppTap(Int16 x, Int16 y)
     Int16    row = y / kLineH - 1;     /* 내용 영역 줄 번호 */
 
     if (kind == kPgMain) {
+        if (row == kMainRowReset) {
+            HoldReset();
+            return;
+        }
         if (row == kMainRowDebug) {
             gDebug = !gDebug;
             PrefSetAppPreferences(kAppCreator, kPrefDebug, 1, &gDebug, sizeof(gDebug), true);
