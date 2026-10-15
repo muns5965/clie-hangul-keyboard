@@ -1,47 +1,41 @@
 /*
- * ClieDiag v3 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v4 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
  *
  * 페이지
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
  *   Libr   : 설치된 공유 라이브러리('libr') DB 목록
- *   Silk   : 현재 활성 실리클릿(Slkw) 조회, 설치된 실리클릿 목록, 탭하여 전환/복원
+ *   SkWr   : SilkWare 플러그인 시험. 설치된 'SkWr' DB 목록, 플러그인 기록
+ *            (feature 'MnSk' #0) 해석, 기록 초기화, 실크 비활성화 스위치(DisS) 켜기/끄기
  *   Events : 이벤트 기록, Graffiti 영역(y>=160) 펜 이벤트 가로채기(INT) 토글
  *
  * 조작
  *   - 위/아래 버튼: 이전/다음 페이지
  *   - Info/Libr: 앱 영역 탭 → 다음 페이지
- *   - Silk: 목록 줄 탭 → 해당 실리클릿으로 전환, "restore" 줄 → 처음 상태로 복원,
+ *   - SkWr: "[clear record]" 줄 탭 → 기록 삭제, "[DisS ...]" 줄 탭 → 스위치 전환,
  *           그 외 영역 탭 → 다음 페이지
  *   - Events: 위쪽 절반 탭 → 다음 페이지, 아래쪽 절반 탭 → INT 토글
- *   - 맨 아래 줄: 마지막 이벤트 / 마지막 Silk 호출 결과
+ *   - 맨 아래 줄: 마지막 이벤트 / 마지막 조작 결과
  *
- * Sony Silk Library 확장(Vsk) 함수는 Sony 원본 헤더 SonySilkLib.h(Vsk 판)의
- * 트랩 번호와 원형을 따른다. 실제 사용 예: SilkletMgr(VskGetCurrentSlkw),
- * SlkClock(VskSetCurrentSlkw).
+ * 실크 비활성화 스위치: ROM SilkExtn(SilkStartup, 0x27EC)은 부팅 시 타입 'DisS',
+ * 크리에이터 'SeSi' DB가 있으면 실크 초기화 전체(SkWr 플러그인 로딩·보호 포함)를
+ * 건너뛴다. 플러그인 문제 복구용. 전환 후 리셋해야 적용된다.
  *
- * v2의 적재 라이브러리 표 읽기(SysLibTblEntry)는 Fatal Exception을 일으켜 제거했다.
- * 소니 함수 호출 직전에는 화면 맨 위에 진행 단계를 찍는다(크래시 위치 확인용).
+ * v3의 Silk(Vsk) 페이지는 NR70V에 없는 함수(VskGetCurrentSlkw)를 불러
+ * Fatal Exception을 일으켜 제거했다. v2의 SysLibTblEntry 표 읽기도 제거 상태.
  */
 
 #include <PalmOS.h>
 
-/* ---------------------------------------------------------------- Sony Silk (Vsk) */
+/* ---------------------------------------------------------------- SkWr 시험 */
 
-#define kSilkLibName        "Sony Silk Library"
-#define silkLibErrNotOpen   (oemErrorClass | 0x700 | 2)
-
-/* 트랩 번호: sysLibTrapCustom(0xA805)부터 순서대로
- *   A805 ResizeDispWin, A806 EnableResize, A807 DisableResize,
- *   A808 GetAPIVersion, A809 SetCurrentSlkw, A80A GetCurrentSlkw, ... */
-Err    SilkLibOpen(UInt16 refNum)                     SYS_TRAP(sysLibTrapOpen);
-Err    SilkLibClose(UInt16 refNum)                    SYS_TRAP(sysLibTrapClose);
-UInt32 VskGetAPIVersion(UInt16 refNum)                SYS_TRAP(sysLibTrapCustom + 3);
-Err    VskSetCurrentSlkw(UInt16 refNum, UInt16 slkwType, UInt32 creator)
-                                                      SYS_TRAP(sysLibTrapCustom + 4);
-Err    VskGetCurrentSlkw(UInt16 refNum, UInt16 slkwType, UInt32 *creatorP)
-                                                      SYS_TRAP(sysLibTrapCustom + 5);
-
-#define kSlkwDBType   'Slkw'
+#define kSilkLibName   "Sony Silk Library"
+#define kSkwrDBType    'SkWr'
+#define kSkCreator     'MnSk'
+#define kSkFtrNum      0
+#define kSkMagic       0x534BUL
+#define kDisSType      'DisS'
+#define kDisSCreator   'SeSi'
+#define kDisSName      "MnSilkDisable"
 
 /* ---------------------------------------------------------------- 화면/버퍼 */
 
@@ -51,11 +45,12 @@ Err    VskGetCurrentSlkw(UInt16 refNum, UInt16 slkwType, UInt32 *creatorP)
 #define kVisible    12          /* 제목줄 1 + 내용 12 + 하단 상태줄 1 */
 #define kScreenW    160
 #define kSilkTopY   160
-#define kMaxSlkw    8
+#define kMaxSkwr    8
 
-/* Silk 페이지 줄 배치 (내용 영역 기준 0부터) */
-#define kSilkRowRestore   3
-#define kSilkRowFirst     5
+/* SkWr 페이지 줄 배치 (내용 영역 기준 0부터) */
+#define kSkRowClear   3
+#define kSkRowDisS    5
+#define kSkRowFirst   8
 
 typedef struct {
     Char   t[kMaxLines][kLineLen];
@@ -65,9 +60,9 @@ typedef struct {
 typedef struct {
     UInt32 creator;
     Char   name[dmDBNameLength];
-} SlkwInfo;
+} SkwrInfo;
 
-enum { kPgInfo, kPgLibr, kPgSilk, kPgEvents };
+enum { kPgInfo, kPgLibr, kPgSkwr, kPgEvents };
 
 static LineBuf  gInfo, gLibr, gLog;
 static Char     gLast[kLineLen] = "-";
@@ -75,13 +70,8 @@ static UInt16   gPage = 0;
 static Boolean  gIntercept = false;
 static UInt32   gPenMoves = 0;
 
-static UInt16   gSilkRef = sysInvalidRefNum;
-static Boolean  gSilkOpened = false;
-static Err      gOrigErr = 0;
-static UInt32   gOrig = 0;
-static Boolean  gOrigValid = false;
-static SlkwInfo gSlkw[kMaxSlkw];
-static UInt16   gSlkwN = 0;
+static SkwrInfo gSkwr[kMaxSkwr];
+static UInt16   gSkwrN = 0;
 
 /* ---------------------------------------------------------------- 공통 */
 
@@ -109,16 +99,6 @@ static void FourCC(UInt32 v, Char *o)
     o[4] = 0;
 }
 
-/* 진행 단계 표시: 소니 함수 호출 직전에 화면 맨 위에 찍는다. */
-static void Crumb(const Char *s)
-{
-    RectangleType r;
-
-    RctSetRectangle(&r, 0, 0, kScreenW, kLineH);
-    WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars(s, StrLen(s), 0, 0);
-}
-
 static void SetLast(const Char *s)
 {
     StrNCopy(gLast, s, kLineLen - 1);
@@ -132,7 +112,7 @@ static UInt16 PagesOf(LineBuf *b)
 
 static UInt16 TotalPages(void)
 {
-    return PagesOf(&gInfo) + PagesOf(&gLibr) + 2;   /* + Silk + Events */
+    return PagesOf(&gInfo) + PagesOf(&gLibr) + 2;   /* + SkWr + Events */
 }
 
 /* 현재 페이지 종류와, Info/Libr이면 버퍼와 하위 페이지 번호 */
@@ -151,7 +131,7 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
         return kPgLibr;
     }
     if (gPage == pi + pl)
-        return kPgSilk;
+        return kPgSkwr;
     return kPgEvents;
 }
 
@@ -200,8 +180,6 @@ static void CollectInfo(void)
     ref = sysInvalidRefNum;
     err = SysLibFind(kSilkLibName, &ref);
     StrPrintF(NextLine(&gInfo), "Silk lib: e=%x ref=%u", (UInt16)err, ref);
-    if (err == errNone)
-        gSilkRef = ref;
 }
 
 static void CollectLibr(void)
@@ -230,8 +208,8 @@ static void CollectLibr(void)
         StrCopy(NextLine(&gLibr), "(no libr found)");
 }
 
-/* 설치된 실리클릿(Slkw) 목록 */
-static void CollectSlkw(void)
+/* 설치된 SilkWare 플러그인(SkWr) 목록 */
+static void CollectSkwr(void)
 {
     DmSearchStateType st;
     UInt16  card;
@@ -239,57 +217,56 @@ static void CollectSlkw(void)
     Boolean first = true;
     UInt32  crid;
 
-    gSlkwN = 0;
-    while (gSlkwN < kMaxSlkw &&
-           DmGetNextDatabaseByTypeCreator(first, &st, kSlkwDBType, 0,
-                                          true, &card, &id) == errNone) {
+    gSkwrN = 0;
+    while (gSkwrN < kMaxSkwr &&
+           DmGetNextDatabaseByTypeCreator(first, &st, kSkwrDBType, 0,
+                                          false, &card, &id) == errNone) {
         first = false;
         crid = 0;
-        gSlkw[gSlkwN].name[0] = 0;
-        DmDatabaseInfo(card, id, gSlkw[gSlkwN].name, NULL, NULL, NULL, NULL,
+        gSkwr[gSkwrN].name[0] = 0;
+        DmDatabaseInfo(card, id, gSkwr[gSkwrN].name, NULL, NULL, NULL, NULL,
                        NULL, NULL, NULL, NULL, NULL, &crid);
-        gSlkw[gSlkwN].creator = crid;
-        gSlkwN++;
+        gSkwr[gSkwrN].creator = crid;
+        gSkwrN++;
     }
 }
 
-/* 처음 상태(현재 활성 실리클릿)를 읽어 둔다. 읽기 전용 호출. */
-static void ReadOrigSilk(void)
+/* 실크 비활성화 스위치 DB가 있으면 그 LocalID, 없으면 0 */
+static LocalID FindDisS(UInt16 *cardP)
 {
-    if (gSilkRef == sysInvalidRefNum)
-        return;
-    Crumb("> VskGetCurrentSlkw(0)");
-    gOrig = 0;
-    gOrigErr = VskGetCurrentSlkw(gSilkRef, 0, &gOrig);
-    gOrigValid = (gOrigErr == errNone);
+    DmSearchStateType st;
+    LocalID id = 0;
+
+    if (DmGetNextDatabaseByTypeCreator(true, &st, kDisSType, kDisSCreator,
+                                       false, cardP, &id) != errNone)
+        return 0;
+    return id;
 }
 
-/* 실리클릿 전환. 라이브러리가 열려 있지 않다는 오류면 한 번 열고 재시도한다. */
-static void SetSilk(UInt32 creator)
+static void ToggleDisS(void)
 {
-    Err  err;
-    Char cc[5], s[kLineLen];
+    UInt16  card = 0;
+    LocalID id = FindDisS(&card);
+    Err     err;
+    Char    s[kLineLen];
 
-    if (gSilkRef == sysInvalidRefNum) {
-        SetLast("Silk lib not found");
-        return;
+    if (id) {
+        err = DmDeleteDatabase(card, id);
+        StrPrintF(s, "DisS delete e=%x (reset!)", (UInt16)err);
+    } else {
+        err = DmCreateDatabase(0, kDisSName, kDisSCreator, kDisSType, false);
+        StrPrintF(s, "DisS create e=%x (reset!)", (UInt16)err);
     }
-    FourCC(creator, cc);
+    SetLast(s);
+    StrCopy(NextLine(&gLog), s);
+}
 
-    StrPrintF(s, "> VskSetCurrentSlkw %s", cc);
-    Crumb(s);
-    err = VskSetCurrentSlkw(gSilkRef, 0, creator);
+static void ClearRecord(void)
+{
+    Err  err = FtrUnregister(kSkCreator, kSkFtrNum);
+    Char s[kLineLen];
 
-    if (err == silkLibErrNotOpen && !gSilkOpened) {
-        Crumb("> SilkLibOpen");
-        if (SilkLibOpen(gSilkRef) == errNone)
-            gSilkOpened = true;
-        StrPrintF(s, "> VskSetCurrentSlkw %s (2)", cc);
-        Crumb(s);
-        err = VskSetCurrentSlkw(gSilkRef, 0, creator);
-    }
-
-    StrPrintF(s, "set %s e=%x%s", cc, (UInt16)err, gSilkOpened ? " (open)" : "");
+    StrPrintF(s, "clear record e=%x", (UInt16)err);
     SetLast(s);
     StrCopy(NextLine(&gLog), s);
 }
@@ -339,44 +316,43 @@ static void DrawRow(UInt16 row, const Char *s)
     WinDrawChars(s, StrLen(s), 0, (row + 1) * kLineH);
 }
 
-static void DrawSilkPage(void)
+static void DrawSkwrPage(void)
 {
-    Char   s[kLineLen], cc[5];
-    UInt32 cur = 0, ver;
-    Err    err;
-    UInt16 i;
+    Char    s[kLineLen], cc[5];
+    UInt32  v = 0;
+    Err     err;
+    UInt16  i, card;
 
-    if (gSilkRef == sysInvalidRefNum) {
-        DrawRow(0, "Silk lib not found");
-        return;
+    err = FtrGet(kSkCreator, kSkFtrNum, &v);
+    if (err != errNone) {
+        StrPrintF(s, "record: none (e=%x)", (UInt16)err);
+        DrawRow(0, s);
+        DrawRow(1, "= not loaded / no Open / write fail");
+    } else if ((v >> 16) != kSkMagic) {
+        StrPrintF(s, "record: %lx (unknown fmt)", v);
+        DrawRow(0, s);
+    } else {
+        StrPrintF(s, "record: %lx", v);
+        DrawRow(0, s);
+        StrPrintF(s, "OK evt=%u build=%u", (UInt16)((v >> 8) & 0xFF),
+                  (UInt16)(v & 0xFF));
+        DrawRow(1, s);
     }
+    DrawRow(kSkRowClear, "[clear record]  <- tap");
 
-    Crumb("> VskGetAPIVersion");
-    ver = VskGetAPIVersion(gSilkRef);
-    Crumb("> VskGetCurrentSlkw(0)");
-    err = VskGetCurrentSlkw(gSilkRef, 0, &cur);
-
-    StrPrintF(s, "ref=%u api=%lx", gSilkRef, ver);
-    DrawRow(0, s);
-    FourCC(cur, cc);
-    StrPrintF(s, "now: e=%x %lx '%s'", (UInt16)err, cur, cc);
-    DrawRow(1, s);
-    FourCC(gOrig, cc);
-    StrPrintF(s, "orig: e=%x %lx '%s'", (UInt16)gOrigErr, gOrig, cc);
-    DrawRow(2, s);
-
-    if (gOrigValid)
-        DrawRow(kSilkRowRestore, "[restore orig]  <- tap");
+    card = 0;
+    if (FindDisS(&card))
+        DrawRow(kSkRowDisS, "[DisS ON: silk off] <- tap");
     else
-        DrawRow(kSilkRowRestore, "[restore n/a]");
+        DrawRow(kSkRowDisS, "[DisS off: normal] <- tap");
+    DrawRow(kSkRowDisS + 1, "(switch needs reset)");
 
-    StrPrintF(s, "-- Slkw installed: %u (tap=set) --", gSlkwN);
-    DrawRow(kSilkRowFirst - 1, s);
-    for (i = 0; i < gSlkwN && kSilkRowFirst + i < kVisible; i++) {
-        FourCC(gSlkw[i].creator, cc);
-        StrPrintF(s, "%s %s%s", cc, gSlkw[i].name,
-                  (gSlkw[i].creator == cur) ? " *" : "");
-        DrawRow(kSilkRowFirst + i, s);
+    StrPrintF(s, "-- SkWr installed: %u --", gSkwrN);
+    DrawRow(kSkRowFirst - 1, s);
+    for (i = 0; i < gSkwrN && kSkRowFirst + i < kVisible; i++) {
+        FourCC(gSkwr[i].creator, cc);
+        StrPrintF(s, "%s %s", cc, gSkwr[i].name);
+        DrawRow(kSkRowFirst + i, s);
     }
 }
 
@@ -402,9 +378,9 @@ static void Draw(void)
         for (i = 0; i < kVisible && start + i < (Int16)b->n; i++)
             DrawRow((UInt16)i, b->t[start + i]);
         break;
-    case kPgSilk:
-        StrPrintF(title, "%u/%u Silk", gPage + 1, TotalPages());
-        DrawSilkPage();
+    case kPgSkwr:
+        StrPrintF(title, "%u/%u SkWr", gPage + 1, TotalPages());
+        DrawSkwrPage();
         break;
     default:
         StrPrintF(title, "%u/%u Events INT:%s", gPage + 1, TotalPages(),
@@ -416,7 +392,7 @@ static void Draw(void)
         break;
     }
 
-    /* 제목줄은 Crumb 표시를 덮어쓰도록 마지막에 그린다 */
+    /* 제목줄과 하단 상태줄은 마지막에 그린다 */
     RctSetRectangle(&r, 0, 0, kScreenW, kLineH);
     WinEraseRectangle(&r, 0);
     WinDrawInvertedChars(title, StrLen(title), 0, 0);
@@ -452,14 +428,14 @@ static void HandleAppTap(Int16 x, Int16 y)
         return;
     }
 
-    if (kind == kPgSilk) {
-        if (row == kSilkRowRestore && gOrigValid) {
-            SetSilk(gOrig);
+    if (kind == kPgSkwr) {
+        if (row == kSkRowClear) {
+            ClearRecord();
             Draw();
             return;
         }
-        if (row >= kSilkRowFirst && row - kSilkRowFirst < (Int16)gSlkwN) {
-            SetSilk(gSlkw[row - kSilkRowFirst].creator);
+        if (row == kSkRowDisS) {
+            ToggleDisS();
             Draw();
             return;
         }
@@ -480,8 +456,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 
     CollectInfo();
     CollectLibr();
-    CollectSlkw();
-    ReadOrigSilk();
+    CollectSkwr();
     Draw();
 
     do {
@@ -512,16 +487,9 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             }
         }
 
-        /* Silk 페이지는 다시 그릴 때마다 소니 함수를 부르므로, 이벤트로는 갱신하지 않는다 */
-        if (logged) {
-            LineBuf *b; UInt16 sub, subN;
-            if (PageKind(&b, &sub, &subN) != kPgSilk)
-                Draw();
-        }
+        if (logged)
+            Draw();
     } while (e.eType != appStopEvent);
-
-    if (gSilkOpened)
-        SilkLibClose(gSilkRef);
 
     return 0;
 }

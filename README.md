@@ -14,9 +14,9 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)용 한글 소프트 키보드 입력기 프�
 | 단계 | 내용 | 상태 |
 | --- | --- | --- |
 | 0 | PRC 빌드 도구 체인 구성 | 완료 |
-| 1 | 진단 PRC(`bin/ClieDiag.prc`): OS·기기 정보, 화면 모드, Sony HR/Silk 라이브러리 존재 여부, libr 목록, 펜·키 이벤트 | v1 확인 완료, v3(실리클릿 전환 시험) 확인 대기 |
+| 1 | 진단 PRC(`bin/ClieDiag.prc`): OS·기기 정보, 화면 모드, Sony HR/Silk 라이브러리 존재 여부, libr 목록, 펜·키 이벤트 | v4 (SkWr 시험·DisS 스위치) 빌드 완료 |
 | 2 | 입력 시험 PRC (자체 폼 필드): 영문 → KSC 완성형 삽입·삭제 → 조합 중 음절 교체 | 대기 |
-| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 역분석 중 |
+| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 1단계 플러그인 빌드 완료, 실측 대기 |
 
 ## 설계 메모
 
@@ -59,21 +59,30 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 
 주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
-## bin/ClieDiag.prc (진단, v3)
+## bin/ClieDiag.prc (진단, v4)
 
-소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. 160×160 호환 모드로 실행된다.
+소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. 160×160 호환 모드로 실행된다. 소니 라이브러리 함수는 호출하지 않는다.
 
 | 페이지 | 내용 |
 | --- | --- |
 | Info | ROM 버전, OEM/기기 ID, 화면 모드, `SoNy` 기능 번호, HR/Silk 라이브러리 탐색 결과 |
 | Libr | 설치된 공유 라이브러리(`libr`) DB 목록 |
-| Silk | `VskGetCurrentSlkw`로 현재 활성 실리클릿 조회, 설치된 `Slkw` 목록. 줄을 탭하면 `VskSetCurrentSlkw`로 전환, `[restore orig]`로 원상복구 |
+| SkWr | 설치된 `SkWr` 플러그인 목록, 플러그인 기록(feature `MnSk` #0) 해석, `[clear record]` 기록 삭제, `[DisS ...]` 실크 비활성화 스위치 전환(리셋 후 적용) |
 | Events | 펜·키 이벤트 기록, Graffiti 영역 가로채기(INT) 토글. `*`는 시스템에 넘기지 않은 이벤트 |
 
 조작: 위/아래 버튼 → 이전/다음 페이지. 그 외 페이지별 탭 동작은 소스 주석 참고.
-소니 함수 호출 직전 화면 맨 위에 진행 단계(`> 함수명`)를 표시한다. 크래시 시 위치 확인용.
+v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception을 일으켜 제거했다.
 
-v2의 적재 라이브러리 표 읽기(`SysLibTblEntry`)는 Fatal Exception을 일으켜 v3에서 제거했다.
+## bin/MnSkPlugin.prc (SilkWare 플러그인 1단계: 무동작 + Open 기록)
+
+소스: `src/skwr/skwr.c`, 빌드: `./tools/build-skwr.sh`. DB 타입 `SkWr`, 크리에이터 `MnSk`, 리소스는 `code 0` 하나.
+시작 코드·데이터 세그먼트 없이 진입 함수 `SkwrEntry`만 `code 0` 맨 앞에 둔다. 빌드 스크립트가 전역변수 없음, 진입점 오프셋 0, `%a5` 참조 없음을 검사한다.
+
+- 동작: Open(이벤트 1)을 받으면 `FtrSet('MnSk', 0, 0x534B0101)` 한 번만 호출하고, 모든 이벤트에 0을 반환한다.
+- 기록 형식: 31~16 식별값 `0x534B`('SK'), 15~8 이벤트 번호, 7~0 빌드 번호.
+- 판정: ClieDiag SkWr 페이지에 `OK evt=1 build=1`이 나오면 로드·Open 수신·기록 성공. `record: none`이면 로드 안 됨/Open 미수신/기록 실패 중 하나(구분 불가).
+- **시험은 CloudpilotEmu 복사본 세션에서만.** 설치 후 리셋해야 로드된다(부팅 시 로딩).
+- 복구 수단(신뢰도 순): ① 세션 백업 복원 ② ClieDiag `[DisS]` 스위치 켜고 리셋 → 플러그인 미로딩·미보호 → 삭제 (코드상 확인, 실측 전) ③ 확장 없이 리셋 후 삭제 (미검증).
 
 ## 실리클릿(Slkw) 분석 메모
 
@@ -95,7 +104,11 @@ v2의 적재 라이브러리 표 읽기(`SysLibTblEntry`)는 Fatal Exception을 
   슬롯은 내장 처리기 1개 + 외부 최대 3개. 진입점은 `(플러그인 저장 슬롯, 이벤트, 0)`으로 호출되며 첫 이벤트는 Open(1).
 - `SilkWareLib`(`SlSW`) API: Open/Close/Sleep/Wake/WinSaveBits/WinRestoreBits/GetRefNum/TimerWrite/GetScrWindow/GetAPIVersion.
 - Graffiti 영역 그림은 `SknG`(Graffiti 스킨)·`SknS`(상태바 스킨) DB에서 읽는다. 스킨 교체는 그림만 바뀌고 입력은 바뀌지 않는다.
-- 플러그인 전환 방법, 이벤트 구조체 배치, 호출 규약은 확정 전. 첫 시험은 CloudpilotEmu 세션 백업 후 진행한다.
+- 호출 규약(확정, SilkExtn 0x2FE0~0x3002, 내장 처리기 0x2530): `Err entry(UInt32 *slot, UInt8 *event, void *out)`, 스택 전달, 반환 `d0` 16비트(0 = 등록 유지),
+  일반 C 레지스터 규약, 호출 전 A5 미설정(전역변수 금지), `code 0` 맨 앞으로 `jsr`. Open 때 `out`은 NULL.
+- 로딩 시점(확정): 부팅 중 `extn` 초기화. `SilkStartup`(0x278C) → `PrvInitStage2` → `PrvInitSilkWare`(0x2E2A). 직전에 `FtrGet`을 쓰므로 Feature Manager 사용 가능(높음).
+- 실크 비활성화 스위치(확정, 0x27EC): 타입 `DisS`·크리에이터 `SeSi` DB가 있으면 실크 초기화 전체를 건너뜀.
+- 플러그인 전환 방법, Draw·Pen 이벤트 구조체 배치는 미확정. 첫 시험은 CloudpilotEmu 세션 백업 후 진행한다.
 
 ### 1차 결과 (v1, 2026-10-15)
 
