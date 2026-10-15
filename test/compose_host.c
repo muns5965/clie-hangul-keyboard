@@ -12,6 +12,13 @@ static unsigned char gCum[88];
 Err FtrGet(UInt32 c, UInt16 n, UInt32 *v) { (void)c; *v = gFtr[n]; return 0; }
 Err FtrSet(UInt32 c, UInt16 n, UInt32 v) { (void)c; gFtr[n] = v; return 0; }
 Err SysCurAppDatabase(UInt16 *card, LocalID *id) { *card = 0; *id = 0x1234; return 0; }
+Err SysLibFind(const Char *n, UInt16 *r) { (void)n; *r = 0xFFFF; return 1; }
+void HRWinDrawChars(UInt16 a, const Char *s, Int16 l, Coord x, Coord y) { (void)a; (void)s; (void)l; (void)x; (void)y; }
+void HRWinDrawRectangleFrame(UInt16 a, FrameType f, RectangleType *r) { (void)a; (void)f; (void)r; }
+void HRWinEraseRectangle(UInt16 a, RectangleType *r, UInt16 c) { (void)a; (void)r; (void)c; }
+void HRWinGetWindowExtent(UInt16 a, Coord *w, Coord *h) { (void)a; *w = 320; *h = 130; }
+void HRWinInvertRectangle(UInt16 a, RectangleType *r, UInt16 c) { (void)a; (void)r; (void)c; }
+FontID HRFntSetFont(UInt16 a, FontID f) { (void)a; return f; }
 const UInt8 *KscBitsPtr(void) { return gBits; }
 const UInt8 *KscCumPtr(void) { return gCum; }
 

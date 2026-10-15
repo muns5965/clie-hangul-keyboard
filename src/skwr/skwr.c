@@ -1,5 +1,5 @@
 /*
- * MnSk - NR70V SilkWare(SkWr) 플러그인 8단계: 4줄 자판(안 B) + 한글 조합
+ * MnSk - NR70V SilkWare(SkWr) 플러그인 9단계: 4줄 자판 + 한글 조합 + 고해상도(HR 라이브러리) 그리기 시험
  *
  * 확정 사항 (ROM SilkExtn 역분석 + 1~6단계 실측, 2026-10-16):
  *   - 호출: Err entry(UInt32 *slotOrValue, UInt8 *event, void *out)
@@ -39,6 +39,11 @@
  *   #49 자판 상태(비트0 영문, 비트1 숫자, 비트8 Shift)
  *   #50 조합 상태(31~24 초성, 23~16 중성, 15~8 종성: 호환 자모 - 0x3130, 7~0 화면에 나간 글자 수)
  *   #51 조합 중인 앱 LocalID
+ *   #52 HR 라이브러리 (31~16 SysLibFind 오류, 15~0 참조 번호), #53 HR 그리기 창 크기(31~16 너비, 15~0 높이)
+ *
+ * 9단계: 자판을 HR 라이브러리로 320x130 고해상도에 그린다(hrStdFont). 펜 좌표·판정은 저해상도 그대로.
+ *   HR을 못 찾거나 창 크기가 고해상도가 아니면 저해상도로 그린다.
+ *   확인할 것: HRWinDrawChars가 CJKOS를 거쳐 한글 2바이트 키 이름을 제대로 그리는지.
  */
 
 #ifdef MNSK_HOST_TEST
@@ -49,7 +54,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      8
+#define kSkBuild      9
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -76,6 +81,8 @@
 #define kFtrState     49
 #define kFtrComp      50
 #define kFtrCompApp   51
+#define kFtrHrRef     52
+#define kFtrHrExt     53
 #define kEvtStop      4
 
 #define kStEng        0x0001
@@ -382,21 +389,70 @@ static inline UInt16 KeyLabel(UInt16 code, Char *s)
 }
 
 /* 키 안쪽(반전 영역) */
-static inline void KeyInner(RectangleType *r)
+/* ---- 소니 HR 라이브러리 (고해상도 320x130 그리기) ----
+ * SilkExtn이 부팅 때 SysLibFind("Sony HR Library") → HROpen 하고 열어 둔 채로 상태바를 그린다(ROM 0x693C).
+ * 그래서 플러그인은 SysLibFind로 참조 번호만 얻어 바로 쓴다(HROpen/HRClose 하지 않음).
+ * 트랩 번호 = sysLibTrapCustom + 순번 (SDK 3.0 SonyHRLib.h 순서, ROM 호출로 확인: PaintChars 0xA82C, FntSetFont 0xA83E).
+ * 글꼴 인자는 1바이트(SilkExtn도 moveb로 넘김). 소니 헤더는 저장소에 넣지 않으므로 필요한 것만 직접 선언한다. */
+#define HRT(n)        SYS_TRAP(sysLibTrapCustom + (n))
+#define kHrStdFont    8
+void   HRWinDrawChars(UInt16 ref, const Char *s, Int16 len, Coord x, Coord y) HRT(9);
+void   HRWinDrawRectangleFrame(UInt16 ref, FrameType f, RectangleType *r) HRT(16);
+void   HRWinEraseRectangle(UInt16 ref, RectangleType *r, UInt16 corner) HRT(21);
+void   HRWinGetWindowExtent(UInt16 ref, Coord *w, Coord *h) HRT(30);
+void   HRWinInvertRectangle(UInt16 ref, RectangleType *r, UInt16 corner) HRT(35);
+FontID HRFntSetFont(UInt16 ref, FontID f) HRT(57);
+
+/* HR 라이브러리 참조 번호. 못 찾으면 0xFFFF. #52 = (오류 << 16) | 참조 번호 */
+static inline UInt16 HrRef(void)
 {
-    RctInsetRectangle(r, 2);
+    Char   nm[16];
+    UInt16 ref = 0xFFFF;
+    Err    err;
+
+    nm[0] = 'S'; nm[1] = 'o'; nm[2] = 'n'; nm[3] = 'y'; nm[4] = ' ';
+    nm[5] = 'H'; nm[6] = 'R'; nm[7] = ' ';
+    nm[8] = 'L'; nm[9] = 'i'; nm[10] = 'b'; nm[11] = 'r'; nm[12] = 'a'; nm[13] = 'r'; nm[14] = 'y';
+    nm[15] = 0;
+    err = SysLibFind(nm, &ref);
+    FtrSet(kSkCreator, kFtrHrRef, ((UInt32)err << 16) | ref);
+    return err ? 0xFFFF : ref;
+}
+
+/* 그리기 창 크기. hr이면 고해상도 좌표 */
+static inline void DrawExt(UInt16 hr, Coord *w, Coord *h)
+{
+    *w = 0;
+    *h = 0;
+    if (hr != 0xFFFF)
+        HRWinGetWindowExtent(hr, w, h);
+    else
+        WinGetWindowExtent(w, h);
+}
+
+static inline void KeyInner(UInt16 hr, RectangleType *r)
+{
+    RctInsetRectangle(r, (hr != 0xFFFF) ? 3 : 2);
+}
+
+static inline void InvRect(UInt16 hr, RectangleType *r)
+{
+    if (hr != 0xFFFF)
+        HRWinInvertRectangle(hr, r, 0);
+    else
+        WinInvertRectangle(r, 0);
 }
 
 /* 키 번호 k의 안쪽 반전 (현재 그리기 창이 실크 창일 때) */
-static inline void InvertCell(UInt16 st, UInt16 k, Coord w, Coord h)
+static inline void InvertCell(UInt16 hr, UInt16 st, UInt16 k, Coord w, Coord h)
 {
     RectangleType r;
 
     if (k == 0)
         return;
     KeyCell(st, (k - 1) / 16, (k - 1) % 16, w, h, &r);
-    KeyInner(&r);
-    WinInvertRectangle(&r, 0);
+    KeyInner(hr, &r);
+    InvRect(hr, &r);
 }
 
 static inline void DrawKeys(UInt32 hwin)
@@ -406,17 +462,27 @@ static inline void DrawKeys(UInt32 hwin)
     RectangleType r;
     FontID        oldFont;
     UInt16        st = (UInt16)GetFtr(kFtrState);
-    UInt16        row, col;
+    UInt16        row, col, hr;
 
     if (!WinOk(hwin))
         return;
     prev = WinSetDrawWindow((WinHandle)hwin);
-    WinGetWindowExtent(&w, &h);
+    hr = HrRef();
+    DrawExt(hr, &w, &h);
+    if (hr != 0xFFFF && (w < 200 || h < 80)) {   /* 고해상도 크기가 아니면 저해상도로 */
+        hr = 0xFFFF;
+        WinGetWindowExtent(&w, &h);
+    }
+    FtrSet(kSkCreator, kFtrHrExt, ((UInt32)(UInt16)w << 16) | (UInt16)h);
 
     RctSetRectangle(&r, 0, 0, w, h);
-    WinEraseRectangle(&r, 0);
-
-    oldFont = FntSetFont(stdFont);
+    if (hr != 0xFFFF) {
+        HRWinEraseRectangle(hr, &r, 0);
+        oldFont = HRFntSetFont(hr, kHrStdFont);
+    } else {
+        WinEraseRectangle(&r, 0);
+        oldFont = FntSetFont(stdFont);
+    }
     for (row = 0; row < kRows; row++) {
         UInt16 n = RowKeys(st, row);
 
@@ -426,34 +492,51 @@ static inline void DrawKeys(UInt32 hwin)
             UInt16 len = KeyLabel(code, lab);
 
             KeyCell(st, row, col, w, h, &r);
-            KeyInner(&r);
-            WinDrawRectangleFrame(roundFrame, &r);
-            if (len > 0)
-                WinDrawChars(lab, len,
-                             r.topLeft.x + (r.extent.x - FntCharsWidth(lab, len)) / 2,
-                             r.topLeft.y + (r.extent.y - FntLineHeight()) / 2);
+            KeyInner(hr, &r);
+            if (hr != 0xFFFF)
+                HRWinDrawRectangleFrame(hr, roundFrame, &r);
+            else
+                WinDrawRectangleFrame(roundFrame, &r);
+            if (len > 0) {
+                Coord tx = r.topLeft.x + (r.extent.x - FntCharsWidth(lab, len)) / 2;
+                Coord ty = r.topLeft.y + (r.extent.y - FntLineHeight()) / 2;
+
+                if (hr != 0xFFFF)
+                    HRWinDrawChars(hr, lab, len, tx, ty);
+                else
+                    WinDrawChars(lab, len, tx, ty);
+            }
             if ((code == kKShift && (st & kStShift)) || (code == kKNum && (st & kStNum)))
-                WinInvertRectangle(&r, 0);
+                InvRect(hr, &r);
         }
     }
-    FntSetFont(oldFont);
+    if (hr != 0xFFFF)
+        HRFntSetFont(hr, oldFont);
+    else
+        FntSetFont(oldFont);
 
     WinSetDrawWindow(prev);
     FtrSet(kSkCreator, kFtrStartWin, ((UInt32)(UInt16)w << 16) | (UInt16)h);
     FtrSet(kSkCreator, kFtrPressed, 0);
 }
 
-/* 눌린 키 반전 토글 */
+/* 눌린 키 반전 토글 (DrawKeys와 같은 방식으로) */
 static inline void InvertKey(UInt32 hwin, UInt16 k)
 {
     WinHandle prev;
     Coord     w = 0, h = 0;
+    UInt16    hr;
 
     if (k == 0 || !WinOk(hwin))
         return;
     prev = WinSetDrawWindow((WinHandle)hwin);
-    WinGetWindowExtent(&w, &h);
-    InvertCell((UInt16)GetFtr(kFtrState), k, w, h);
+    hr = HrRef();
+    DrawExt(hr, &w, &h);
+    if (hr != 0xFFFF && (w < 200 || h < 80)) {
+        hr = 0xFFFF;
+        WinGetWindowExtent(&w, &h);
+    }
+    InvertCell(hr, (UInt16)GetFtr(kFtrState), k, w, h);
     WinSetDrawWindow(prev);
 }
 

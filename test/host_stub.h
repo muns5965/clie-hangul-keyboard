@@ -14,6 +14,10 @@ typedef struct { struct { Coord x, y; } topLeft, extent; } RectangleType;
 #define stdFont 0
 #define roundFrame 1
 #define asm __asm__
+#define SYS_TRAP(x)
+#define sysLibTrapCustom 0
+typedef uint16_t FrameType;
+Err SysLibFind(const Char *name, UInt16 *ref);
 Err FtrGet(UInt32 c, UInt16 n, UInt32 *v);
 Err FtrSet(UInt32 c, UInt16 n, UInt32 v);
 Err EvtEnqueueKey(WChar c, UInt16 k, UInt16 m);
