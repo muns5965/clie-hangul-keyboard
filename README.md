@@ -89,6 +89,9 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
 - 3단계(빌드 3): 가설 — Open 이벤트 +10의 32비트 값이 실크 화면 창(SilkExtn 전역 172, SilkWareLib GetScrWindow와 같은 값).
   Open 때 이 값을 슬롯에 넣고, Start 때 돌려받아 그 창에 지우기·테두리·채운 사각형을 그린다. 이벤트 앞 16바이트를 #20~#42에 기록.
 - 플러그인 교체 시: 기존 플러그인은 부팅 때 삭제 보호가 걸리므로, ClieDiag `[DisS]` 켜기 → 리셋 → 새 PRC 설치(덮어쓰기) → `[DisS]` 끄기 → 리셋.
+  DisS가 켜지면 실크 영역(홈 아이콘 포함)이 없어 런처를 못 연다. 이때는 `bin/DiagRescue.prc`(빌드: `tools/build-rescue.sh`)를 설치하고
+  하드웨어 To Do 버튼으로 진단 앱을 연다. ClieDiag와 같은 코드를 크리에이터 `todo`, 버전 2로 빌드한 것으로, ROM To Do(버전 1)보다 우선 실행된다.
+  시험이 끝나면 DiagRescue를 지우면 원래 To Do가 돌아온다.
 - 기록 형식: 31~16 식별값 `0x534B`('SK'), 15~8 이벤트 번호, 7~0 빌드 번호.
 - 판정: ClieDiag SkWr 페이지에 `OK evt=1 build=1`이 나오면 로드·Open 수신·기록 성공. `record: none`이면 로드 안 됨/Open 미수신/기록 실패 중 하나(구분 불가).
 - **시험은 CloudpilotEmu 복사본 세션에서만.** 설치 후 리셋해야 로드된다(부팅 시 로딩).
