@@ -16,7 +16,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)용 한글 소프트 키보드 입력기 프�
 | 0 | PRC 빌드 도구 체인 구성 | 완료 |
 | 1 | 진단 PRC(`bin/ClieDiag.prc`): OS·기기 정보, 화면 모드, Sony HR/Silk 라이브러리 존재 여부, libr 목록, 펜·키 이벤트 | v4 (SkWr 시험·DisS 스위치) 빌드 완료 |
 | 2 | 입력 시험 PRC (자체 폼 필드): 영문 → KSC 완성형 삽입·삭제 → 조합 중 음절 교체 | 대기 |
-| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 1·2단계 실측 성공(로드, 전환 버튼, 펜 이벤트 수신), 3단계(그리기) 실측 대기 |
+| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 1~4단계 실측 성공(로드, 전환 버튼, 펜 이벤트·좌표, 그리기), 5단계(ABC 입력) 실측 대기 |
 
 ## 설계 메모
 
@@ -59,7 +59,7 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 
 주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
-## bin/ClieDiag.prc (진단, v7)
+## bin/ClieDiag.prc (진단, v8)
 
 소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. 160×160 호환 모드로 실행된다. 소니 라이브러리 함수는 호출하지 않는다.
 
@@ -75,7 +75,7 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 조작: 위/아래 버튼 → 이전/다음 페이지. 그 외 페이지별 탭 동작은 소스 주석 참고.
 v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception을 일으켜 제거했다.
 
-## bin/MnSkPlugin.prc (SilkWare 플러그인, 현재 4단계: 사각형 그리기 시험, 창 수정판)
+## bin/MnSkPlugin.prc (SilkWare 플러그인, 현재 5단계: ABC 버튼 → 현재 앱에 글자 입력)
 
 소스: `src/skwr/skwr.c`, 빌드: `./tools/build-skwr.sh`. DB 타입 `SkWr`, 크리에이터 `MnSk`, 리소스는 `code 0` 하나.
 시작 코드·데이터 세그먼트 없이 진입 함수 `SkwrEntry`만 `code 0` 맨 앞에 둔다. 빌드 스크립트가 전역변수 없음, 진입점 오프셋 0, `%a5` 참조 없음을 검사한다.
@@ -92,6 +92,11 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
   +10 값은 `0x17`로 창이 아니었다. +2 값 `0x000048AA`는 SilkExtn 전역 84(전환 직후 WinSetDrawWindow로 실크 영역을 지우는 창)와 일치.
 - 4단계(빌드 4): Open +2 값을 창으로 사용. 그리기 전 핸들 범위(0 아님, 짝수, 0x400000 미만)와 창 구조체 windowBounds(오프셋 10)
   크기(너비 160/320, 높이 1~240)를 검사해 통과할 때만 그린다. #43 창 위치, #44 창 크기, #45 판정(1 그림, 2 핸들 이상, 3 크기 이상).
+- 4단계 실측: **그리기 성공**(Graffiti 자리에 흰 바탕·테두리·사각형). 창 160×65(저해상도 좌표, 판정 r=1).
+  Start `03 0F 00000140 00000082 00000008 01` = 너비 320, 높이 130, 8bpp, 고해상도 1. DispChange는 저해상도 앱에서 160×65·고해상도 0을 알림.
+  PenDown/PenUp +2 x, +4 y(16비트): 오른쪽 아래 끝 탭 → (155,59)/(154,62). 펜 좌표 = 실크 영역 기준 저해상도 좌표(0~159, 0~64).
+- 5단계(빌드 5): Start·Draw·DispChange에 A·B·C 버튼 3개를 그림. PenDown이 버튼 안이면 반전, PenUp이 같은 버튼이면
+  `EvtEnqueueKey('A'~'C')`. 눌린 버튼 상태는 feature #46, 보낸 키 횟수 #47, 마지막 키 #48.
 - 플러그인 교체 시: 기존 플러그인은 부팅 때 삭제 보호가 걸리므로, ClieDiag `[DisS]` 켜기 → 리셋 → 새 PRC 설치(덮어쓰기) → `[DisS]` 끄기 → 리셋.
   DisS가 켜지면 실크 영역(홈 아이콘 포함)이 없어 런처를 못 연다. 이때는 `bin/DiagRescue.prc`(빌드: `tools/build-rescue.sh`)를 설치하고
   하드웨어 To Do 버튼으로 진단 앱을 연다. ClieDiag와 같은 코드를 크리에이터 `todo`, 버전 2로 빌드한 것으로, ROM To Do(버전 1)보다 우선 실행된다.
