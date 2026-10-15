@@ -1,5 +1,5 @@
 /*
- * ClieDiag v8 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
+ * ClieDiag v9 - Sony CLIE NR70V (Palm OS 4.1S) 진단 프로그램
  *
  * 페이지
  *   Info   : ROM 버전, OEM/기기 ID, 화면 모드, 'SoNy' 기능 번호, HR/Silk 탐색 결과
@@ -328,6 +328,8 @@ static Boolean IsSilkPen(EventType *e)
 
 /* ---------------------------------------------------------------- 화면 */
 
+static void Hex8(UInt32 v, Char *o);
+
 static void DrawRow(UInt16 row, const Char *s)
 {
     WinDrawChars(s, StrLen(s), 0, (row + 1) * kLineH);
@@ -403,10 +405,12 @@ static void DrawSkevPage(void)
     StrPrintF(s, "last evt=%u out=%u", (UInt16)(last & 0xFF), (UInt16)(last >> 16));
     DrawRow(7, s);
     {
+        /* 6단계: #48 = (방식 << 16) | 코드.  방식 1 = 키 하나, 2 = 바이트 두 개 */
         UInt32 kl = SkFtr(48);
-        Char   kc = (kl >= 0x20 && kl < 0x7F) ? (Char)kl : '-';
+        Char   h4[12];
 
-        StrPrintF(s, "keys sent: %lu  last: %c", SkFtr(47), kc);
+        Hex8(kl & 0xFFFF, h4);
+        StrPrintF(s, "keys: %lu  m=%u code=%s", SkFtr(47), (UInt16)(kl >> 16), h4 + 4);
         DrawRow(9, s);
     }
     DrawRow(10, "1 Open 3 Start 4 Stop 5 Draw");

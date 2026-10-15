@@ -1,5 +1,5 @@
 /*
- * MnSk - NR70V SilkWare(SkWr) 플러그인 5단계: ABC 버튼 3개 → 탭하면 현재 앱에 글자 입력
+ * MnSk - NR70V SilkWare(SkWr) 플러그인 6단계: 한글(KSC5601) 출력 시험 - [가] [각] [BS] 버튼
  *
  * 확정 사항 (ROM SilkExtn 역분석 + 1~4단계 실측, 2026-10-16):
  *   - 호출: Err entry(UInt32 *slotOrValue, UInt8 *event, void *out)
@@ -12,25 +12,29 @@
  *   - PenDown/PenMove/PenUp +2 x, +4 y (16비트). 실크 영역 왼쪽 위 기준 저해상도 좌표(0~159, 0~64).
  *   - 활성화: 런처 상태바 5번째 버튼(외부 플러그인이 있을 때만 표시).
  *
- * 5단계 동작:
- *   - Start / Draw / DispChange: 실크 영역을 지우고 A·B·C 버튼 3개를 그린다.
- *   - PenDown이 버튼 안이면 그 버튼을 반전 표시, PenUp 때 원래대로.
- *   - PenUp이 누른 버튼과 같은 버튼 안이면 EvtEnqueueKey로 'A'/'B'/'C'를 보낸다.
- *   - 상태(눌린 버튼)는 전역변수를 못 쓰므로 feature #46 에 둔다.
+ * 5단계 실측: A·B·C 버튼 → EvtEnqueueKey → 메모장 본문에 입력 성공.
+ *
+ * 6단계 동작 (버튼 3개, 각 버튼은 위/아래 절반으로 나뉨):
+ *   - 버튼 1 [ga]  = 가(KSC5601 0xB0A1), 버튼 2 [gak] = 각(0xB0A2), 버튼 3 [BS] = 백스페이스(0x08)
+ *   - 위쪽 절반(1): 방식 ① 2바이트 코드를 키 하나로  EvtEnqueueKey(0xB0A1)
+ *   - 아래쪽 절반(2): 방식 ② 바이트 두 개를 키 두 개로 EvtEnqueueKey(0xB0); EvtEnqueueKey(0xA1)
+ *   - BS는 위·아래 모두 백스페이스 한 번.
+ *   - 버튼 이름은 문자열 상수를 못 쓰므로 영문 글자를 하나씩 그린다(한글 그리기는 이후 단계).
+ *   - 상태(눌린 버튼·절반)는 전역변수를 못 쓰므로 feature #46 에 둔다(1~3 = 위, 11~13 = 아래).
  *
  * 기록 (feature 'MnSk'):
  *   #0 Open 표시, #1~#16 이벤트 0~15 횟수, #17 마지막 이벤트, #18 번호≥16 횟수, #19 out≠NULL 횟수
  *   #20~#23 Open 앞 16바이트, #24~#27 마지막 Start 앞 16바이트,
  *   #29 그린 창 크기(31~16 너비, 15~0 높이), #31~#34 마지막 PenDown, #35~#38 마지막 PenUp,
  *   #39~#42 마지막 DispChange, #45 그리기 판정(1 그림, 2 핸들 이상, 3 크기 이상),
- *   #46 눌린 버튼(0 없음, 1~3), #47 보낸 키 횟수, #48 마지막으로 보낸 키
+ *   #46 눌린 버튼(0 없음, 1~3 위, 11~13 아래), #47 보낸 키 횟수, #48 마지막 전송(31~16 방식 1/2, 15~0 코드)
  */
 
 #include <PalmOS.h>
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      5
+#define kSkBuild      6
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -155,12 +159,30 @@ static inline void DrawKeys(UInt32 hwin)
 
     oldFont = FntSetFont(boldFont);
     for (i = 0; i < kKeyN; i++) {
+        Char   lab[4];
+        UInt16 n, half;
+        Coord  midY;
+
         KeyRect(i, w, h, &r);
         WinDrawRectangleFrame(roundFrame, &r);
-        c = (Char)('A' + i);
-        WinDrawChars(&c, 1,
-                     r.topLeft.x + (r.extent.x - FntCharWidth(c)) / 2,
-                     r.topLeft.y + (r.extent.y - FntLineHeight()) / 2);
+        midY = r.topLeft.y + r.extent.y / 2;
+        WinDrawGrayLine(r.topLeft.x + 2, midY, r.topLeft.x + r.extent.x - 3, midY);
+
+        /* 문자열 상수 대신 한 글자씩 채운다 */
+        if (i == 0)      { lab[0] = 'g'; lab[1] = 'a'; n = 2; }
+        else if (i == 1) { lab[0] = 'g'; lab[1] = 'a'; lab[2] = 'k'; n = 3; }
+        else             { lab[0] = 'B'; lab[1] = 'S'; n = 2; }
+
+        for (half = 0; half < 2; half++) {
+            Coord ty = r.topLeft.y + half * (r.extent.y / 2) + (r.extent.y / 2 - FntLineHeight()) / 2;
+            Coord tx = r.topLeft.x + (r.extent.x - FntCharsWidth(lab, n)) / 2;
+
+            WinDrawChars(lab, n, tx, ty);
+            if (i < 2) {
+                c = (Char)('1' + half);
+                WinDrawChars(&c, 1, r.topLeft.x + 3, ty);
+            }
+        }
     }
     FntSetFont(oldFont);
 
@@ -169,19 +191,23 @@ static inline void DrawKeys(UInt32 hwin)
     FtrSet(kSkCreator, kFtrPressed, 0);
 }
 
-/* 버튼 k(1~3) 반전 표시 토글 */
-static inline void InvertKey(UInt32 hwin, UInt16 k)
+/* 눌림 코드 p(1~3 위 절반, 11~13 아래 절반)의 반전 표시 토글 */
+static inline void InvertKey(UInt32 hwin, UInt16 p)
 {
     WinHandle     prev;
     Coord         w = 0, h = 0;
     RectangleType r;
+    UInt16        k = (p > 10) ? p - 10 : p;
 
-    if (k == 0 || !WinOk(hwin))
+    if (k == 0 || k > kKeyN || !WinOk(hwin))
         return;
     prev = WinSetDrawWindow((WinHandle)hwin);
     WinGetWindowExtent(&w, &h);
     KeyRect(k - 1, w, h, &r);
-    RctInsetRectangle(&r, 1);
+    RctInsetRectangle(&r, 2);
+    r.extent.y /= 2;
+    if (p > 10)
+        r.topLeft.y += r.extent.y + 1;
     WinInvertRectangle(&r, 0);
     WinSetDrawWindow(prev);
 }
@@ -197,7 +223,16 @@ static inline UInt16 PenKey(UInt32 hwin, const UInt8 *event)
     prev = WinSetDrawWindow((WinHandle)hwin);
     WinGetWindowExtent(&w, &h);
     WinSetDrawWindow(prev);
-    return HitKey((Coord)Be16(event + 2), (Coord)Be16(event + 4), w, h);
+    {
+        Coord  x = (Coord)Be16(event + 2), y = (Coord)Be16(event + 4);
+        UInt16 k = HitKey(x, y, w, h);
+        RectangleType r;
+
+        if (k == 0)
+            return 0;
+        KeyRect(k - 1, w, h, &r);
+        return (y >= r.topLeft.y + r.extent.y / 2) ? k + 10 : k;
+    }
 }
 
 static inline UInt32 GetFtr(UInt16 num)
@@ -264,11 +299,24 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
             InvertKey((UInt32)slot, pressed);
             FtrSet(kSkCreator, kFtrPressed, 0);
             if (pressed != 0 && k == pressed) {
-                WChar c = (WChar)('A' + k - 1);
+                UInt16 key = (k > 10) ? k - 10 : k;
+                UInt16 method = (k > 10) ? 2 : 1;
+                UInt16 code;
 
-                EvtEnqueueKey(c, 0, 0);
+                if (key == 3) {
+                    code = chrBackspace;
+                    EvtEnqueueKey(chrBackspace, 0, 0);
+                } else {
+                    code = (key == 1) ? 0xB0A1 : 0xB0A2;   /* 가 / 각 */
+                    if (method == 1) {
+                        EvtEnqueueKey(code, 0, 0);
+                    } else {
+                        EvtEnqueueKey(code >> 8, 0, 0);
+                        EvtEnqueueKey(code & 0xFF, 0, 0);
+                    }
+                }
                 BumpFtr(kFtrKeyCount);
-                FtrSet(kSkCreator, kFtrKeyLast, c);
+                FtrSet(kSkCreator, kFtrKeyLast, ((UInt32)method << 16) | code);
             }
         }
         break;
