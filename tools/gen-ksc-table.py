@@ -25,6 +25,8 @@ tbl = bytearray((11172 + 7) // 8)
 for i, ok in enumerate(bits):
     if ok:
         tbl[i >> 3] |= 0x80 >> (i & 7)
+if len(tbl) % 2:  # .even 채움 바이트가 어셈블러마다 다를 수 있어 명시적으로 0을 붙인다
+    tbl.append(0)
 cum = []
 n = 0
 for blk in range((11172 + 255) // 256):
