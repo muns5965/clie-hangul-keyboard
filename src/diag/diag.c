@@ -1,8 +1,11 @@
 /*
- * ClieDiag v14 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v15 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
+ * v15: Events의 INT 전환은 맨 아래 "[INT ...]" 줄 탭으로만(아래 절반 탭으로 실수로 켜져 홈 아이콘이 막혔음).
+ *      SkWr 페이지에 "[delete DiagRescue]" — 이름으로 그 DB만 지운다(런처 삭제는 같은 크리에이터 'todo'의
+ *      To Do 데이터까지 지울 수 있어서).
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -20,8 +23,9 @@
  *   - 위/아래 버튼: 이전/다음 페이지
  *   - Info/Libr: 앱 영역 탭 → 다음 페이지
  *   - SkWr: "[clear record]" 줄 탭 → 기록·카운터 모두 삭제, "[DisS ...]" 줄 탭 → 스위치 전환,
+ *           "[delete DiagRescue]" 줄 탭 → 옛 복구 앱 삭제,
  *           그 외 영역 탭 → 다음 페이지
- *   - Events: 위쪽 절반 탭 → 다음 페이지, 아래쪽 절반 탭 → INT 토글
+ *   - Events: 맨 아래 "[INT ...]" 줄 탭 → INT 토글, 그 외 탭 → 다음 페이지
  *   - 맨 아래 줄: 마지막 이벤트 / 마지막 조작 결과
  *
  * 실크 비활성화 스위치: ROM SilkExtn(SilkStartup, 0x27EC)은 부팅 시 타입 'DisS',
@@ -64,6 +68,9 @@
 #define kSkRowClear   3
 #define kSkRowDisS    5
 #define kSkRowFirst   8
+#define kSkRowRescue  4
+#define kEvRowInt     11
+#define kRescueName   "DiagRescue"
 
 typedef struct {
     Char   t[kMaxLines][kLineLen];
@@ -274,6 +281,20 @@ static LocalID FindDisS(UInt16 *cardP)
     return id;
 }
 
+/* 옛 복구 앱 DiagRescue만 이름으로 지운다 (To Do 데이터는 건드리지 않음) */
+static void DeleteRescue(void)
+{
+    LocalID id = DmFindDatabase(0, kRescueName);
+    Char    s[kLineLen];
+
+    if (id == 0)
+        StrCopy(s, "DiagRescue: not found");
+    else
+        StrPrintF(s, "DiagRescue delete e=%x", (UInt16)DmDeleteDatabase(0, id));
+    SetLast(s);
+    StrCopy(NextLine(&gLog), s);
+}
+
 static void ToggleDisS(void)
 {
     UInt16  card = 0;
@@ -377,6 +398,8 @@ static void DrawSkwrPage(void)
         DrawRow(1, s);
     }
     DrawRow(kSkRowClear, "[clear record]  <- tap");
+    if (DmFindDatabase(0, kRescueName))
+        DrawRow(kSkRowRescue, "[delete DiagRescue] <- tap");
 
     card = 0;
     if (FindDisS(&card))
@@ -620,10 +643,10 @@ static void Draw(void)
     default:
         StrPrintF(title, "%u/%u Events INT:%s", gPage + 1, TotalPages(),
                   gIntercept ? "ON" : "off");
-        start = (gLog.n > kVisible) ? (Int16)(gLog.n - kVisible) : 0;
-        for (i = 0; i < kVisible && start + i < (Int16)gLog.n; i++)
+        start = (gLog.n > kEvRowInt) ? (Int16)(gLog.n - kEvRowInt) : 0;
+        for (i = 0; i < kEvRowInt && start + i < (Int16)gLog.n; i++)
             DrawRow((UInt16)i, gLog.t[start + i]);
-        WinDrawGrayLine(0, kScreenW / 2, kScreenW - 1, kScreenW / 2);
+        DrawRow(kEvRowInt, gIntercept ? "[INT ON: silk blocked] <- tap" : "[INT off] <- tap");
         break;
     }
 
@@ -665,7 +688,7 @@ static void HandleAppTap(Int16 x, Int16 y)
     }
 
     if (kind == kPgEvents) {
-        if (y >= kScreenW / 2) {
+        if (row == kEvRowInt) {
             gIntercept = !gIntercept;
             StrPrintF(NextLine(&gLog), "== INT %s ==", gIntercept ? "ON" : "off");
             Draw();
@@ -683,6 +706,12 @@ static void HandleAppTap(Int16 x, Int16 y)
         }
         if (row == kSkRowDisS) {
             ToggleDisS();
+            Draw();
+            return;
+        }
+        if (row == kSkRowRescue && DmFindDatabase(0, kRescueName)) {
+            DeleteRescue();
+            CollectSkwr();
             Draw();
             return;
         }
