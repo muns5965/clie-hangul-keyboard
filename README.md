@@ -16,7 +16,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)용 한글 소프트 키보드 입력기 프�
 | 0 | PRC 빌드 도구 체인 구성 | 완료 |
 | 1 | 진단 PRC(`bin/ClieDiag.prc`): OS·기기 정보, 화면 모드, Sony HR/Silk 라이브러리 존재 여부, libr 목록, 펜·키 이벤트 | v1 확인 완료, v3(실리클릿 전환 시험) 확인 대기 |
 | 2 | 입력 시험 PRC (자체 폼 필드): 영문 → KSC 완성형 삽입·삭제 → 조합 중 음절 교체 | 대기 |
-| 3 | Graffiti 영역 입력기: 소니 실리클릿(`Slkw`) 플러그인 방식 우선 (최소 목표: ABC 버튼 3개) | 조사 중 |
+| 3 | Graffiti 영역 입력기: NR70V 전용 `SkWr` 플러그인 방식 검토 중. ROM의 `SilkExtn`에서 플러그인 로딩 및 이벤트 호출 구조가 확인되었으나, 자체 제작 플러그인의 실제 실행은 미검증 (순서: 무동작 → 사각형 → 펜 수신 → ABC → 한글) | 역분석 중 |
 
 ## 설계 메모
 
@@ -47,7 +47,17 @@ sudo ./tools/setup-toolchain.sh
 | Palm OS SDK | 4.0, [palm-os-sdk](https://github.com/jichu4n/palm-os-sdk) |
 | PilRC | [jichu4n/pilrc](https://github.com/jichu4n/pilrc) |
 
-주의: 컴파일러 빌드는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
+### GitHub Actions 자동 빌드
+
+`.github/workflows/build-prc.yml`: `src/` 또는 `tools/build-*.sh`가 바뀌어 푸시되면 GitHub 서버에서 PRC를 빌드한다.
+Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고정)와 Palm OS SDK 4를 설치하고,
+`tools/build-*.sh`를 파일명 순서로 모두 실행한다(`build-hello.sh` 제외). 빌드 전에 저장소에 커밋된 `bin/*.prc`는 지운다.
+새 PRC를 추가할 때는 `tools/build-<이름>.sh`만 만들면 CI에 자동으로 포함된다. 공통 코드 디렉터리를 만들면 워크플로의 `paths` 트리거에 추가할 것.
+빌드된 PRC마다 `tools/prc-info.sh`로 DB 이름·타입·크리에이터·리소스 목록을 실행 요약에 표시한다.
+결과 PRC와 스크립트별 로그(`build/logs/`)는 실행 페이지의 Artifacts(`prc`)에서 받는다. 실행 요약에 날짜를 뺀 PRC 해시가 표시되며,
+로컬 빌드와 동일함을 확인했다(ClieDiag v3: size 4808, hash 1dbacad7e3b57cb0).
+
+주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
 ## bin/ClieDiag.prc (진단, v3)
 
@@ -75,6 +85,17 @@ v2의 적재 라이브러리 표 읽기(`SysLibTblEntry`)는 Fatal Exception을 
 - SlkCalc는 `FrmGetFocus` → `FldInsert`로 현재 앱 입력 칸에 글자를 넣는다.
 - Vsk 함수는 "Sony Silk Library"에 있음(트랩 0xA808~0xA812). 활성화는 `VskSetCurrentSlkw(ref, 0, creator)`, 조회는 `VskGetCurrentSlkw(ref, 0, &creator)`.
 - CLIE NetMon은 `aSkw`(OS 5 ARM)로 NR70V에서는 사용 불가.
+- **결론: NR70V에서는 `Slkw` 실리클릿을 쓸 수 없다.** SDK 5.0 문서상 NR70 시리즈는 Silk Manager v1(Resize만 지원)이고,
+  Silk Plug-in·Vsk 함수는 v2 이상(NX 등 OS 5)부터다. NR70V ROM의 SilkLib v100 디스패치 테이블도 8개 함수뿐이며,
+  ClieDiag v3에서 `VskGetCurrentSlkw` 호출 시 Fatal Exception이 났다(Silk 페이지는 v4에서 정리 예정).
+
+## NR70V `SkWr` 플러그인 분석 메모 (ROM 역분석, 미검증)
+
+- ROM `SilkExtn`(type `extn`, creator `SeSi`)이 부팅 시 타입 `SkWr` DB를 모두 찾아 `code 0` 리소스를 잠그고 진입점으로 등록한다.
+  슬롯은 내장 처리기 1개 + 외부 최대 3개. 진입점은 `(플러그인 저장 슬롯, 이벤트, 0)`으로 호출되며 첫 이벤트는 Open(1).
+- `SilkWareLib`(`SlSW`) API: Open/Close/Sleep/Wake/WinSaveBits/WinRestoreBits/GetRefNum/TimerWrite/GetScrWindow/GetAPIVersion.
+- Graffiti 영역 그림은 `SknG`(Graffiti 스킨)·`SknS`(상태바 스킨) DB에서 읽는다. 스킨 교체는 그림만 바뀌고 입력은 바뀌지 않는다.
+- 플러그인 전환 방법, 이벤트 구조체 배치, 호출 규약은 확정 전. 첫 시험은 CloudpilotEmu 세션 백업 후 진행한다.
 
 ### 1차 결과 (v1, 2026-10-15)
 
