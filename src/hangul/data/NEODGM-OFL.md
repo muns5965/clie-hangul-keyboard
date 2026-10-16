@@ -3,6 +3,9 @@
 `HgJ16.bin`(16×16 조합형 묶음)과 `tools/font-editor/index.html`의 조각 데이터는 Neo둥근모(NeoDunggeunmo) 1.600의 한글 조각·자모를 기기용 형식으로 바꾼 것이다(`tools/gen-johab.py`, `tools/font-editor/build.py`).
 이 데이터는 SIL Open Font License 1.1을 따른다.
 
+`hangul24-pieces.json`(편집기 내보내기, 24×24 조각 344개)과 `HgJ24.bin`(24×24 조합형 묶음, `tools/gen-johab24.py`)은
+위 16×16 조각을 24×24로 확대하고 손으로 고친 파생 데이터다. 같은 OFL 1.1을 따르며, 파생 글꼴에는 "Neo둥근모" 이름을 쓰지 않는다.
+
 Original font was released under the public domain by Jungtae Kim in 1990s. Conversion and additional character design by Dalgona. <me@dalgona.dev>
 
 # SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
