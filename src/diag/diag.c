@@ -1,5 +1,5 @@
 /*
- * ClieDiag v21 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v22 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -19,6 +19,10 @@
  *      기본 글꼴들의 줄 높이(h)·기준선(b)·'A'/'W' 폭, CJKOS가 그리는 '가'(B0A1) 폭과 HR 글꼴 값.
  * v21: 진단 "Font" 페이지 — KS X 1001 "가나다 한글"을 기존 함수(std·bold·large)와 HR 함수(HR std·bold·small)로
  *      실제로 그려 CJKOS가 각 경로에서 한글을 그리는지 확인. 줄마다 측정 폭(w)도 표시.
+ * v22: 진단 "Trap" 페이지 — 바뀐(ROM 밖을 가리키는) 시스템 트랩 목록과 Intl 디스패치 표(Txt 계열 함수) 목록.
+ *      트랩 0xA000~sysTrapLastTrapNumber를 SysGetTrapAddress로, Intl 선택자 0~intlMaxSelector를
+ *      IntlGetRoutineAddress로 읽어, 주소의 상위 바이트가 ROM(SysReset 주소 기준)과 다르면 "바뀐 것"으로 본다.
+ *      표시: "트랩번호 주소하위6자리" 한 줄에 2개. CJKOS를 켜고/끄고 비교하면 CJKOS가 바꾼 것만 남는다.
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -127,7 +131,7 @@ static void MeasureFonts(const Char *tag);
 
 /* ---------------------------------------------------------------- 화면/버퍼 */
 
-#define kMaxLines   48
+#define kMaxLines   80
 #define kLineLen    40
 #define kLineH      11
 #define kVisible    12          /* 제목줄 1 + 내용 12 + 하단 상태줄 1 */
@@ -153,7 +157,7 @@ typedef struct {
     Char   name[dmDBNameLength];
 } SkwrInfo;
 
-enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain, kPgFont };
+enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain, kPgFont, kPgTrap };
 
 #define kAppCreator    'MnDg'
 #define kPrefDebug     0
@@ -162,7 +166,7 @@ enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain, kPgFont
 #define kResetHoldSec  3
 #define kCoreType      'SkCo'
 
-static LineBuf  gInfo, gLibr, gLog;
+static LineBuf  gInfo, gLibr, gLog, gTrap;
 static Char     gLast[kLineLen] = "-";
 static UInt16   gPage = 0;
 static Boolean  gIntercept = false;
@@ -217,7 +221,7 @@ static UInt16 TotalPages(void)
 {
     if (!gDebug)
         return 1;                                    /* Main만 */
-    return 1 + PagesOf(&gInfo) + PagesOf(&gLibr) + 5; /* Main + Info + Libr + Font + SkWr + SkEv + SkRaw + Events */
+    return 1 + PagesOf(&gInfo) + PagesOf(&gLibr) + PagesOf(&gTrap) + 5; /* Main + Info + Libr + Trap + Font + SkWr + SkEv + SkRaw + Events */
 }
 
 /* 현재 페이지 종류와, Info/Libr이면 버퍼와 하위 페이지 번호 */
@@ -225,7 +229,8 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
 {
     UInt16 pi = PagesOf(&gInfo);
     UInt16 pl = PagesOf(&gLibr);
-    UInt16 pg;
+    UInt16 pt = PagesOf(&gTrap);
+    UInt16 pg, q;
 
     *bufP = NULL; *subP = 0; *subNP = 1;
     if (gPage == 0 || !gDebug)
@@ -239,13 +244,18 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
         *bufP = &gLibr; *subP = pg - pi; *subNP = pl;
         return kPgLibr;
     }
-    if (pg == pi + pl)
+    if (pg < pi + pl + pt) {
+        *bufP = &gTrap; *subP = pg - pi - pl; *subNP = pt;
+        return kPgTrap;
+    }
+    q = pg - (pi + pl + pt);
+    if (q == 0)
         return kPgFont;
-    if (pg == pi + pl + 1)
+    if (q == 1)
         return kPgSkwr;
-    if (pg == pi + pl + 2)
+    if (q == 2)
         return kPgSkev;
-    if (pg == pi + pl + 3)
+    if (q == 3)
         return kPgSkraw;
     return kPgEvents;
 }
@@ -281,6 +291,47 @@ static void MeasureHrFonts(void)
     HRFntSetFont(gHrRef, 10);        /* hrLargeFont */
     FontLine(NextLine(&gInfo), "HR", "large");
     HRFntSetFont(gHrRef, old);
+}
+
+/* 바뀐 트랩·Intl 루틴 목록 (v22). 한 줄에 3개 "번호 주소하위6자리" */
+static void TrapAdd(Char **lineP, UInt16 *nP, UInt16 num, UInt32 addr)
+{
+    Char item[16];
+
+    if (*nP % 2 == 0)
+        *lineP = NextLine(&gTrap);
+    StrPrintF(item, "%x %lx ", num, addr & 0x00FFFFFFUL);
+    StrCat(*lineP, item);
+    (*nP)++;
+}
+
+static void CollectTraps(void)
+{
+    UInt32  rom = (UInt32)SysGetTrapAddress(sysTrapSysReset) & 0xFF000000UL;
+    UInt16  t, n = 0, cnt = 0;
+    Char   *line = NULL;
+    UInt32  a;
+
+    StrPrintF(NextLine(&gTrap), "ROM hi=%lx  traps A000-%x", rom >> 24, sysTrapLastTrapNumber);
+    for (t = sysTrapBase; t <= sysTrapLastTrapNumber; t++) {
+        a = (UInt32)SysGetTrapAddress(t);
+        if (a != 0 && (a & 0xFF000000UL) != rom) {
+            TrapAdd(&line, &n, t, a);
+            cnt++;
+        }
+    }
+    StrPrintF(NextLine(&gTrap), "= %u traps not in ROM", cnt);
+    StrPrintF(NextLine(&gTrap), "-- Intl selectors 0-%u --", intlMaxSelector);
+    n = 0;
+    cnt = 0;
+    for (t = 0; t <= intlMaxSelector; t++) {
+        a = (UInt32)IntlGetRoutineAddress(t);
+        if (a != 0 && (a & 0xFF000000UL) != rom) {
+            TrapAdd(&line, &n, t, a);
+            cnt++;
+        }
+    }
+    StrPrintF(NextLine(&gTrap), "= %u intl not in ROM", cnt);
 }
 
 static void CollectInfo(void)
@@ -859,8 +910,9 @@ static void Draw(void)
         break;
     case kPgInfo:
     case kPgLibr:
+    case kPgTrap:
         StrPrintF(title, "%u/%u %s %u/%u", gPage + 1, TotalPages(),
-                  (kind == kPgInfo) ? "Info" : "Libr", sub + 1, subN);
+                  (kind == kPgInfo) ? "Info" : (kind == kPgLibr) ? "Libr" : "Trap", sub + 1, subN);
         start = (Int16)(sub * kVisible);
         for (i = 0; i < kVisible && start + i < (Int16)b->n; i++)
             DrawRow((UInt16)i, b->t[start + i]);
@@ -1034,6 +1086,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
     MeasureFonts("hi");          /* 고해상도 모드, 기존 API 글꼴 */
     MeasureHrFonts();
     CollectLibr();
+    CollectTraps();
     CollectSkwr();
     Draw();
 
