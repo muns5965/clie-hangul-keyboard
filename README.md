@@ -68,7 +68,7 @@ NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 
 
 | 작업 | 절차 |
 | --- | --- |
-| 처음 설치 | `MnSkPlugin.prc`, `MnSkCore.prc` 설치 → 리셋 → 상태바 □→로 켜기 |
+| 처음 설치 | `MnSkPlugin.prc`, `MnSkCore.prc`, `ClieDiag.prc` 설치 → ClieDiag `Soft Reset` 3초 → 상태바 □→로 켜기 |
 | 본체(키보드) 업데이트 | □→로 끄기 → `MnSkCore.prc` 설치 → □→로 켜기 (리셋 없음) |
 | 로더 업데이트 | □→로 끄기 → `MnSkPlugin.prc` 설치 → 바로 리셋(ClieDiag `Soft Reset` 3초). 리셋 전 □→ 금지 |
 | 플러그인 없이 부팅(비상) | 타입 `DisS`·크리에이터 `SeSi` DB가 있으면 `SilkExtn`이 실크 초기화 전체를 건너뛴다(실크 영역도 사라짐) |
