@@ -169,6 +169,9 @@ Int16 HgCharWidth(WChar c)
     UInt32       mode = Ftr(22);
     Char         box[2];
 
+    FtrSet(kHgCreator, 55, Ftr(55) + 1);   /* v11 진단: 호출 수, 2바이트 호출 수 #61 */
+    if (c > 0xFF)
+        FtrSet(kHgCreator, 61, Ftr(61) + 1);
     if (c <= 0xFF)
         return Orig(5) ? ((WidthFn)Orig(5))(c) : FntCharWidth((Char)c);
     if (mode == 0) {   /* 그리기 패치가 꺼진 모드: 두 바이트가 라틴 글자 둘로 그려짐 */

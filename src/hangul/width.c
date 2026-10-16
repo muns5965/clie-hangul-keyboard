@@ -14,6 +14,9 @@
  * 1바이트 글자는 원래 FntCharsWidth로 잰다. 탭은 fntTabChrWidth(20) 배수 위치로.
  * 줄바꿈: 공백 뒤에서 끊는 것을 우선하고, 공백이 없으면 글자 경계(2바이트를 자르지 않음)에서 끊는다.
  *
+ * v11 진단 기록(feature 'MnHg'): #50~#54 함수별 호출 수, #56~#60 한글 경로 호출 수,
+ *   #62 마지막 한글 폭 계산 = 폭<<16 | 배율<<8 | 글꼴 높이, #63 마지막 한글 경로 = 함수<<24 | 길이<<12 | 결과(12비트)
+ *
  * 리소스 배치: 오프셋 0 = 진입점 5개의 오프셋 표, 20 = 원래 함수 주소 5개(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  */
@@ -73,6 +76,16 @@ static inline UInt32 Ftr(UInt16 n)
     return v;
 }
 
+static inline void Bump(UInt16 n)
+{
+    FtrSet(kHgCreator, n, Ftr(n) + 1);
+}
+
+static inline void Last(UInt16 fn, UInt32 len, Int16 res)
+{
+    FtrSet(kHgCreator, 63, ((UInt32)fn << 24) | ((len & 0xFFF) << 12) | ((UInt16)res & 0xFFF));
+}
+
 /* 1바이트 글자 폭(원래 FntCharsWidth) */
 static inline Int16 W1(UInt8 c)
 {
@@ -103,10 +116,12 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
             px = owt['W' - first] & 0xFF;
         if (coord > 0 && px >= (UInt16)coord * 2 - 1)
             ratio = 2;
+        FtrSet(kHgCreator, 62, ((UInt32)((kGlyphW + ratio - 1) / ratio) << 16) | (ratio << 8) | (UInt8)f[7]);
         return (kGlyphW + ratio - 1) / ratio;
     }
     b[0] = '[';
     b[1] = ']';
+    FtrSet(kHgCreator, 62, ((UInt32)((CharsWidthFn)Orig(0))(b, 2) << 16) | (f != NULL ? (UInt8)f[7] : 0));
     return ((CharsWidthFn)Orig(0))(b, 2);
 }
 
@@ -147,16 +162,28 @@ static Int16 Measure(const UInt8 *t, UInt32 n, Boolean tabs)
 
 Int16 HgCharsWidth(const Char *chars, Int16 len)
 {
+    Int16 r;
+
+    Bump(50);
     if (chars == NULL || len <= 0 || !HasHi((const UInt8 *)chars, len))
         return ((CharsWidthFn)Orig(0))(chars, len);
-    return Measure((const UInt8 *)chars, len, false);
+    Bump(56);
+    r = Measure((const UInt8 *)chars, len, false);
+    Last(0, len, r);
+    return r;
 }
 
 Int16 HgLineWidth(const Char *chars, UInt16 len)
 {
+    Int16 r;
+
+    Bump(51);
     if (chars == NULL || len == 0 || !HasHi((const UInt8 *)chars, len))
         return ((LineWidthFn)Orig(1))(chars, len);
-    return Measure((const UInt8 *)chars, len, true);
+    Bump(57);
+    r = Measure((const UInt8 *)chars, len, true);
+    Last(1, len, r);
+    return r;
 }
 
 void HgCharsInWidth(const Char *str, Int16 *widthP, Int16 *lengthP, Boolean *fitP)
@@ -166,11 +193,13 @@ void HgCharsInWidth(const Char *str, Int16 *widthP, Int16 *lengthP, Boolean *fit
     UInt32       n, i = 0;
     Boolean      fit = true;
 
+    Bump(52);
     if (str == NULL || widthP == NULL || lengthP == NULL || *lengthP <= 0 ||
         !HasHi(t, (UInt32)*lengthP)) {
         ((CharsInWidthFn)Orig(2))(str, widthP, lengthP, fitP);
         return;
     }
+    Bump(58);
     maxW = *widthP;
     n = (UInt32)*lengthP;
     while (i < n) {
@@ -194,6 +223,7 @@ void HgCharsInWidth(const Char *str, Int16 *widthP, Int16 *lengthP, Boolean *fit
     }
     *widthP = x;
     *lengthP = (Int16)i;
+    Last(2, i, x);
     if (fitP != NULL)
         *fitP = fit;
 }
@@ -205,11 +235,13 @@ UInt16 HgWordWrap(const Char *chars, UInt16 maxWidth)
     Int16        x = 0, hw = -1, w;
     UInt32       i = 0, brk = 0;
 
+    Bump(53);
     if (chars == NULL)
         return 0;
     l = ((WordWrapFn)Orig(3))(chars, maxWidth);
     if (!HasHi(t, (UInt32)l + 1))   /* 이 줄과 다음 한 바이트에 한글이 없으면 원래 결과 */
         return l;
+    Bump(59);
     while (t[i] != 0) {
         UInt16 sz;
 
@@ -242,8 +274,10 @@ Int16 HgWidthToOffset(const Char *chars, UInt16 len, Int16 px, Boolean *leadingP
     Int16        x = 0, hw = -1, w;
     UInt32       i = 0;
 
+    Bump(54);
     if (chars == NULL || len == 0 || !HasHi(t, len))
         return ((WidthToOffsetFn)Orig(4))(chars, len, px, leadingP, truncP);
+    Bump(60);
     while (i < len) {
         UInt16 sz = Step(t, i, len, x, &hw, &w);
 

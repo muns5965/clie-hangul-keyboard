@@ -1,5 +1,5 @@
 /*
- * MnHangul v10 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v11 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -35,6 +35,9 @@
  * v10: 3b 폭. Main 4번째 줄 오른쪽 [Width ON/OFF] = 폭 함수 트랩 5개(FntCharsWidth, FntLineWidth, FntCharsInWidth,
  *     FntWordWrap, FntWidthToOffset)를 리소스 HgWd 0(src/hangul/width.c)으로 교체. 기록 #47 핸들, #48 코드 주소.
  *     첫 줄에 prot N = 지금 켜진 기능 수(각각 DB 삭제 보호 1개). 0이어야 MnHangul을 덮어써 설치할 수 있다.
+ * v11: Width 페이지(폭 함수 진단: 함수별 호출 수·한글 경로 수, 마지막 한글 폭·배율·글꼴 높이, #50~#63).
+ *     Main 3번째 줄 오른쪽 [All OFF] = Width → Intl → Count → Patch 순서로 모두 끈다(업데이트 설치 전).
+ *     페이지: Main → Font → Sizes → Calls → Width.
  */
 
 #include <PalmOS.h>
@@ -79,8 +82,8 @@ static const UInt16 kIntlSel[kIntlN] = {
 #define kRowClear     5
 
 static Char   gMsg[40] = "-";
-static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes, 3 Calls */
-#define kPages 4
+static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes, 3 Calls, 4 Width */
+#define kPages 5
 
 /* 3단계 호출 조사 대상 (count.s의 StubN 순서와 같다): 0~7 트랩, 8~23 Intl 선택자 */
 #define kCountN      24
@@ -333,6 +336,54 @@ static UInt16 ProtectCount(void)
            (GetF(kFtrIntlC) ? 1 : 0) + (GetF(kFtrWidthC) ? 1 : 0);
 }
 
+static void PatchOff(void);
+static void CountOff(void);
+
+/* 모두 끄기: 켠 반대 순서 */
+static void AllOff(void)
+{
+    if (GetF(kFtrWidthC) != 0)
+        WidthOff();
+    if (GetF(kFtrIntlC) != 0)
+        IntlOff();
+    if (GetF(kFtrCountC) != 0)
+        CountOff();
+    if (GetF(kFtrEntry) != 0)
+        PatchOff();
+    if (ProtectCount() == 0)
+        StrCopy(gMsg, "all off: ready to install");
+}
+
+/* v11 폭 진단 */
+static void DrawWidthPage(void)
+{
+    static const Char *name[6] = { "CharsW", "LineW", "CharsInW", "WordWrap", "W2Offset", "CharWid" };
+    RectangleType r;
+    Char          s[48];
+    UInt32        v;
+    UInt16        i;
+
+    RctSetRectangle(&r, 0, 0, 160, 160);
+    WinEraseRectangle(&r, 0);
+    WinDrawInvertedChars("MnHangul v11 Width [tap: Main]", 30, 0, 0);
+    StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
+              GetF(kFtrIntlC) ? "ON" : "off");
+    Row(0, s);
+    for (i = 0; i < 6; i++) {
+        StrPrintF(s, "%s  %lu / %lu", name[i], GetF(50 + i), GetF(56 + i));
+        Row(1 + i, s);
+    }
+    v = GetF(62);
+    StrPrintF(s, "last hangul w %u  x%u  font h %u", (UInt16)(v >> 16), (UInt16)((v >> 8) & 0xFF),
+              (UInt16)(v & 0xFF));
+    Row(8, s);
+    v = GetF(63);
+    StrPrintF(s, "last: %s len %u -> %u", name[(v >> 24) < 6 ? (v >> 24) : 0], (UInt16)((v >> 12) & 0xFFF),
+              (UInt16)(v & 0xFFF));
+    Row(9, s);
+    Row(11, "Clear counters (Main) resets");
+}
+
 static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
 {
     RectangleType r;
@@ -521,7 +572,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v10 Calls [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v11 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -542,6 +593,8 @@ static void ClearCounters(void)
         FtrUnregister(kHgCreator, i);
     if (GetF(kFtrCountP) != 0)
         MemSet((void *)GetF(kFtrCountP), kCountN * 4, 0);
+    for (i = 50; i <= 63; i++)
+        FtrUnregister(kHgCreator, i);
     StrCopy(gMsg, "counters cleared");
 }
 
@@ -630,7 +683,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v10 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v11 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -644,7 +697,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v10 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v11 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -681,13 +734,18 @@ static void Draw(void)
         DrawCallsPage();
         return;
     }
+    if (gPage == 4) {
+        DrawWidthPage();
+        return;
+    }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v10 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v11 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
-    StrPrintF(s, "patch: %s  mode: %s  prot %u%s", Installed() ? "ON" : "off", a, ProtectCount(),
-              ProtectCount() ? "" : " (can install)");
+    StrPrintF(s, "patch %s  %s  font %s  prot %u%s", Installed() ? "ON" : "off", a,
+              (GetF(kFtrGlyph0) && GetF(kFtrGlyph1) && GetF(43)) ? "ok" : "-", ProtectCount(),
+              ProtectCount() ? "" : " ok");
     Row(0, s);
     Button(kRowOn, "Patch ON");
     Button(kRowOff, "Patch OFF");
@@ -697,9 +755,7 @@ static void Draw(void)
     ButtonAt(84, kRowClear, GetF(kFtrIntlC) ? "Intl: ON" : "Intl: off");
     /* 한글 견본: 한글 OK 가각 (EUC-KR) */
     WinDrawChars("\xC7\xD1\xB1\xDB OK \xB0\xA1\xB0\xA2", 12, 80, (kRowOn + 1) * kLineH);
-    StrPrintF(s, "glyph %s/%s/%s", GetF(kFtrGlyph0) ? "ok" : "-", GetF(kFtrGlyph1) ? "ok" : "-",
-              GetF(43) ? "ok" : "-");
-    WinDrawChars(s, StrLen(s), 80, (kRowOff + 1) * kLineH);
+    ButtonAt(84, kRowOff, "All OFF");
     ButtonAt(84, kRowBox, GetF(kFtrWidthC) ? "Width: ON" : "Width: off");
 
     StrPrintF(s, "calls %lu hi %lu drawn %lu 2c %lu x%lu", GetF(0), GetF(9), GetF(19),
@@ -760,6 +816,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 ;
             else if (row == kRowOn)
                 PatchOn();
+            else if (row == kRowOff && e.screenX >= 84)
+                AllOff();
             else if (row == kRowOff)
                 PatchOff();
             else if (row == kRowBox && e.screenX >= 84) {
