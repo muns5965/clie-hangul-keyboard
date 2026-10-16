@@ -182,6 +182,8 @@ Int16 HgCharWidth(WChar c)
         return FntCharsWidth(box, 2);
     }
     f = (const Int16 *)FntGetFontPtr();
+    if (f != NULL)
+        FidLog(kFidW, (UInt16)f[7]);   /* v21 진단 */
     if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {
         WinLog(kWinSeenW);   /* v16 진단 */
         if (WinOffscreen() && Ftr(24) != 0)

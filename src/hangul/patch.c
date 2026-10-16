@@ -283,6 +283,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
             Int16 fh0 = ((const Int16 *)p6)[7], rh0 = ((const Int16 *)p2)[3];
 
             CountSize(fh0, rh0);
+            FidLog(kFidD, (UInt16)fh0);   /* v21 진단 */
             WinLog(fh0 == rh0 ? kWinSeen1 : fh0 == rh0 * 2 ? kWinSeen2 : kWinSeenX);   /* v16 진단 */
         }
     }

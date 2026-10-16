@@ -109,6 +109,8 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
         return ((CharsWidthFn)Orig(0))(b, 2);
     }
     f = (const Int16 *)FntGetFontPtr();
+    if (f != NULL)
+        FidLog(kFidW, (UInt16)f[7]);   /* v21 진단 */
     /* v12: 폭을 잴 때는 저해상도 글꼴(높이 8~15)인데 그릴 때 Sony가 2배 고해상도 글꼴로 바꿔 넘긴다(v11 실측:
      * 폭 잴 때 11, 그릴 때 22 ×2). 그러면 그리기는 16×16 한글을 배율 2로 그리므로 폭 = 18 ÷ 2 */
     if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {

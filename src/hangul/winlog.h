@@ -66,4 +66,26 @@ static inline void WinLog(UInt16 seen)
     }
 }
 
+/* v21 진단: 글꼴 높이·글꼴 번호(FntGetFont: 0 std, 1 bold, 2 large …)별 횟수.
+ * 4칸, 칸 = 번호 << 24 | 높이 << 16 | 횟수. 폭 잴 때 #84~#87, 그릴 때(높이 = 그리는 글꼴) #88~#91 */
+#define kFidW 84
+#define kFidD 88
+
+static inline void FidLog(UInt16 base, UInt16 h)
+{
+    UInt32 key = ((UInt32)(FntGetFont() & 0xFF) << 24) | ((UInt32)(h & 0xFF) << 16);
+    UInt16 i;
+
+    for (i = 0; i < 4; i++) {
+        UInt32 v = 0;
+
+        FtrGet(kHgCreator, base + i, &v);
+        if (v == 0 || (v & 0xFFFF0000UL) == key) {
+            if ((v & 0xFFFF) != 0xFFFF)
+                FtrSet(kHgCreator, base + i, key | ((v & 0xFFFF) + 1));
+            return;
+        }
+    }
+}
+
 #endif
