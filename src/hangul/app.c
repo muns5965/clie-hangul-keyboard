@@ -1,5 +1,5 @@
 /*
- * MnHangul v3 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험 + 2b 한글 자리표시)
+ * MnHangul v4 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험 + 2b 한글 자리표시 + 글꼴 구조 덤프)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -14,6 +14,10 @@
  * v2: 고해상도 모드(ClieDiag v19와 같은 방식: HR 라이브러리 HRWinScreenMode 320x320, 끝날 때 복귀).
  *     맨 아래 메시지 줄이 화면 밖으로 잘리던 것 수정.
  * v3: Box 버튼, 글꼴(fontType/fRectHeight)·p3·p1 기록 표시(저해상도/고해상도 좌표 구분 단서).
+ * v4: 아래 버튼(PageDown)으로 Font 페이지. 마지막 호출 p6(#3)과 마지막 한글 호출 p6(#18)의 글꼴 머리 13워드
+ *     (fontType firstChar lastChar maxWidth kernMax nDescent fRectWidth fRectHeight owTLoc ascent descent
+ *     leading rowWords)와 SDK 구조로 계산한 표 위치, 'A'·0xC7의 오프셋/폭 항목을 보인다(2c 임시 글꼴 설계용).
+ *     위 버튼(PageUp)으로 Main 페이지.
  */
 
 #include <PalmOS.h>
@@ -32,7 +36,8 @@
 #define kRowBox       4
 #define kRowClear     5
 
-static Char gMsg[40] = "-";
+static Char   gMsg[40] = "-";
+static UInt16 gPage = 0;   /* 0 Main, 1 Font */
 
 /* 고해상도 모드 (소니 헤더 없이 필요한 트랩만 선언, sysLibTrapCustom + 순번) */
 Err HROpen(UInt16 ref)  SYS_TRAP(sysLibTrapOpen);
@@ -214,14 +219,80 @@ static void Font(Char *o, UInt32 v)
     StrPrintF(o, "%x/%d", (UInt16)(v >> 16), (Int16)(v & 0xFFFF));
 }
 
+/* 읽어도 되는 주소인지: ROM(0x10xxxxxx) 또는 RAM(16MB 아래), 짝수 */
+static Boolean Readable(UInt32 a)
+{
+    return a != 0 && (a & 1) == 0 && (a < 0x01000000UL || (a >> 24) == 0x10);
+}
+
+/* 글꼴 하나를 6줄로: 머리 13워드, SDK FontType 구조로 계산한 표 위치, 'A'·0xC7 항목 */
+static void DumpFont(UInt16 row, const Char *name, UInt32 a)
+{
+    const Int16 *w = (const Int16 *)a;
+    Char         s[48];
+    UInt32       bmp, loc, owt, exp;
+    Int16        first, last;
+    UInt16       k;
+
+    StrPrintF(s, "%s @%lx", name, a);
+    Row(row, s);
+    if (!Readable(a)) {
+        Row(row + 1, "  (none)");
+        return;
+    }
+    for (k = 0; k < 3; k++) {
+        UInt16 i = k * 5;
+
+        if (k < 2)
+            StrPrintF(s, "%d: %x %x %x %x %x", i, w[i], w[i + 1], w[i + 2], w[i + 3], w[i + 4]);
+        else
+            StrPrintF(s, "%d: %x %x %x", i, w[i], w[i + 1], w[i + 2]);
+        Row(row + 1 + k, s);
+    }
+    first = w[1];
+    last = w[2];
+    bmp = (UInt32)(UInt16)w[12] * 2 * (UInt16)w[7];
+    loc = 26 + bmp;
+    owt = 16 + (UInt32)(UInt16)w[8] * 2;
+    exp = loc + (UInt32)(last - first + 2) * 2;
+    StrPrintF(s, "bmp %lu loc %lu owt %lu/%lu", bmp, loc, owt, exp);
+    Row(row + 4, s);
+    if (owt < 0x8000UL && last >= first && last - first < 512) {
+        UInt16 ea = 0xFFFF, ec = 0xFFFF;
+
+        if (0x41 >= first && 0x41 <= last)
+            ea = *(const UInt16 *)(a + owt + (0x41 - first) * 2);
+        if (0xC7 >= first && 0xC7 <= last)
+            ec = *(const UInt16 *)(a + owt + (0xC7 - first) * 2);
+        StrPrintF(s, "ow A %x  C7 %x", ea, ec);
+        Row(row + 5, s);
+    }
+}
+
+static void DrawFontPage(void)
+{
+    RectangleType r;
+
+    RctSetRectangle(&r, 0, 0, 160, 160);
+    WinEraseRectangle(&r, 0);
+    WinDrawInvertedChars("MnHangul v4 Font (up: Main)", 27, 0, 0);
+    DumpFont(0, "last p6", GetF(3));
+    DumpFont(6, "hi p6", GetF(18));
+    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 13 * kLineH);
+}
+
 static void Draw(void)
 {
     RectangleType r;
     Char          s[48], a[16], b[16], c[16];
 
+    if (gPage == 1) {
+        DrawFontPage();
+        return;
+    }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v3 (2b) CJKOS OFF only", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v4 (dn: Font) CJKOS OFF", 32, 0, 0);
 
     StrPrintF(s, "patch: %s  box: %s  A378=%lx", Installed() ? "ON" : "off",
               GetF(kFtrBox) ? "ON" : "off", (UInt32)SysGetTrapAddress(kTrapBlt));
@@ -275,7 +346,9 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < 160) {
             Int16 row = e.screenY / kLineH - 1;
 
-            if (row == kRowOn)
+            if (gPage != 0)
+                ;
+            else if (row == kRowOn)
                 PatchOn();
             else if (row == kRowOff)
                 PatchOff();
@@ -287,8 +360,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             continue;
         }
         if (!SysHandleEvent(&e) && e.eType == keyDownEvent &&
-            (e.data.keyDown.chr == vchrPageUp || e.data.keyDown.chr == vchrPageDown))
+            (e.data.keyDown.chr == vchrPageUp || e.data.keyDown.chr == vchrPageDown)) {
+            gPage = (e.data.keyDown.chr == vchrPageDown) ? 1 : 0;
             Draw();
+        }
     } while (e.eType != appStopEvent);
     StopHires();
     return 0;

@@ -16,7 +16,7 @@
  *   #0 호출 수, #1 마지막 길이, #2 마지막 첫 4바이트, #3 p6, #4 p2 사각형 (x<<16|y), #5 (w<<16|h),
  *   #6 p3 점 (x<<16|y), #7 p1, #8 p7,
  *   #9 0x80 이상 바이트가 든 호출 수, #10~#13 그 마지막 호출의 길이·첫 4바이트·사각형 xy·wh
- *   #14 마지막 호출 글꼴 (fontType<<16 | fRectHeight), #15 hi 호출 글꼴, #16 hi 호출 p3, #17 hi 호출 p1
+ *   #14 마지막 호출 글꼴 (fontType<<16 | fRectHeight), #15 hi 호출 글꼴, #16 hi 호출 p3, #17 hi 호출 p1, #18 hi 호출 p6
  *   #19 자리표시로 바꾼 글자 수, #22 자리표시 켜짐(앱이 설정, 패치는 읽기만)
  */
 
@@ -99,6 +99,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         FtrSet(kHgCreator, 15, FontInfo(p6));
         FtrSet(kHgCreator, 16, Pair((const Int16 *)p3));
         FtrSet(kHgCreator, 17, (UInt32)p1);
+        FtrSet(kHgCreator, 18, (UInt32)p6);
     }
     if (orig == 0)
         return 0;
