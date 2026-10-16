@@ -31,7 +31,7 @@ NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 
 **`SkWr` 플러그인**("SilkWare") 구조를 쓴다. 아래는 모두 ROM 역분석과 에뮬레이터 실측으로 확인한 내용이다.
 
 ### 1. SkWr 플러그인 호출 방식 (SilkExtn → 플러그인)
-- 부팅 때 `SilkExtn`이 타입 **`SkWr`**인 DB를 모두 찾아(내장 1개 + 외부 최대 3개) 각 DB의 `code 0` 리소스 **맨 앞 주소로 바로 jsr** 한다.
+- 부팅 때 `SilkExtn`이 타입 **`SkWr`**인 DB를 모두 찾아(내장 1개 + 외부 최대 3개) 각 DB의 `code 0` 리소스 **맨 앞 바이트를 함수 입구로 보고 곧바로 호출**한다(68000 `jsr` 명령, 앱 실행 절차 없음).
   일반 앱이 아니므로 시작 코드·A5(전역변수)가 없다 → **전역변수·문자열 상수·초기화된 배열 금지**, 위치 독립 코드로 짠다.
 - 호출 형식: `Err entry(UInt32 *slot, UInt8 *event, void *out)`, 반환 0 = 등록 유지(0이 아니면 등록 취소).
 - Open 때만 첫 인자가 **슬롯 주소**이고, 이후 이벤트에는 거기 넣어 둔 **값**이 그대로 온다 → 필요한 값(창 핸들) 저장소로 쓴다.
@@ -234,7 +234,7 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
 - `SilkWareLib`(`SlSW`) API: Open/Close/Sleep/Wake/WinSaveBits/WinRestoreBits/GetRefNum/TimerWrite/GetScrWindow/GetAPIVersion.
 - Graffiti 영역 그림은 `SknG`(Graffiti 스킨)·`SknS`(상태바 스킨) DB에서 읽는다. 스킨 교체는 그림만 바뀌고 입력은 바뀌지 않는다.
 - 호출 규약(확정, SilkExtn 0x2FE0~0x3002, 내장 처리기 0x2530): `Err entry(UInt32 *slot, UInt8 *event, void *out)`, 스택 전달, 반환 `d0` 16비트(0 = 등록 유지),
-  일반 C 레지스터 규약, 호출 전 A5 미설정(전역변수 금지), `code 0` 맨 앞으로 `jsr`. Open 때 `out`은 NULL.
+  일반 C 레지스터 규약, 호출 전 A5 미설정(전역변수 금지), `code 0` 맨 앞을 바로 호출(`jsr`). Open 때 `out`은 NULL.
 - 로딩 시점(확정): 부팅 중 `extn` 초기화. `SilkStartup`(0x278C) → `PrvInitStage2` → `PrvInitSilkWare`(0x2E2A). 직전에 `FtrGet`을 쓰므로 Feature Manager 사용 가능(높음).
 - 실크 비활성화 스위치(확정, 0x27EC): 타입 `DisS`·크리에이터 `SeSi` DB가 있으면 실크 초기화 전체를 건너뜀.
 - 플러그인 전환 방법, Draw·Pen 이벤트 구조체 배치는 미확정. 첫 시험은 CloudpilotEmu 세션 백업 후 진행한다.
