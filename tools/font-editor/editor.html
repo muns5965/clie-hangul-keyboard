@@ -300,7 +300,8 @@ let dbWritable = true;
 function toHex(a) { let s = ""; for (let y = 0; y < S; y++) { let v = 0; for (let x = 0; x < S; x++) v = (v << 1) | a[y * S + x]; s += v.toString(16).padStart(6, "0"); } return s; }
 function fromHex(h) { const a = new Uint8Array(S * S); for (let y = 0; y < S; y++) { const v = parseInt(h.substr(y * 6, 6), 16); for (let x = 0; x < S; x++) a[y * S + x] = (v >> (S - 1 - x)) & 1; } return a; }
 function recomputeAuto() { auto24 = p16.map((a) => upscale(a, method)); }
-/* 낱자모 기본 모양: 손그림이 있으면 그것, 없으면 지금 조각(자음 = 초성 2벌, 겹받침 = 종성 2벌, 모음 = 중성 1벌)을 24칸 가운데로.
+/* 낱자모 기본 모양: 손그림이 있으면 그것, 없으면 지금 조각(자음 = cho_1_xx, 겹받침 = jong_1_xx, 모음 = jung_0_xx.
+   화면 표시로는 초성 2벌·종성 2벌·중성 1벌)을 24칸 가운데로.
    가로 시작 = floor((24 − 폭) / 2 + 0.5), 세로 시작 = floor((24 − 높이) / 2). 생성 도구 gen-johab24.py ②·③과 같은 규칙 */
 function jamoSrcIndex(c) {
   const name = JUNG.includes(c) ? `jung_0_${String(JUNG.indexOf(c)).padStart(2, "0")}`
@@ -654,8 +655,10 @@ function exportObject() {
     format: "mnhangul-hangul-pieces", version: 2, size: S, baseline: BASE24,
     base: DATA.base, method,
     note: "rows: 24 rows x 24 bits, hex 6 chars per row, MSB = left. edited = names changed by hand. jamo = hand-edited standalone jamo only (char -> rows); others are built from pieces/hand file.",
-    names: DATA.names, pieces: DATA.names.map((n, i) => toHex(piece(i))), edited: [...edits.keys()].filter((n) => !n.startsWith("jamo_")),
-    jamo: Object.fromEntries(JAMO_CH.map((c, k) => [c, ALL[N + k]]).filter(([c, n]) => edits.has(n)).map(([c, n]) => [c, toHex(edits.get(n))])),
+    /* 기본 모양(조각 = 자동 확대, 낱자모 = jamoBase)과 같아진 항목은 '고친 것'에서 뺀다(불러오기·저장본 되돌리기·조각 변경 뒤에도) */
+    names: DATA.names, pieces: DATA.names.map((n, i) => toHex(piece(i))),
+    edited: DATA.names.filter((n, i) => edits.has(n) && toHex(edits.get(n)) !== toHex(auto24[i])),
+    jamo: Object.fromEntries(JAMO_CH.map((c, k) => [c, ALL[N + k], k]).filter(([c, n, k]) => edits.has(n) && toHex(edits.get(n)) !== toHex(jamoBase(k))).map(([c, n]) => [c, toHex(edits.get(n))])),
   };
 }
 document.getElementById("btnExport").addEventListener("click", async () => {
