@@ -21,20 +21,36 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 | (제외) | ROM 수정 | 실기 ROM 재기록 위험, Sony ROM 저작권 문제로 검토하지 않음 |
 
 ### B안 세부 (검토)
-- 교체 후보 (아래는 **대체 후보 목록**이며, CJKOS가 실제로 이 함수들을 교체했는지는 **미확인**이다. 1단계 조사로 확인한다)
 
-| 함수 | 기능 | 대체가 필요한 이유 | CJKOS 실제 교체 |
-| --- | --- | --- | --- |
-| `WinDrawChars` | 문자열을 화면에 그리기 | 2바이트를 한글 글꼴로 그려야 함 | 미확인 |
-| `WinEraseChars` / `WinInvertChars` | 문자열 지우기 / 반전(선택 표시) | 그리기와 같은 폭·글꼴 필요 | 미확인 |
-| `FntCharsWidth` | 문자열의 화면 폭 계산 | 한글 한 글자 폭을 바르게 계산해야 커서·정렬이 맞음 | 미확인 |
-| `FntWordWrap` | 한 줄에 들어갈 길이 계산(줄바꿈) | 글자 중간에서 줄이 끊기지 않게 | 미확인 |
-| `TxtGetNextChar` / `TxtGetPrevChar` | 다음 / 이전 글자 조회 | 커서 이동·BS가 2바이트를 한 글자로 다루게 | 미확인 |
-| `TxtCharBounds` | 위치가 속한 글자의 경계 | 선택·삭제 범위 | 미확인 |
-| `TxtByteAttr` | 바이트가 2바이트 글자의 앞/뒤인지 판별 | 글자 경계 판정의 기본 | 미확인 |
-| HR 라이브러리 그리기 경로 | NR70V 고해상도 그리기 | 고해상도 모드 앱에서도 한글 표시 | 미확인 |
+#### 실측 1: CJKOS가 바꾼 함수 (ClieDiag v22 Trap 페이지, 2026-10-16)
+CJKOS를 켰을 때 ROM 밖을 가리키는 시스템 트랩 33개·Intl 선택자 18개, **CJKOS를 끄면 0개**.
+즉 아래는 모두 CJKOS가 바꾼 것이다(이 기기에는 다른 RAM 패치가 없다). 코드는 `0x0034xxxx`(트랩 31·Intl 18)와 `0x000F3xxx`(`FtrGet`, `IntlDispatch`) 두 곳.
+
+| 분류 | 함수 | 대체 모듈에 필요 |
+| --- | --- | --- |
+| 그리기 | `BltDrawChars`(글자를 찍는 최하위 함수) | 필수. `WinDrawChars`가 아니라 그 아래를 바꾼다 |
+| 글꼴 상태 | `FntSetFont`, `WinPopDrawState` | 필수(현재 글꼴에 맞는 한글 크기 선택) |
+| 폭·줄바꿈 | `FntCharWidth`, `FntCharsWidth`, `FntCharsInWidth`, `FntLineWidth`, `FntWidthToOffset`, `FntWordWrap`, `FldWordWrap` | 필수 |
+| 글자 경계(Intl) | `TxtByteAttr`, `TxtCharAttr`, `TxtCharSize`, `TxtGetPreviousChar`, `TxtGetNextChar`, `TxtGetChar`, `TxtSetNextChar`, `TxtCharBounds`, `TxtCharWidth`, `TxtCharIsValid` | 필수(커서·BS·선택) |
+| 인코딩 정보 | `TxtCharEncoding`, `TxtStrEncoding`, `TxtEncodingName`(Intl), `FtrGet`, `IntlDispatch` | 필요(시스템이 다바이트 인코딩으로 인식) |
+| 단어·비교·정렬 | `TxtWordBounds`, `TxtCompare`, `TxtCaselessCompare`, `TxtTransliterate`(Intl), `StrCompare`, `StrCaselessCompare`, `GetCharSortValue`, `GetCharAttr`, `GetCharCaselessValue` | 선택 |
+| 화면 현지화 | `FrmInitForm`, `FrmDrawForm`, `MenuAddItem`, `DateToAscii`, `FontSelect` | 불필요(또는 나중) |
+| CJKOS 자체 입력기 | `EvtGetEvent`, `FldHandleEvent`, `SysKeyboardDialog` | 불필요(이 프로젝트 키보드가 대신함) |
+| CJKOS 자체 관리 | `SysAppLaunch`, `DmOpenDatabase`, `DmCloseDatabase`, `DmDeleteDatabase`, `DmGet1Resource`, `DmNextOpenResDatabase`, `DmMoveOpenDBContext`, `IntlGetRoutineAddress`(Intl) | 불필요(글꼴 DB·리소스 관리로 추정) |
+
+최소 교체 범위(검토): 트랩 약 10개 + Intl 약 13개. CJKOS가 실제로 한 방식이 이것이라는 뜻이며, 같은 범위로 같은 호환성을 얻는지는 구현 후 검증한다.
+
+#### 실측 2: CJKOS 한글 글꼴 크기·폭 (ClieDiag v20 Info, v21 Font 페이지)
+| 쓰는 곳 | 줄 높이 | CJKOS가 그리는 한글 | 한 글자 폭 | 대체 모듈 계획 |
+| --- | --- | --- | --- | --- |
+| 저해상도 std / bold / large | 11 / 11 / 14 | 12px | 13 / 14 / 13 | 12×12 |
+| 고해상도 small(HR) | 14 | 12px 그대로(선명) | 13 | 12×12 |
+| 고해상도 std / bold | 22 | 약 8~9px를 2배로 늘림(투박) | 18 / 20 | **16×16 고해상도 그대로** |
+| 고해상도 large | 28 | 12px를 2배로 늘림(투박) | 26 | **24×24 고해상도 그대로** |
+
+폭은 CJKOS와 같게 맞춰 기존 앱의 줄바꿈·정렬을 유지하고, 고해상도 std·bold·large는 늘린 글꼴 대신 해당 크기 조합형 글꼴로 그린다.
 
 - 교체 시점: 리셋 알림(`sysAppLaunchCmdSystemReset`) 또는 부팅 때 실행되는 SkWr 로더의 Open.
-- 글꼴: ① 완성형 2,350자 비트맵(저해상도 12px 약 42KB, 고해상도 24px 약 170KB) ② 벌식 조합형(수 KB~10KB대, 11,172자). 자유 라이선스 글꼴 또는 자체 제작.
-- 진행 순서(디버그 먼저): ① ClieDiag에 "바뀐 트랩 목록"(ROM 밖을 가리키는 트랩) 페이지 → CJKOS가 실제로 바꾼 함수 확인
-  ② `WinDrawChars` 하나만 교체해 표시 시험(CJKOS 끈 복사본 세션) ③ 글자 경계 ④ 고해상도 경로·글꼴.
+- 글꼴: **벌식 조합형으로 결정**(8×4×4 기준 조각 약 360개: 12×12 약 8.6KB, 16×16 약 11.5KB, 24×24 약 26KB, 11,172자). 16×16은 Neo둥근모(OFL) 활용 검토, 12·24는 직접 제작 또는 변환.
+- 진행 순서(디버그 먼저): ① 바뀐 함수 조사(**완료**, 실측 1) ② `BltDrawChars` 하나만 교체해 표시 시험(CJKOS 끈 복사본 세션)
+  ③ 폭·글자 경계 ④ 글꼴 3벌(16 → 12 → 24).
