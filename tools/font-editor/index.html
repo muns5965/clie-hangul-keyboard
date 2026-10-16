@@ -453,9 +453,13 @@ function setEdit(name, arr) {
 let painting = null;
 const editCv = document.getElementById("edit");
 function cellAt(ev) { const r = editCv.getBoundingClientRect(); const x = Math.floor((ev.clientX - r.left) / r.width * S); const y = Math.floor((ev.clientY - r.top) / r.height * S); return x >= 0 && x < S && y >= 0 && y < S ? [x, y] : null; }
-editCv.addEventListener("contextmenu", (e) => e.preventDefault());
+/* 오른쪽 버튼 = 지우기. 편집 칸 근처에서는 브라우저 메뉴를 막는다(캡처 단계, 문서 전체에서 판정) */
+document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest(".canvas-box, #edit")) { e.preventDefault(); e.stopPropagation(); } }, true);
+editCv.addEventListener("contextmenu", (e) => { e.preventDefault(); return false; });
+editCv.addEventListener("mousedown", (e) => { if (e.button === 2) e.preventDefault(); });
 editCv.addEventListener("pointerdown", (ev) => {
   const c = cellAt(ev); if (!c) return;
+  if (ev.button === 2) ev.preventDefault();
   editCv.setPointerCapture(ev.pointerId);
   const name = DATA.names[sel];
   const before = edits.has(name) ? edits.get(name).slice() : null;
