@@ -101,15 +101,16 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 
 주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
-## bin/ClieDiag.prc (상태·진단, v18)
+## bin/ClieDiag.prc (상태·진단, v19)
 
-소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. 160×160 호환 모드로 실행된다. 소니 라이브러리 함수는 호출하지 않는다.
+소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. v19부터 고해상도 모드로 실행(HR 라이브러리를 못 찾으면 160×160 호환 모드, 제목에 `(lo-res)`).
 
 기본 화면은 **Main 한 페이지**: 로더 설치·빌드·삭제 보호 해제 여부, 본체 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법.
 Main의 `Debug` 체크박스를 탭하면 아래 진단 페이지가 나타난다(체크 상태는 앱 설정에 저장).
 v14부터 복구용 DiagRescue(크리에이터 `todo`, To Do 버튼 대체)는 폐기 — 로더 11은 DisS 없이 교체된다.
 기기에 남은 DiagRescue는 SkWr 진단 페이지의 `Delete DiagRescue` 버튼으로 지운다(런처 삭제는 같은 크리에이터 `todo`의 To Do 데이터까지 지울 수 있음).
 v17: 누를 수 있는 줄은 둥근 테두리 버튼(누르면 반전), 디버그는 네모 체크박스로 표시.
+v19: 고해상도 모드(HR Library `HRWinScreenMode` 320×320). 기존 그리기 함수가 고해상도 글꼴로 그려지고 좌표·펜은 160 기준 그대로. 상태바(홈·□→)가 보인다.
 v18: 리셋 버튼 폭 고정·가운데 정렬, 누르는 동안 `Hold... N`(취소 안내는 맨 아래 줄).
 v16: Main의 `Soft Reset (hold 3s)` 줄을 3초 누르고 있으면 소프트 리셋(`SysReset`), 중간에 떼면 취소.
 v15: Events의 INT(실크 펜 가로채기)는 맨 아래 `INT` 버튼으로만 전환(아래 절반 탭으로 실수로 켜져 홈 아이콘이 막힌 일이 있음).

@@ -1,5 +1,5 @@
 /*
- * ClieDiag v18 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v19 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -11,6 +11,10 @@
  * v17: 누를 수 있는 줄은 둥근 테두리 버튼, 디버그는 네모 체크박스로 그린다. 누르면 버튼이 반전된다.
  * v18: 리셋 버튼은 폭 고정(거의 화면 전체)·조금 높게, 가운데 정렬. 누르는 동안 "Hold... N"만 표시하고
  *      "release to cancel"은 맨 아래 상태줄에(글자가 길어져 버튼이 화면 밖으로 넘치던 문제).
+ * v19: 고해상도 모드. 시작 때 Sony HR Library를 열고 HRWinScreenMode(320x320), 끝날 때 기본 모드로 되돌리고 닫는다.
+ *      Sony 문서(Programmer's Companion): 고해상도 모드에서 기존 API는 좌표를 그대로(160 기준) 쓰고
+ *      글자는 고해상도 글꼴로 그려진다. 펜 좌표도 기존 기준. 그래서 그리기 코드는 그대로다.
+ *      저해상도 앱이면 상태바 대신 CLIÉ 로고가 나오던 것이, 고해상도 앱이 되어 상태바(홈·□→)가 나온다.
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -42,6 +46,46 @@
  */
 
 #include <PalmOS.h>
+
+/* ---------------------------------------------------------------- 고해상도 (Sony HR Library)
+ * 소니 헤더는 저장소에 넣지 않으므로 필요한 트랩만 직접 선언한다(sysLibTrapCustom + 순번, SDK 3.0 순서).
+ * 연산 인자는 1바이트 enum(gcc·ROM 모두 moveb). */
+#define HRT(n)         SYS_TRAP(sysLibTrapCustom + (n))
+Err HROpen(UInt16 ref)  SYS_TRAP(sysLibTrapOpen);
+Err HRClose(UInt16 ref) SYS_TRAP(sysLibTrapClose);
+Err HRWinScreenMode(UInt16 ref, WinScreenModeOperation op, UInt32 *w, UInt32 *h,
+                    UInt32 *depth, Boolean *color) HRT(48);
+
+static UInt16 gHrRef = 0xFFFF;      /* 고해상도 모드로 바꿨으면 HR 참조 번호 */
+static Err    gHrErr = 0;
+
+static void StartHires(void)
+{
+    UInt16 ref;
+    UInt32 w = 320, h = 320;
+
+    gHrErr = SysLibFind("Sony HR Library", &ref);
+    if (gHrErr != errNone)
+        return;
+    gHrErr = HROpen(ref);
+    if (gHrErr != errNone)
+        return;
+    gHrErr = HRWinScreenMode(ref, winScreenModeSet, &w, &h, NULL, NULL);
+    if (gHrErr != errNone) {
+        HRClose(ref);
+        return;
+    }
+    gHrRef = ref;
+}
+
+static void StopHires(void)
+{
+    if (gHrRef == 0xFFFF)
+        return;
+    HRWinScreenMode(gHrRef, winScreenModeSetToDefaults, NULL, NULL, NULL, NULL);
+    HRClose(gHrRef);
+    gHrRef = 0xFFFF;
+}
 
 /* ---------------------------------------------------------------- SkWr 시험 */
 
@@ -694,7 +738,8 @@ static void Draw(void)
 
     switch (kind) {
     case kPgMain:
-        StrPrintF(title, "%u/%u MnSk keyboard", gPage + 1, TotalPages());
+        StrPrintF(title, "%u/%u MnSk keyboard%s", gPage + 1, TotalPages(),
+                  (gHrRef != 0xFFFF) ? "" : " (lo-res)");
         DrawMainPage();
         break;
     case kPgInfo:
@@ -864,6 +909,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (PrefGetAppPreferences(kAppCreator, kPrefDebug, &gDebug, &size, true) == noPreferenceFound)
             gDebug = false;
     }
+    StartHires();
     CollectInfo();
     CollectLibr();
     CollectSkwr();
@@ -908,5 +954,6 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             Draw();
     } while (e.eType != appStopEvent);
 
+    StopHires();
     return 0;
 }
