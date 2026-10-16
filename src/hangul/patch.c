@@ -14,6 +14,8 @@
  *     (1 또는 2, 실측 v3). 라틴 폭은 p6 폭 표(SDK FontType 구조, 실측 v4)에서 계산한다.
  *     완성형 한글(앞 0xB0~0xC8)은 글자 데이터(#23·#24 포인터, 앱이 HgFn 0·1을 잠가 둠), 그 밖의 2바이트는 네모.
  *     조건이 안 맞으면(저해상도 글꼴 등) 2b처럼 "[]"로 그린다.
+ * v7: 글꼴 높이 22만이 아니라 16~40(배율 1·2)이면 그린다(메모장 큰 글꼴 등). 세로 위치는 ascent - 15.
+ *     한글 호출마다 (글꼴 높이, 사각형 높이) 조합별 횟수를 #30~#37에 센다.
  *
  * 리소스 배치: 오프셋 0 = 원래 함수 주소 칸(4바이트, 앱이 DmWrite로 기록), 오프셋 4 = 진입점 PatchBlt.
  * 어느 앱에서든 불리므로 전역변수·A5·재배치 금지(빌드 스크립트가 검사).
@@ -69,7 +71,6 @@ static inline UInt32 Pair(const Int16 *p)
 }
 
 #define kGlyphW   18      /* 한글 한 글자 폭(고해상도 픽셀, CJKOS 고해상도 std와 같음) */
-#define kCellTop  3       /* 22줄 칸 안에서 16줄 글자의 시작 줄 */
 #define kTmpChar  0x48    /* 임시 글꼴의 유일한 글자 */
 #define kSplit    1175    /* HgFn 0 = 순위 0~1174, HgFn 1 = 나머지 */
 
@@ -96,33 +97,35 @@ static inline UInt16 CharW(const Int16 *f, UInt8 c)
     return e & 0xFF;
 }
 
-/* 1글자 임시 글꼴(63워드 = 126바이트):
- *   워드 0~12 머리, 13~56 그림(22줄 × 2워드), 57~59 위치표(글자, 없는 글자, 끝), 60~62 폭 표(글자, 없는 글자, 끝)
- *   owTLoc(워드 8): 폭 표 바이트 위치 120 = 16 + 52*2 */
+/* 1글자 임시 글꼴 (h = 글꼴 높이, 워드 수 TmpWords(h)):
+ *   워드 0~12 머리, 13~ 그림(h줄 × 2워드), 그 뒤 위치표 3워드(글자, 없는 글자, 끝), 폭 표 3워드(글자, 없는 글자, 끝)
+ *   owTLoc(워드 8) = (폭 표 바이트 위치 - 16) / 2 */
+#define TmpWords(h)  (13 + (h) * 2 + 6)
+
 static inline void MakeTmpFont(UInt16 *t, const Int16 *src)
 {
-    UInt16 i;
+    UInt16 h = src[7], loc = 13 + h * 2, i;
 
-    for (i = 0; i < 63; i++)
+    for (i = 0; i < TmpWords(h); i++)
         t[i] = 0;
     t[0] = src[0];
     t[1] = kTmpChar;
     t[2] = kTmpChar;
     t[3] = kGlyphW;
     t[6] = kGlyphW;
-    t[7] = src[7];
-    t[8] = 52;
+    t[7] = h;
+    t[8] = ((loc + 3) * 2 - 16) / 2;
     t[9] = src[9];
     t[10] = src[10];
     t[12] = 2;
-    t[58] = kGlyphW;
-    t[59] = kGlyphW;
-    t[60] = kGlyphW;
-    t[62] = 0xFFFF;
+    t[loc + 1] = kGlyphW;
+    t[loc + 2] = kGlyphW;
+    t[loc + 3] = kGlyphW;
+    t[loc + 5] = 0xFFFF;
 }
 
-/* 16×16 글자 g(32바이트, NULL이면 네모)를 임시 글꼴 그림 칸에 (1, kCellTop) 위치로 넣는다 */
-static inline void SetGlyph(UInt16 *t, const UInt8 *g)
+/* 16×16 글자 g(32바이트, NULL이면 네모)를 임시 글꼴 그림 칸 (1, top)에 넣는다 */
+static inline void SetGlyph(UInt16 *t, const UInt8 *g, UInt16 top)
 {
     UInt16 y;
 
@@ -133,8 +136,37 @@ static inline void SetGlyph(UInt16 *t, const UInt8 *g)
             v = ((UInt16)g[y * 2] << 8) | g[y * 2 + 1];
         else
             v = (y == 0 || y == 15) ? 0xFFFF : 0x8001;
-        t[13 + (y + kCellTop) * 2] = v >> 1;
-        t[13 + (y + kCellTop) * 2 + 1] = (v & 1) << 15;
+        t[13 + (y + top) * 2] = v >> 1;
+        t[13 + (y + top) * 2 + 1] = (v & 1) << 15;
+    }
+}
+
+/* 글자 세로 시작 줄: 한글(1~13줄)을 영문 대문자 높이에 맞춘다. ascent - 15 (std 18 → 3, v6과 같음), 칸 안으로 제한 */
+static inline UInt16 GlyphTop(const Int16 *f)
+{
+    Int16 top = f[9] - 15;
+
+    if (top < 0)
+        top = 0;
+    if (top > f[7] - 16)
+        top = f[7] - 16;
+    return top;
+}
+
+/* v7 크기 조사: (글꼴 높이, 사각형 높이) 조합별 한글 호출 수. #30~#37 = 높이<<24 | 사각형<<16 | 횟수 */
+static inline void CountSize(Int16 fh, Int16 rh)
+{
+    UInt32 key = ((UInt32)(fh & 0xFF) << 24) | ((UInt32)(rh & 0xFF) << 16);
+    UInt16 i;
+
+    for (i = 30; i <= 37; i++) {
+        UInt32 v = GetF(i);
+
+        if (v == 0 || (v & 0xFFFF0000UL) == key) {
+            if ((v & 0xFFFF) != 0xFFFF)
+                FtrSet(kHgCreator, i, key | ((v & 0xFFFF) + 1));
+            return;
+        }
     }
 }
 
@@ -148,6 +180,8 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
     UInt32        res = 0;
     UInt8         one = kTmpChar;
 
+    UInt16        top = GlyphTop(font);
+
     MakeTmpFont(tmp, font);
     while (i < len) {
         if (IsPair(chars, i, len)) {
@@ -159,7 +193,7 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
                 g = (rank < kSplit) ? (const UInt8 *)g0 + rank * 32
                                     : (const UInt8 *)g1 + (rank - kSplit) * 32;
             }
-            SetGlyph(tmp, g);
+            SetGlyph(tmp, g, top);
             r.topLeft.x = rc->topLeft.x + px / ratio;
             r.extent.x = kGlyphW / ratio;
             res = orig(p1, &r, p3, &one, 1, tmp, p7);
@@ -224,6 +258,8 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         FtrSet(kHgCreator, 16, Pair((const Int16 *)p3));
         FtrSet(kHgCreator, 17, (UInt32)p1);
         FtrSet(kHgCreator, 18, (UInt32)p6);
+        if (p2 != NULL && p6 != NULL)
+            CountSize(((const Int16 *)p6)[7], ((const Int16 *)p2)[3]);
     }
     if (orig == 0)
         return 0;
@@ -232,12 +268,15 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         Int16        rh = ((const Int16 *)p2)[3];
         UInt32       g0 = GetF(23), g1 = GetF(24);
 
-        if (f[7] == 22 && (rh == 22 || rh == 11) && g0 != 0 && g1 != 0) {
-            UInt16 *tmp = MemPtrNew(126);
+        Int16        fh = f[7];
+
+        /* v7: 글꼴 높이 16~40, 배율(글꼴 높이 ÷ 사각형 높이) 1 또는 2 */
+        if (fh >= 16 && fh <= 40 && rh > 0 && (fh == rh || fh == rh * 2) && g0 != 0 && g1 != 0) {
+            UInt16 *tmp = MemPtrNew(TmpWords(fh) * 2);
 
             if (tmp != NULL) {
                 UInt32 r = DrawGlyphs((BltFn)orig, p1, (const RectangleType *)p2, p3, chars, len, f, p7,
-                                      (UInt16)(22 / rh), tmp, g0, g1);
+                                      (UInt16)(fh / rh), tmp, g0, g1);
 
                 MemPtrFree(tmp);
                 return r;

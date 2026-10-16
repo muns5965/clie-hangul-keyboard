@@ -1,5 +1,5 @@
 /*
- * MnHangul v6 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험, 2b 자리표시, 2c 16×16 한글 그리기, 글꼴 덤프)
+ * MnHangul v7 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험, 2b 자리표시, 2c 16×16 한글 그리기, 글꼴 덤프·크기 조사)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -22,6 +22,8 @@
  * v6: Box 버튼 → Mode 버튼(off → box → glyph 순환, #22 = 0/1/2). Patch ON 때 글자 데이터 리소스 HgFn 0·1
  *     (Neo둥근모 16×16 완성형, 시험용)을 잠가 포인터를 #23·#24, 핸들을 #25·#26에 둔다(Patch OFF 때 해제).
  *     버튼 오른쪽에 한글 견본(기존 함수 WinDrawChars, 고해상도 모드 = 배율 2 경우)을 그린다.
+ * v7: 패치가 글꼴 높이 16~40에서 한글을 그림. Sizes 페이지(#30~#37: 글꼴 높이·사각형 높이별 한글 호출 수).
+ *     제목 줄 탭 = Main → Font → Sizes → Main, 아래 버튼 = 다음 페이지, 위 버튼 = Main.
  */
 
 #include <PalmOS.h>
@@ -48,7 +50,7 @@
 #define kRowClear     5
 
 static Char   gMsg[40] = "-";
-static UInt16 gPage = 0;   /* 0 Main, 1 Font */
+static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes */
 
 /* 고해상도 모드 (소니 헤더 없이 필요한 트랩만 선언, sysLibTrapCustom + 순번) */
 Err HROpen(UInt16 ref)  SYS_TRAP(sysLibTrapOpen);
@@ -234,6 +236,8 @@ static void ClearCounters(void)
         FtrUnregister(kHgCreator, i);   /* #20~#26(핸들·진입점·모드·글자 데이터)은 지우지 않는다 */
     FtrUnregister(kHgCreator, kFtrGlyphCnt);
     FtrUnregister(kHgCreator, kFtrRatio);
+    for (i = 30; i <= 37; i++)
+        FtrUnregister(kHgCreator, i);
     StrCopy(gMsg, "counters cleared");
 }
 
@@ -322,9 +326,38 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v6 Font [tap: Main]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v7 Font [tap: Sizes]", 29, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
+}
+
+/* v7 크기 조사 표 */
+static void DrawSizesPage(void)
+{
+    RectangleType r;
+    Char          s[48];
+    UInt16        i, row = 1;
+
+    RctSetRectangle(&r, 0, 0, 160, 160);
+    WinEraseRectangle(&r, 0);
+    WinDrawInvertedChars("MnHangul v7 Sizes [tap: Main]", 29, 0, 0);
+    Row(0, "hangul calls by font h / rect h");
+    for (i = 30; i <= 37; i++) {
+        UInt32 v = GetF(i);
+        UInt16 fh, rh;
+
+        if (v == 0)
+            continue;
+        fh = (UInt16)(v >> 24);
+        rh = (UInt16)((v >> 16) & 0xFF);
+        StrPrintF(s, "font %u  rect %u  x%s  : %lu", fh, rh,
+                  (fh == rh) ? "1" : (fh == rh * 2) ? "2" : "?", v & 0xFFFF);
+        Row(row++, s);
+    }
+    if (row == 1)
+        Row(1, "(none yet)");
+    Row(10, "x1/x2 + font 16..40 = glyph");
+    Row(11, "other = [] (box)");
 }
 
 static void Draw(void)
@@ -336,9 +369,13 @@ static void Draw(void)
         DrawFontPage();
         return;
     }
+    if (gPage == 2) {
+        DrawSizesPage();
+        return;
+    }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v6 [tap: Font] CJKOS OFF", 33, 0, 0);
+    WinDrawInvertedChars("MnHangul v7 [tap: Font] CJKOS OFF", 33, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch: %s  mode: %s  A378=%lx", Installed() ? "ON" : "off", a,
@@ -401,7 +438,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             Int16 row = e.screenY / kLineH - 1;
 
             if (e.screenY < kLineH)
-                gPage = (gPage == 0) ? 1 : 0;
+                gPage = (gPage + 1) % 3;
             else if (gPage != 0)
                 ;
             else if (row == kRowOn)
@@ -417,7 +454,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         }
         if (!SysHandleEvent(&e) && e.eType == keyDownEvent &&
             (e.data.keyDown.chr == vchrPageUp || e.data.keyDown.chr == vchrPageDown)) {
-            gPage = (e.data.keyDown.chr == vchrPageDown) ? 1 : 0;
+            gPage = (e.data.keyDown.chr == vchrPageDown) ? (gPage + 1) % 3 : 0;
             Draw();
         }
     } while (e.eType != appStopEvent);
