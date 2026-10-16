@@ -22,6 +22,7 @@
 #include <PalmOS.h>
 
 #define kHgCreator 'MnHg'
+#include "winlog.h"
 #define kGlyphW    18
 
 UInt16 HgCharAttr(WChar c);
@@ -181,8 +182,10 @@ Int16 HgCharWidth(WChar c)
         return FntCharsWidth(box, 2);
     }
     f = (const Int16 *)FntGetFontPtr();
-    if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0)
-        return kGlyphW / 2;   /* v12: 저해상도 글꼴 → 그릴 때 2배 고해상도(width.c와 같은 규칙) */
+    if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {
+        WinLog(kWinSeenW);   /* v16 진단 */
+        return kGlyphW / 2;
+    }   /* v12: 저해상도 글꼴 → 그릴 때 2배 고해상도(width.c와 같은 규칙) */
     if (mode == 2 && f != NULL && f[7] >= 16 && f[7] <= 40 && Ftr(23) != 0) {
         Int16  coord = FntCharWidth('W');
         UInt16 px = PixW(f, 'W'), ratio = 1;

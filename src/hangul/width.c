@@ -25,6 +25,7 @@
 #include <PalmOS.h>
 
 #define kHgCreator 'MnHg'
+#include "winlog.h"
 #define kGlyphW    18
 #define kTab       20
 
@@ -111,6 +112,7 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
     /* v12: 폭을 잴 때는 저해상도 글꼴(높이 8~15)인데 그릴 때 Sony가 2배 고해상도 글꼴로 바꿔 넘긴다(v11 실측:
      * 폭 잴 때 11, 그릴 때 22 ×2). 그러면 그리기는 16×16 한글을 배율 2로 그리므로 폭 = 18 ÷ 2 */
     if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {
+        WinLog(kWinSeenW);   /* v16 진단: 이 창이 그릴 때 ×1인지 ×2인지 비교 */
         FtrSet(kHgCreator, 62, ((UInt32)(kGlyphW / 2) << 16) | (2 << 8) | (UInt8)f[7]);
         return kGlyphW / 2;
     }

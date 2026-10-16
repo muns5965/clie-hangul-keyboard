@@ -1,5 +1,5 @@
 /*
- * MnHangul v15 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v16 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v16: Win 페이지 — 한글 폭 잴 때·그릴 때의 현재 그리기 창 4개(주소, 비트맵 폭·rowBytes, windowFlags, 창 폭,
+ *      본 경우 W=폭 잼 1=그림×1 2=그림×2 ?=기타, #72~#83). 폭 잴 때 ×1/×2 구별 단서 찾기(src/hangul/winlog.h).
  * v15: 11칸에도 12×12(한글은 위 11줄 안). Sizes 페이지에 크기별 마지막으로 그린 앱 크리에이터(#64~#71; #40~#48은 핸들이라 피함).
  */
 
@@ -87,8 +89,8 @@ static const UInt16 kIntlSel[kIntlN] = {
 #define kRowClear     5
 
 static Char   gMsg[40] = "-";
-static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes, 3 Calls, 4 Width */
-#define kPages 5
+static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes, 3 Calls, 4 Width, 5 Win */
+#define kPages 6
 
 /* 3단계 호출 조사 대상 (count.s의 StubN 순서와 같다): 0~7 트랩, 8~23 Intl 선택자 */
 #define kCountN      24
@@ -370,7 +372,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v15 Width [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v16 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -577,7 +579,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v15 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v16 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -601,6 +603,8 @@ static void ClearCounters(void)
     if (GetF(kFtrCountP) != 0)
         MemSet((void *)GetF(kFtrCountP), kCountN * 4, 0);
     for (i = 50; i <= 63; i++)
+        FtrUnregister(kHgCreator, i);
+    for (i = 72; i <= 83; i++)   /* v16 창 진단 */
         FtrUnregister(kHgCreator, i);
     StrCopy(gMsg, "counters cleared");
 }
@@ -690,7 +694,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v15 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v16 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -704,7 +708,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v15 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v16 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -732,6 +736,39 @@ static void DrawSizesPage(void)
     Row(11, "last col = app creator, other = []");
 }
 
+/* v16 창 진단(#72~#83): 한글 폭 잴 때(W)·그릴 때(1 = ×1, 2 = ×2)의 현재 그리기 창 */
+static void DrawWinPage(void)
+{
+    RectangleType r;
+    Char          s[48], seen[5];
+    UInt16        i, row = 1;
+
+    RctSetRectangle(&r, 0, 0, 160, 160);
+    WinEraseRectangle(&r, 0);
+    WinDrawInvertedChars("MnHangul v16 Win [tap: Main]", 28, 0, 0);
+    Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
+    for (i = 0; i < 4; i++) {
+        UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
+        UInt16 n = 0;
+
+        if (w == 0)
+            continue;
+        if (f & 1) seen[n++] = 'W';
+        if (f & 2) seen[n++] = '1';
+        if (f & 4) seen[n++] = '2';
+        if (f & 8) seen[n++] = '?';
+        seen[n] = 0;
+        StrPrintF(s, "%lx  seen %s", w, seen);
+        Row(row++, s);
+        StrPrintF(s, "  bmp %u rb %u win %u fl %x",
+                  (UInt16)(b >> 16), (UInt16)b, (UInt16)((f >> 4) & 0xFFF), (UInt16)(f >> 16));
+        Row(row++, s);
+    }
+    if (row == 1)
+        Row(1, "(none yet)");
+    Row(10, "Clear counters, open app, type hangul");
+}
+
 static void Draw(void)
 {
     RectangleType r;
@@ -753,9 +790,13 @@ static void Draw(void)
         DrawWidthPage();
         return;
     }
+    if (gPage == 5) {
+        DrawWinPage();
+        return;
+    }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v15 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v16 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s  prot %u%s", Installed() ? "ON" : "off", a,
