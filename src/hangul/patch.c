@@ -12,7 +12,8 @@
  *     문자열을 라틴 구간과 2바이트 글자로 나눠, 라틴 구간은 원래 글꼴로, 2바이트 글자는 p6 머리를 본뜬
  *     1글자 임시 글꼴(폭 18, 높이 22, 글자 'H' 하나)로 원래 함수를 부른다. 좌표 배율 = 글꼴 높이 ÷ 사각형 높이
  *     (1 또는 2, 실측 v3). 라틴 폭은 p6 폭 표(SDK FontType 구조, 실측 v4)에서 계산한다.
- *     완성형 한글(앞 0xB0~0xC8)은 글자 데이터(#23·#24 포인터, 앱이 HgFn 0·1을 잠가 둠), 그 밖의 2바이트는 네모.
+ *     완성형 한글(앞 0xB0~0xC8)은 글자 데이터(#23·#24 포인터, 앱이 HgFn 0·1을 잠가 둠),
+ *     자모 행 0xA4(v9, #43 = HgFn 2), 그 밖의 2바이트는 네모.
  *     조건이 안 맞으면(저해상도 글꼴 등) 2b처럼 "[]"로 그린다.
  * v7: 글꼴 높이 22만이 아니라 16~40(배율 1·2)이면 그린다(메모장 큰 글꼴 등). 세로 위치는 ascent - 15.
  *     한글 호출마다 (글꼴 높이, 사각형 높이) 조합별 횟수를 #30~#37에 센다.
@@ -175,6 +176,7 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
                                 const UInt8 *chars, UInt16 len, const Int16 *font, void *p7,
                                 UInt16 ratio, UInt16 *tmp, UInt32 g0, UInt32 g1)
 {
+    UInt32        g2 = GetF(43);
     RectangleType r = *rc;
     UInt16        i = 0, px = 0, n = 0;
     UInt32        res = 0;
@@ -192,7 +194,8 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
 
                 g = (rank < kSplit) ? (const UInt8 *)g0 + rank * 32
                                     : (const UInt8 *)g1 + (rank - kSplit) * 32;
-            }
+            } else if (chars[i] == 0xA4 && g2 != 0)
+                g = (const UInt8 *)g2 + (chars[i + 1] - 0xA1) * 32;
             SetGlyph(tmp, g, top);
             r.topLeft.x = rc->topLeft.x + px / ratio;
             r.extent.x = kGlyphW / ratio;

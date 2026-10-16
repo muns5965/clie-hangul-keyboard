@@ -91,5 +91,14 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
   `FntWordWrapReverseNLines`, `FntWidthToOffset`, `FldWordWrap`)와 Intl 루틴 16개(선택자 1~9, 13~15, 19, 22, 23, 30)에
   18바이트 통과 코드(리소스 `HgCt 0`, `src/hangul/count.s`)를 끼워 호출 수만 센다. Intl은 `IntlSetRoutineAddress`(선택자 29)로 바꾼다.
   메모 입력·BS·커서 이동 때 실제로 불리는 함수를 실측해 교체 대상을 확정한다.
+  **실측**(메모 입력·BS·커서 이동): 불림 = Intl `NextChar` 129, `PrevChar` 109, `SetNext` 82, `CharWid` 40, `CharAttr` 35,
+  `CharBnds` 6 / 트랩 `CharsW` 605, `LineW` 220, `W2Offset` 34, `CharsInW` 26, `WordWrap` 11, `CharW` 4.
+  0회 = `ByteAttr`, `CharXAttr`, `CharSize`, `GetChar`, `WordBnds`, `IsValid`, `CharEnc`, `StrEnc`, `TruncOfs`, `WWrapOfs`,
+  `WWrapRevN`, `FldWWrap`. → 교체 대상 **Intl 6개 + 폭 트랩 5개**(`CharW`는 1바이트 전용이라 제외). 영문 ROM에서도 Intl 루틴은 디스패처를 거친다.
+  CJKOS 없이 "가나다" 입력 시 바이트가 깨짐: 조합 중 고치기(BS + 새 글자)의 BS가 1바이트만 지우기 때문(`PrevChar` 1바이트 기준).
+- 3a(v9): Intl 6개(`CharAttr`, `PrevChar`, `NextChar`, `SetNext`, `CharBnds`, `CharWid`)를 EUC-KR 판으로 교체(리소스 `HgIt 0`,
+  `src/hangul/intl.c`). 2바이트 = 앞·뒤 0xA1~0xFE, 상위 바이트 구간은 구간 시작부터 두 바이트씩 짝. 한글 폭은 그리기와 같은 규칙
+  (glyph 모드·글꼴 16~40 → 18픽셀 ÷ 좌표 배율, 배율 = 'W' 픽셀 폭 ÷ `FntCharWidth('W')`). 자모 행 0xA4(현대 자모 51자) 글자 추가(`HgFn 2`).
+  폭 트랩 5개는 3b에서 교체한다.
 - 진행 순서(디버그 먼저): ① 바뀐 함수 조사(**완료**, 실측 1) ② `BltDrawChars` 하나만 교체해 표시 시험(CJKOS 끈 복사본 세션)
   ③ 폭·글자 경계 ④ 글꼴 3벌(16 → 12 → 24).
