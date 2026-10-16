@@ -412,7 +412,12 @@ function select(i) { sel = i; kind = info[i].kind; curSet = info[i].set; redrawA
 function setStore(text, cls) { const c = document.getElementById("store"); c.textContent = "저장: " + text; c.className = "chip" + (cls ? " " + cls : ""); }
 function saveLocal() { const o = {}; edits.forEach((a, n) => { o[n] = toHex(a); }); lsSet("nd24.edits", o); }
 const writing = new Map();
+/* 서버에 아직 못 올린 조각(이 기기에만 있음). 다음 연결 때 올린다 */
+const firstRunOfSync = lsGet("nd24.dirty", null) === null;   // 이 판 이전에 쓰던 기기: 이 기기 기록을 모두 올릴 후보로
+const dirty = new Set(lsGet("nd24.dirty", []));
+function saveDirty() { lsSet("nd24.dirty", [...dirty]); }
 async function persist(name) {
+  dirty.add(name); saveDirty();
   saveLocal();
   if (!db || !dbWritable) return;
   const prev = writing.get(name) || Promise.resolve();
@@ -422,6 +427,7 @@ async function persist(name) {
       const ref = db.collection("pieces").doc(name);
       if (edits.has(name)) await ref.set({ bits: toHex(edits.get(name)), size: S });
       else await ref.delete();
+      if (!pending.get(name) || pending.get(name) <= 1) { dirty.delete(name); saveDirty(); }
       setStore("서버", "ok");
     } catch (e) {
       if (e && e.code === "invalid_argument") { dbWritable = false; setStore("읽기 전용 (이 브라우저에만 저장)", "warn"); }
@@ -532,7 +538,11 @@ document.getElementById("kscOnly").addEventListener("change", drawUsers);
 document.getElementById("sampleText").addEventListener("input", drawSamples);
 document.getElementById("r24x2").addEventListener("click", (ev) => { const r = ev.target.getBoundingClientRect(); const x = (ev.clientX - r.left) * (ev.target.width / r.width); const h = sampleHits.find((t) => x >= t.x0 && x < t.x1); if (h) pick(h.s); });
 const methodSel = document.getElementById("method"); methodSel.value = method;
-methodSel.addEventListener("change", () => { method = methodSel.value; lsSet("nd24.method", method); recomputeAuto(); redrawAll(); });
+function applyMethod(m) { if (!(m in METHODS) && m !== "nearest") return; method = m; methodSel.value = m; lsSet("nd24.method", m); recomputeAuto(); redrawAll(); }
+methodSel.addEventListener("change", async () => {
+  applyMethod(methodSel.value);
+  if (db && dbWritable) { try { await db.doc("settings/main").set({ method }); } catch (e) { /* 이 기기에만 */ } }
+});
 window.addEventListener("resize", drawEditor);
 if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redrawAll);
 
@@ -586,7 +596,20 @@ setStore("이 브라우저에만", "");
 (async () => {
   try { db = window.claude ? await claude.use("db") : null; } catch (e) { db = null; }
   if (!db) { setStore("이 브라우저에만", "warn"); return; }
+  /* 자동 확대 방식도 서버에 두어 PC·휴대폰이 같은 방식을 쓴다(고치지 않은 조각이 기기마다 달라 보이지 않게) */
+  db.doc("settings/main").onSnapshot((d) => { const m = d.exists && d.data().method; if (m && m !== method) applyMethod(m); }, () => {});
+  let first = true;
   db.collection("pieces").onSnapshot((snap) => {
+    if (first && !snap.metadata.fromCache) {
+      /* 처음 서버와 맞출 때: 서버가 기준. 이 기기에서 서버에 못 올린 조각만 올리고, 나머지 이 기기 기록은 버린다 */
+      first = false;
+      const onServer = new Set(snap.docs.map((d) => d.id));
+      if (firstRunOfSync) [...edits.keys()].forEach((n) => { if (!onServer.has(n)) dirty.add(n); });
+      [...edits.keys()].forEach((n) => { if (!onServer.has(n) && !dirty.has(n)) edits.delete(n); });
+      const up = [...dirty];
+      up.forEach((n) => persist(n));
+      if (up.length) setStore(`이 기기에만 있던 ${up.length}개 올림`, "ok");
+    }
     snap.docChanges().forEach((ch) => {
       const n = ch.doc.id; if (DATA.names.indexOf(n) < 0) return;
       if (pending.has(n) || ch.doc.metadata.hasPendingWrites) return;   // 이 화면이 쓰는 중인 조각: 화면 상태가 기준
