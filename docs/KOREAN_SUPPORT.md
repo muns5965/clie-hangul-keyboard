@@ -1,6 +1,7 @@
 # 한글 지원과 CJKOS
 
-> 검토 문서. 아래 대체안은 **검토안**이며 구현·검증된 구조가 아니다. (기준 커밋 `117932a`)
+> 검토·시험 문서. B안 중 그리기 함수(`BltDrawChars`) 교체는 시험 앱 MnHangul로 실측했다(아래 2a~2c).
+> 그 밖의 함수 교체와 전체 구조는 아직 **검토안**이며 구현·검증되지 않았다.
 
 ## 현재 의존 관계
 | 기능 | 담당 | CJKOS가 없으면 |
@@ -23,8 +24,11 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 ### B안 세부 (검토)
 
 #### 실측 1: CJKOS가 바꾼 함수 (ClieDiag v22 Trap 페이지, 2026-10-16)
-CJKOS를 켰을 때 ROM 밖을 가리키는 시스템 트랩 33개·Intl 선택자 18개, **CJKOS를 끄면 0개**.
-즉 아래는 모두 CJKOS가 바꾼 것이다(이 기기에는 다른 RAM 패치가 없다). 코드는 `0x0034xxxx`(트랩 31·Intl 18)와 `0x000F3xxx`(`FtrGet`, `IntlDispatch`) 두 곳.
+- **관찰**: CJKOS를 켰을 때 ROM 밖을 가리키는 시스템 트랩 33개·Intl 선택자 18개, **CJKOS를 끄면 0개**.
+  가리키는 코드는 `0x0034xxxx`(트랩 31·Intl 18)와 `0x000F3xxx`(`FtrGet`, `IntlDispatch`) 두 곳.
+- **판단**: 다른 RAM 패치가 없는 시험 환경에서 켜고/끄고 차이로 나타났으므로 CJKOS가 바꾼 것으로 본다.
+  다만 주소가 바뀌었다는 사실만으로 각 함수가 한글 처리에 꼭 필요한지, CJKOS가 어떤 목적으로 바꿨는지는 알 수 없다.
+  아래 표의 "대체 모듈에 필요" 열은 함수 이름·역할로 추정한 **잠정 판단**이며, 함수별 교체 시험으로 확인한다.
 
 | 분류 | 함수 | 대체 모듈에 필요 |
 | --- | --- | --- |
@@ -38,7 +42,8 @@ CJKOS를 켰을 때 ROM 밖을 가리키는 시스템 트랩 33개·Intl 선택�
 | CJKOS 자체 입력기 | `EvtGetEvent`, `FldHandleEvent`, `SysKeyboardDialog` | 불필요(이 프로젝트 키보드가 대신함) |
 | CJKOS 자체 관리 | `SysAppLaunch`, `DmOpenDatabase`, `DmCloseDatabase`, `DmDeleteDatabase`, `DmGet1Resource`, `DmNextOpenResDatabase`, `DmMoveOpenDBContext`, `IntlGetRoutineAddress`(Intl) | 불필요(글꼴 DB·리소스 관리로 추정) |
 
-최소 교체 범위(검토): 트랩 약 10개 + Intl 약 13개. CJKOS가 실제로 한 방식이 이것이라는 뜻이며, 같은 범위로 같은 호환성을 얻는지는 구현 후 검증한다.
+초기 구현 후보: 글자 그리기, 문자열 폭 계산, 2바이트 글자 경계 처리에 관련된 트랩·Intl 선택자(잠정 후보 트랩 약 10개 + Intl 약 13개).
+실제로 필요한 최소 범위는 함수 하나씩 교체 시험과 함수 간 의존성 확인으로 확정한다. 지금까지 확정된 것은 `BltDrawChars` 하나(2a~2c 실측)다.
 
 #### 실측 2: CJKOS 한글 글꼴 크기·폭 (ClieDiag v20 Info, v21 Font 페이지)
 | 쓰는 곳 | 줄 높이 | CJKOS가 그리는 한글 | 한 글자 폭 | 대체 모듈 계획 |

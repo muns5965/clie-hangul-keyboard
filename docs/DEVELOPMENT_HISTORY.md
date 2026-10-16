@@ -1,7 +1,7 @@
 # 개발 이력 (1~12단계, ROM 역분석, ClieDiag 변경 기록)
 
 > 과거 기록을 보존하는 문서다. 여기 나오는 옛 절차·가설은 **현행 방식이 아니다**.
-> 현행 구조는 [ARCHITECTURE.md](ARCHITECTURE.md), 현행 절차는 [RECOVERY.md](RECOVERY.md). (README에서 옮김, 기준 커밋 `117932a`)
+> 현행 구조는 [ARCHITECTURE.md](ARCHITECTURE.md), 현행 절차는 [RECOVERY.md](RECOVERY.md). (README에서 옮김. 문서 분리 시점 커밋 `117932a` — 개발 이력 참고용이며 현행 소스 버전 표시가 아님)
 
 ## SkWr 플러그인 단계별 기록
 

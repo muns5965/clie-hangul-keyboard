@@ -1,6 +1,7 @@
 # 설치·업데이트·복구
 
-> 현행 절차(로더 11 · 본체 12 · ClieDiag v19 기준). 구조 설명은 [ARCHITECTURE.md](ARCHITECTURE.md). (기준 커밋 `117932a`)
+> 현행 절차(로더 11 · 본체 12 기준). ClieDiag는 Main에 `Soft Reset (hold 3s)` 버튼이 있는 v16 이상이 필요하다
+> (버전별 변경: [DEVELOPMENT_HISTORY.md](DEVELOPMENT_HISTORY.md#cliediag-변경-기록)). 구조 설명은 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 개념
 - **DB 식별자**: Palm OS DB는 4바이트 타입·크리에이터 ID로 구분한다. 로더는 타입 `SkWr`, 본체는 `SkCo`, 둘 다 크리에이터 `MnSk`
