@@ -13,7 +13,7 @@
  *     1글자 임시 글꼴(폭 18, 높이 22, 글자 'H' 하나)로 원래 함수를 부른다. 좌표 배율 = 글꼴 높이 ÷ 사각형 높이
  *     (1 또는 2, 실측 v3). 라틴 폭은 p6 폭 표(SDK FontType 구조, 실측 v4)에서 계산한다.
  *     v14: 글자는 조합형 묶음(HgJb 0 = Neo둥근모 16×16, HgJb 1 = 12×12)에서 조합한다(#23·#24).
- *     칸 높이 16~40 → 16×16(칸 폭 18), 12~15 → 12×12(칸 폭 13). 자모 행 0xA4는 묶음의 자모표, 그 밖의 2바이트는 네모.
+ *     칸 높이 16~40 → 16×16(칸 폭 18), 11~15 → 12×12(칸 폭 13; v15부터 11 포함, 한글은 위 11줄 안에 있음). 자모 행 0xA4는 묶음의 자모표, 그 밖의 2바이트는 네모.
  *     조건이 안 맞으면(저해상도 글꼴 등) 2b처럼 "[]"로 그린다.
  * v7: 글꼴 높이 22만이 아니라 16~40(배율 1·2)이면 그린다(메모장 큰 글꼴 등). 세로 위치는 ascent - 15.
  *     한글 호출마다 (글꼴 높이, 사각형 높이) 조합별 횟수를 #30~#37에 센다.
@@ -139,11 +139,11 @@ static inline void MakeTmpFont(UInt16 *t, const Int16 *src, UInt16 cw)
 }
 
 /* 글자 그림 rows(H줄, NULL이면 H×(cw-2) 네모)를 임시 글꼴 그림 칸 (1, top)에 넣는다 */
-static inline void SetGlyph(UInt16 *t, const UInt16 *rows, UInt16 H, UInt16 cw, UInt16 top)
+static inline void SetGlyph(UInt16 *t, const UInt16 *rows, UInt16 H, UInt16 cw, UInt16 top, UInt16 fh)
 {
     UInt16 y, edge = (UInt16)(0xFFFF << (16 - (cw - 2)));
 
-    for (y = 0; y < H; y++) {
+    for (y = 0; y < H && y + top < fh; y++) {   /* 칸보다 긴 줄은 버림(12×12 글자를 11칸에: 12번째 줄은 한글에서 늘 빈 줄) */
         UInt16 v;
 
         if (rows != NULL)
@@ -166,6 +166,8 @@ static inline UInt16 GlyphTop(const Int16 *f, UInt16 H)
         top = 0;
     if (top > f[7] - (Int16)H)
         top = f[7] - (Int16)H;
+    if (top < 0)
+        top = 0;   /* v15: 칸이 글자보다 낮으면(11칸에 12×12) 맨 위부터 */
     return top;
 }
 
@@ -179,8 +181,16 @@ static inline void CountSize(Int16 fh, Int16 rh)
         UInt32 v = GetF(i);
 
         if (v == 0 || (v & 0xFFFF0000UL) == key) {
+            UInt16  card;
+            LocalID id;
+            UInt32  crid = 0;
+
             if ((v & 0xFFFF) != 0xFFFF)
                 FtrSet(kHgCreator, i, key | ((v & 0xFFFF) + 1));
+            /* v15: 이 크기를 마지막으로 그린 앱의 크리에이터(#64~#71, 같은 순서) */
+            if (SysCurAppDatabase(&card, &id) == errNone &&
+                DmDatabaseInfo(card, id, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, &crid) == errNone)
+                FtrSet(kHgCreator, i + 34, crid);
             return;
         }
     }
@@ -203,7 +213,7 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
         if (IsPair(chars, i, len)) {
             Boolean ok = GlyphRows(pk, chars[i], chars[i + 1], rows);
 
-            SetGlyph(tmp, ok ? rows : NULL, H, cw, top);
+            SetGlyph(tmp, ok ? rows : NULL, H, cw, top, (UInt16)font[7]);
             r.topLeft.x = rc->topLeft.x + px / ratio;
             r.extent.x = cw / ratio;
             res = orig(p1, &r, p3, &one, 1, tmp, p7);
@@ -281,7 +291,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         Int16        fh = f[7];
 
         /* v7: 글꼴 높이 16~40, 배율(글꼴 높이 ÷ 사각형 높이) 1 또는 2. v14: 12~15는 12×12 묶음 */
-        const UInt8 *pk = (fh >= 16) ? p16 : (fh >= 12) ? p12 : NULL;
+        const UInt8 *pk = (fh >= 16) ? p16 : (fh >= 11) ? p12 : NULL;   /* v15: 11칸도 12×12 */
 
         if (fh <= 40 && pk != NULL && rh > 0 && (fh == rh || fh == rh * 2)) {
             UInt16 *tmp = MemPtrNew(TmpWords(fh) * 2);

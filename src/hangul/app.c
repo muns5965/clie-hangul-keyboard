@@ -1,5 +1,5 @@
 /*
- * MnHangul v14 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v15 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,7 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v15: 11칸에도 12×12(한글은 위 11줄 안). Sizes 페이지에 크기별 마지막으로 그린 앱 크리에이터(#64~#71; #40~#48은 핸들이라 피함).
  */
 
 #include <PalmOS.h>
@@ -369,7 +370,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v14 Width [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v15 Width [tap: Main]", 30, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -576,7 +577,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v14 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v15 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -594,6 +595,8 @@ static void ClearCounters(void)
     FtrUnregister(kHgCreator, kFtrGlyphCnt);
     FtrUnregister(kHgCreator, kFtrRatio);
     for (i = 30; i <= 37; i++)
+        FtrUnregister(kHgCreator, i);
+    for (i = 64; i <= 71; i++)
         FtrUnregister(kHgCreator, i);
     if (GetF(kFtrCountP) != 0)
         MemSet((void *)GetF(kFtrCountP), kCountN * 4, 0);
@@ -687,7 +690,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v14 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v15 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -701,7 +704,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v14 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v15 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -711,14 +714,22 @@ static void DrawSizesPage(void)
             continue;
         fh = (UInt16)(v >> 24);
         rh = (UInt16)((v >> 16) & 0xFF);
-        StrPrintF(s, "font %u  rect %u  x%s  : %lu", fh, rh,
-                  (fh == rh) ? "1" : (fh == rh * 2) ? "2" : "?", v & 0xFFFF);
+        {
+            UInt32 c = GetF(i + 34);   /* v15: 마지막으로 그린 앱 크리에이터 */
+            Char   cr[5];
+
+            cr[0] = (Char)(c >> 24); cr[1] = (Char)(c >> 16); cr[2] = (Char)(c >> 8); cr[3] = (Char)c; cr[4] = 0;
+            if (c == 0)
+                StrCopy(cr, "-");
+            StrPrintF(s, "font %u rect %u x%s : %lu  %s", fh, rh,
+                      (fh == rh) ? "1" : (fh == rh * 2) ? "2" : "?", v & 0xFFFF, cr);
+        }
         Row(row++, s);
     }
     if (row == 1)
         Row(1, "(none yet)");
-    Row(10, "x1/x2 + font 16..40 = glyph");
-    Row(11, "other = [] (box)");
+    Row(10, "font 16..40 = 16x16, 11..15 = 12x12");
+    Row(11, "last col = app creator, other = []");
 }
 
 static void Draw(void)
@@ -744,7 +755,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v14 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v15 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s  prot %u%s", Installed() ? "ON" : "off", a,
