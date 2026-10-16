@@ -2,6 +2,14 @@
 
 > 현행 절차(로더 11 · 본체 12 · ClieDiag v19 기준). 구조 설명은 [ARCHITECTURE.md](ARCHITECTURE.md). (기준 커밋 `117932a`)
 
+## 개념
+- **DB 식별자**: Palm OS DB는 4바이트 타입·크리에이터 ID로 구분한다. 로더는 타입 `SkWr`, 본체는 `SkCo`, 둘 다 크리에이터 `MnSk`
+  (전체 목록: [ARCHITECTURE.md](ARCHITECTURE.md#9-4바이트-식별자)).
+- **DB 삭제 보호**(`DmDatabaseProtect`): 켜져 있으면 DB를 지우거나 덮어쓸 수 없다. `SilkExtn`이 부팅 때 플러그인 DB에 켜고, 로더 11이 스스로 끈다. 리셋 때 사라진다.
+- **소프트 리셋**: 데이터는 그대로 두고 다시 부팅. 플러그인은 부팅 때만 불러오므로 로더를 바꾸면 필요하다. ClieDiag `Soft Reset`(3초) 또는 에뮬레이터 메뉴.
+- **DisS**: 타입 `DisS`·크리에이터 `SeSi`인 DB. 있으면 `SilkExtn`이 실크 초기화 전체를 건너뛴다(플러그인 로딩·보호 포함). 실크 영역과 홈 아이콘도 사라진다.
+- **Warm reset**: 위 버튼을 누른 채 리셋. Palm OS 표준으로는 시스템 패치·확장 일부를 건너뛴다. NR70V `SilkExtn`에도 적용되는지는 미검증.
+
 ## 현행 절차
 
 | 작업 | 절차 | 리셋 |

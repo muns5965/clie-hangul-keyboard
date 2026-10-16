@@ -21,8 +21,19 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 | (제외) | ROM 수정 | 실기 ROM 재기록 위험, Sony ROM 저작권 문제로 검토하지 않음 |
 
 ### B안 세부 (검토)
-- 교체 후보: 그리기(`WinDrawChars`, `WinEraseChars`, `WinInvertChars`, `FntCharsWidth`, `FntWordWrap` …),
-  글자 경계(`TxtGetNextChar`, `TxtGetPrevChar`, `TxtCharBounds`, `TxtByteAttr` …), NR70V 고해상도 그리기 경로(HR 라이브러리).
+- 교체 후보 (아래는 **대체 후보 목록**이며, CJKOS가 실제로 이 함수들을 교체했는지는 **미확인**이다. 1단계 조사로 확인한다)
+
+| 함수 | 기능 | 대체가 필요한 이유 | CJKOS 실제 교체 |
+| --- | --- | --- | --- |
+| `WinDrawChars` | 문자열을 화면에 그리기 | 2바이트를 한글 글꼴로 그려야 함 | 미확인 |
+| `WinEraseChars` / `WinInvertChars` | 문자열 지우기 / 반전(선택 표시) | 그리기와 같은 폭·글꼴 필요 | 미확인 |
+| `FntCharsWidth` | 문자열의 화면 폭 계산 | 한글 한 글자 폭을 바르게 계산해야 커서·정렬이 맞음 | 미확인 |
+| `FntWordWrap` | 한 줄에 들어갈 길이 계산(줄바꿈) | 글자 중간에서 줄이 끊기지 않게 | 미확인 |
+| `TxtGetNextChar` / `TxtGetPrevChar` | 다음 / 이전 글자 조회 | 커서 이동·BS가 2바이트를 한 글자로 다루게 | 미확인 |
+| `TxtCharBounds` | 위치가 속한 글자의 경계 | 선택·삭제 범위 | 미확인 |
+| `TxtByteAttr` | 바이트가 2바이트 글자의 앞/뒤인지 판별 | 글자 경계 판정의 기본 | 미확인 |
+| HR 라이브러리 그리기 경로 | NR70V 고해상도 그리기 | 고해상도 모드 앱에서도 한글 표시 | 미확인 |
+
 - 교체 시점: 리셋 알림(`sysAppLaunchCmdSystemReset`) 또는 부팅 때 실행되는 SkWr 로더의 Open.
 - 글꼴: ① 완성형 2,350자 비트맵(저해상도 12px 약 42KB, 고해상도 24px 약 170KB) ② 벌식 조합형(수 KB~10KB대, 11,172자). 자유 라이선스 글꼴 또는 자체 제작.
 - 진행 순서(디버그 먼저): ① ClieDiag에 "바뀐 트랩 목록"(ROM 밖을 가리키는 트랩) 페이지 → CJKOS가 실제로 바꾼 함수 확인

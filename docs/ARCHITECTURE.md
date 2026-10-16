@@ -8,12 +8,16 @@ ROM의 Sony 확장 `SilkExtn`(타입 `extn`, 크리에이터 `SeSi`)이 그린�
 NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 Fatal Exception). 대신 ROM을 분석해 찾은
 **`SkWr` 플러그인**("SilkWare") 구조를 쓴다. 아래는 모두 ROM 역분석과 에뮬레이터 실측으로 확인한 내용이다.
 
+표기: 처리 순서는 `A → B → C`, 분기는 "조건 충족 시 A / 실패 시 B"로 쓴다. 함수는 처음 나올 때 짧게 설명하고,
+자세한 역할은 [주요 Palm OS API](#8-주요-palm-os-api) 표에 모은다. 4바이트 식별자는 [식별자 표](#9-4바이트-식별자)를 본다.
+
 ### 1. SkWr 플러그인 호출 방식 (SilkExtn → 플러그인)
 - 부팅 때 `SilkExtn`이 타입 **`SkWr`**인 DB를 모두 찾아(내장 1개 + 외부 최대 3개) 각 DB의 `code 0` 리소스 **맨 앞 바이트를 함수 입구로 보고 곧바로 호출**한다(68000 `jsr` 명령, 앱 실행 절차 없음).
   일반 앱이 아니므로 시작 코드·A5(전역변수)가 없다 → **전역변수·문자열 상수·초기화된 배열 금지**, 위치 독립 코드로 짠다.
 - 호출 형식: `Err entry(UInt32 *slot, UInt8 *event, void *out)`, 반환 0 = 등록 유지(0이 아니면 등록 취소).
 - Open 때만 첫 인자가 **슬롯 주소**이고, 이후 이벤트에는 거기 넣어 둔 **값**이 그대로 온다 → 필요한 값(창 핸들) 저장소로 쓴다.
-  상태는 Feature Manager(`FtrSet/FtrGet`)에 둔다(리셋 때 지워짐).
+  조합 상태와 진단값은 Palm OS의 Feature Manager로 관리한다. `FtrSet()`으로 기록하고 `FtrGet()`으로 조회하며(식별값은 크리에이터 `MnSk`),
+  이 프로젝트의 기능값은 리셋 후 초기화된다.
 - 이벤트 번호(`event[0]`): 1 Open, 3 Start, 4 Stop, 5 Draw, 6 DispChange, 7 PenDown, 8 PenMove, 9 PenUp.
   - Open +2(32비트): **실크 영역 창 핸들**. 창은 160×65(저해상도 좌표).
   - Start / DispChange +2 너비, +6 높이, +10 색 깊이, +14 **고해상도 여부**(1바이트).
@@ -22,13 +26,14 @@ NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 
   이전 것에 Stop, 새 것에 Start가 간다. 이벤트는 활성 플러그인에만 온다.
 
 ### 2. 그리기
-- `WinSetDrawWindow(Open 때 받은 창)`으로 그린 뒤 원래 창으로 되돌린다. Start·Draw·DispChange 때 전체를 다시 그린다.
-- 고해상도: `SilkExtn`이 부팅 때 `Sony HR Library`를 열어 두므로 `SysLibFind`로 참조 번호만 얻어 HR 함수를 쓴다.
+- 그릴 대상 창 지정(`WinSetDrawWindow`, Open 때 받은 실크 창) → 그리기 → 원래 창으로 복구. Start·Draw·DispChange 때 전체를 다시 그린다.
+- 고해상도: `SilkExtn`이 부팅 때 `Sony HR Library`를 열어 두므로, 이름으로 라이브러리를 찾는 `SysLibFind`로 참조 번호만 얻어 HR 함수를 쓴다.
   창은 저해상도 크기 그대로 두고 **좌표만 2배**로 넘긴다(`SilkExtn` 자신도 이렇게 그림). 고해상도 여부는 Start/DispChange +14로 판단.
-- 한글 키 이름: CJKOS 글꼴은 저해상도라 고해상도에서 굵게 보이므로, 자모를 12×12 격자 선분으로 그린다(`tools/gen-jamo-glyphs.py`).
+- 한글 키 이름: CJKOS 글꼴은 저해상도라 고해상도에서 굵게 보이므로, 자모를 12×12 격자 선분으로 그린다(`HRWinDrawLine`, `tools/gen-jamo-glyphs.py`).
 
 ### 3. 글자 보내기
-- `EvtEnqueueKey(문자, 0, 0)` → 현재 앱에 `keyDownEvent`로 들어간다(시험한 앱: 메모장·런처. 다른 앱은 검증 대상).
+- `EvtEnqueueKey()`는 지정한 문자 코드를 Palm OS 키 이벤트 큐에 넣는다. 현재 앱은 이를 `keyDownEvent`(키 입력 이벤트)로 처리한다.
+  시험한 앱: 메모장·런처·ClieDiag. 다른 앱은 검증 대상.
 - 한글은 **KS X 1001 완성형 EUC-KR 2바이트 코드를 키 하나로** 보낸다(`EvtEnqueueKey(0xB0A1)` → 가). 바이트를 나눠 보내면 깨진다.
   표시와 글자 경계 처리는 CJKOS가 한다([KOREAN_SUPPORT.md](KOREAN_SUPPORT.md)).
 - BS 구분: 이미 확정된 완성형 글자는 시스템(CJKOS)이 BS 한 번에 한 글자씩 지운다.
@@ -50,10 +55,20 @@ NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 
 | `MnSkPlugin.prc` | `src/skwr/loader.c` / `tools/build-loader.sh` | 타입 `SkWr`, 크리에이터 `MnSk`, `code 0` | SilkExtn이 부팅 때 부르는 작은 로더(약 1KB). 변경 빈도 낮음, 필요하면 리셋 1번으로 교체 |
 | `MnSkCore.prc` | `src/skwr/skwr.c` / `tools/build-core.sh` | 타입 `SkCo`, 크리에이터 `MnSk`, 리소스 `MnCo 0`, DB 버전 1(로더 ABI) | 자판·조합 본체 |
 
-- `SilkExtn`은 부팅 때 SkWr DB마다 `code 0` 잠금 → **삭제 보호**(`DmDatabaseProtect`) → Open 호출 → 잠금 해제 → DB 닫기 순서로 처리한다(ROM 0x2F00~0x3030).
-  교체를 막는 것은 보호뿐이므로, **로더는 Open 안에서 자기 DB의 보호를 푼다**(feature #60). 등록은 유지한다.
-- 로더: Open 때 실크 창 핸들을 슬롯에 저장. 자판이 켜지면(Start) 본체 DB를 열어 버전 확인 → `MnCo 0` 잠금 → DB 닫기 →
-  이후 모든 이벤트를 본체 진입점으로 넘김. Stop 때 잠금 해제. 본체가 없거나 버전이 다르면 아무것도 안 함(#56에 사유).
+- `SilkExtn`은 부팅 때 각 `SkWr` DB를 다음 순서로 처리한다(ROM 0x2F00~0x3030).
+
+  `code 0` 리소스 잠금 → DB 삭제 보호(`DmDatabaseProtect`) → 플러그인 `Open` 호출 → 리소스 잠금 해제(`MemHandleUnlock`) → DB 닫기
+
+  교체를 막는 것은 DB 삭제 보호뿐이므로, **로더는 `Open` 처리 중 자기 DB의 삭제 보호를 해제**한다(feature #60). 등록은 유지한다.
+- 로더 `Open`: 실크 창 핸들을 슬롯에 저장 → 자기 DB 찾기(`DmGetNextDatabaseByTypeCreator`, 타입 `SkWr`·크리에이터 `MnSk`) → 삭제 보호 해제(`DmDatabaseProtect(…, false)`).
+- 로더의 본체 불러오기(`src/skwr/loader.c` `LoadCore()` 순서 그대로). 자판이 켜진 동안 Start·Draw·DispChange에서 본체가 없으면 실행한다.
+
+  `DmOpenDatabaseByTypeCreator('SkCo','MnSk', 읽기 전용)` → `DmOpenDatabaseInfo` + `DmDatabaseInfo`로 DB 버전 읽기 → 버전 = 1(ABI) 확인
+  → `DmFindResource(db, 'MnCo', 0)`로 리소스 번호 → `DmGetResourceIndex`로 리소스 핸들 → `MemHandleLock`으로 코드 주소 → `DmCloseDatabase`
+  → 핸들·주소를 feature #57·#58에 저장 → 이후 모든 이벤트를 본체 진입점(코드 주소)으로 넘김
+
+  실패 시: DB 없음 2 / 버전 다름 4 / 리소스 없음 3 / 잠금 실패 5를 #56에 기록하고 아무것도 하지 않는다(멈추지 않음).
+  Stop: 본체에 넘긴 뒤 `MemHandleUnlock`으로 잠금 해제 → 본체 DB를 바꿀 수 있는 상태.
 - 본체는 위치 독립 코드(전역·A5·재배치 없음)라 다른 DB에서 불러와 그대로 실행된다. 빌드 스크립트가 검사.
 - 리소스 타입을 `code`가 아닌 `MnCo`로 한 것은 본체 DB가 열린 동안 앱의 `DmGetResource('code', …)`에 걸리지 않게 하려는 것.
 - 데이터 표(KS X 1001 판정표 `tools/gen-ksc-table.py`, 자모 선 글꼴 `tools/gen-jamo-glyphs.py`)는 `.text` 끝에 어셈블리로 넣고 PC 상대로 읽는다.
@@ -66,3 +81,38 @@ NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 
 주요 번호: #0 로더 Open 기록, #46 눌린 키, #47 보낸 키 수, #48 마지막 키, #49 자판 상태, #50 조합 상태, #51 조합 중인 앱,
 #52~#54 HR 라이브러리·고해상도, #55 본체 빌드, #56 본체 불러오기 결과, #57~#59 본체 핸들·주소·켜짐, #60 보호 해제 결과.
 ClieDiag의 디버그 페이지에서 볼 수 있다.
+
+### 8. 주요 Palm OS API
+| 함수 | 기능 | 이 프로젝트에서 쓰는 곳 |
+| --- | --- | --- |
+| `FtrSet` / `FtrGet` | Feature Manager에 값 기록 / 조회(리셋 때 초기화) | 조합 상태·자판 상태·진단값 저장(크리에이터 `MnSk`) |
+| `WinSetDrawWindow` | 그릴 대상 창 지정, 이전 창을 돌려줌 | 실크 창에 그린 뒤 원래 창으로 복구 |
+| `EvtEnqueueKey` | 키 입력 이벤트를 이벤트 큐에 추가 | 글자·BS를 현재 앱으로 보냄 |
+| `SysLibFind` | 이름으로 이미 열린 시스템 라이브러리 찾기 | `Sony HR Library` 참조 번호 |
+| `HRWinDrawLine` 등 HR 함수 | Sony 고해상도 라이브러리로 선·글자·사각형 그리기 | 고해상도 자판, 자모 선 글꼴 |
+| `DmDatabaseProtect` | **DB 삭제 보호** 켜기/끄기(보호 상태는 리셋 때 사라짐) | SilkExtn이 켬, 로더가 자기 DB에서 끔 |
+| `DmGetNextDatabaseByTypeCreator` | 타입·크리에이터로 DB 찾기 | 로더가 자기 DB 찾기 |
+| `DmOpenDatabaseByTypeCreator` | 타입·크리에이터로 DB 열기 | 본체 DB 열기 |
+| `DmOpenDatabaseInfo` / `DmDatabaseInfo` | 열린 DB의 ID / DB 정보(버전 등) 읽기 | 본체 버전(ABI) 확인 |
+| `DmFindResource` | 리소스 타입·ID로 DB 안 리소스 번호 찾기 | 본체 `MnCo 0` 찾기 |
+| `DmGetResourceIndex` | 리소스 번호로 리소스 핸들 얻기 | 본체 코드 핸들 |
+| `MemHandleLock` / `MemHandleUnlock` | **메모리 핸들 잠금**(주소 고정) / 해제 | 본체 코드 주소 얻기 / Stop 때 해제 |
+| `DmCloseDatabase` | DB 닫기 | 본체 잠근 뒤 바로 닫음(앱 종료 때 자동 닫힘 문제 회피) |
+| `SysReset` | 소프트 리셋 | ClieDiag `Soft Reset` |
+
+`DmDatabaseProtect`(DB 삭제 보호)와 `MemHandleUnlock`(메모리 잠금 해제)은 서로 다른 보호·잠금이다.
+`DmGetResource`(열린 모든 리소스 DB에서 타입·ID로 검색)는 이 프로젝트에서 쓰지 않는다. 본체 리소스 타입을 `code`가 아닌
+`MnCo`로 한 것은, 본체 DB가 열린 순간 앱의 `DmGetResource('code', …)` 검색에 잘못 걸리지 않게 하기 위해서다.
+
+### 9. 4바이트 식별자
+| 식별자 | 종류 | 의미 |
+| --- | --- | --- |
+| `SkWr` | DB 타입 | `SilkExtn`이 부팅 때 찾는 플러그인(로더) |
+| `SkCo` | DB 타입 | 키보드 본체 DB |
+| `MnCo` | 리소스 타입 | 본체 코드 |
+| `code` | 리소스 타입 | 실행 코드(로더의 `code 0`) |
+| `MnSk` | 크리에이터 ID | 로더·본체 공통. Feature Manager 식별값으로도 사용 |
+| `MnDg` | 크리에이터 ID | ClieDiag |
+| `SeSi` | 크리에이터 ID | Sony `SilkExtn`(ROM), DisS DB |
+| `DisS` | DB 타입 | 실크 초기화를 건너뛰는 비상 스위치 |
+| `extn` | DB 타입 | 시스템 확장(`SilkExtn`) |

@@ -6,6 +6,19 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 - 한글 **표시와 글자 처리는 현재 CJKOS에 의존**한다. CJKOS를 대체할 한글 처리 모듈은 검토 단계다([docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md)).
 - 키보드 기능은 현재 동결(안정화) 상태다.
 
+## 용어
+
+| 용어 | 뜻 |
+| --- | --- |
+| 가상 실크스크린 | NR70V 화면 아래쪽에서 Graffiti 입력 영역과 상태바를 소프트웨어로 그리는 영역 |
+| Graffiti | Palm OS의 필기 인식 입력 방식(그 입력 영역) |
+| `SilkExtn` | NR70V ROM에 들어 있는 Sony의 실크스크린 제어 확장 모듈 |
+| `SkWr` | `SilkExtn`이 부팅 때 찾아 호출하는 플러그인 DB의 타입 식별자 |
+| 로더(Loader) | 부팅 때 `SilkExtn`에 등록되어, 키보드 본체에 이벤트를 넘겨주는 작은 프로그램(`MnSkPlugin.prc`) |
+| 본체(Core) | 자판 그리기, 터치 판정, 한글 조합을 실제로 처리하는 프로그램(`MnSkCore.prc`) |
+| PRC | Palm OS의 앱·코드·리소스를 담아 배포하는 데이터베이스 파일 형식 |
+| CJKOS | 영문 Palm OS에서 한중일 문자 표시·입력을 지원하는 외부 소프트웨어 |
+
 ## 현재 상태
 
 | 기능 | 상태 |
@@ -24,8 +37,8 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 
 | 파일 | 역할 |
 | --- | --- |
-| `bin/MnSkPlugin.prc` | 로더(SkWr 플러그인, 약 1KB). 부팅 때 실크 확장이 부른다 |
-| `bin/MnSkCore.prc` | 키보드 본체(자판·조합) |
+| `bin/MnSkPlugin.prc` | 로더. `SilkExtn`에 등록되는 `SkWr` 플러그인(약 1KB)으로, 부팅 때 호출되어 키보드 본체와 연결한다 |
+| `bin/MnSkCore.prc` | 키보드 본체(자판 그리기·터치 판정·한글 조합). 로더가 불러 실행한다 |
 | `bin/ClieDiag.prc` | 상태 확인·소프트 리셋(3초 누르기)·진단(Debug 체크 시) |
 
 ## 설치·업데이트
