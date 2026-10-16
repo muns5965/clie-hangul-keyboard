@@ -1,5 +1,5 @@
 /*
- * MnHangul v7 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험, 2b 자리표시, 2c 16×16 한글 그리기, 글꼴 덤프·크기 조사)
+ * MnHangul v8 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과, 2b 자리표시, 2c 한글 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -24,6 +24,11 @@
  *     버튼 오른쪽에 한글 견본(기존 함수 WinDrawChars, 고해상도 모드 = 배율 2 경우)을 그린다.
  * v7: 패치가 글꼴 높이 16~40에서 한글을 그림. Sizes 페이지(#30~#37: 글꼴 높이·사각형 높이별 한글 호출 수).
  *     제목 줄 탭 = Main → Font → Sizes → Main, 아래 버튼 = 다음 페이지, 위 버튼 = Main.
+ * v8: Calls 페이지(3단계 조사). 2번째 줄 탭 = Count ON/OFF. 켜면 폭 함수 트랩 8개와 Intl 루틴 16개에
+ *     통과 코드(리소스 HgCt 0, src/hangul/count.s)를 끼워 호출 수만 센다(동작은 그대로).
+ *     트랩은 SysSetTrapAddress, Intl 루틴은 IntlSetRoutineAddress(선택자 29)로 바꾼다.
+ *     끄기: 아직 우리 코드를 가리키는 것만 원래대로. 기록 #40 핸들, #41 횟수 블록, #42 코드 주소.
+ *     Main의 Clear counters가 횟수도 0으로 만든다. 페이지: Main → Font → Sizes → Calls.
  */
 
 #include <PalmOS.h>
@@ -50,7 +55,29 @@
 #define kRowClear     5
 
 static Char   gMsg[40] = "-";
-static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes */
+static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes, 3 Calls */
+#define kPages 4
+
+/* 3단계 호출 조사 대상 (count.s의 StubN 순서와 같다): 0~7 트랩, 8~23 Intl 선택자 */
+#define kCountN      24
+#define kCountTraps  8
+#define kCountRes    'HgCt'
+#define kFtrCountH   40
+#define kFtrCountP   41
+#define kFtrCountC   42
+static const UInt16 kCountId[kCountN] = {
+    sysTrapFntCharWidth, sysTrapFntCharsWidth, sysTrapFntCharsInWidth, sysTrapFntLineWidth,
+    sysTrapFntWordWrap, sysTrapFntWordWrapReverseNLines, sysTrapFntWidthToOffset, sysTrapFldWordWrap,
+    intlTxtByteAttr, intlTxtCharAttr, intlTxtCharXAttr, intlTxtCharSize,
+    intlTxtGetPreviousChar, intlTxtGetNextChar, intlTxtGetChar, intlTxtSetNextChar,
+    intlTxtCharBounds, intlTxtWordBounds, intlTxtCharEncoding, intlTxtStrEncoding,
+    intlTxtCharIsValid, intlTxtCharWidth, intlTxtGetTruncationOffset, intlTxtGetWordWrapOffset
+};
+static const Char *kCountName[kCountN] = {
+    "CharW", "CharsW", "CharsInW", "LineW", "WordWrap", "WWrapRevN", "W2Offset", "FldWWrap",
+    "ByteAttr", "CharAttr", "CharXAttr", "CharSize", "PrevChar", "NextChar", "GetChar", "SetNext",
+    "CharBnds", "WordBnds", "CharEnc", "StrEnc", "IsValid", "CharWid", "TruncOfs", "WWrapOfs"
+};
 
 /* 고해상도 모드 (소니 헤더 없이 필요한 트랩만 선언, sysLibTrapCustom + 순번) */
 Err HROpen(UInt16 ref)  SYS_TRAP(sysLibTrapOpen);
@@ -228,6 +255,115 @@ static void ToggleBox(void)
     StrCat(gMsg, Installed() ? " mode" : " mode (needs Patch ON)");
 }
 
+static void *GetRoutine(UInt16 i)
+{
+    return (i < kCountTraps) ? SysGetTrapAddress(kCountId[i]) : IntlGetRoutineAddress(kCountId[i]);
+}
+
+static void SetRoutine(UInt16 i, void *a)
+{
+    if (i < kCountTraps)
+        SysSetTrapAddress(kCountId[i], a);
+    else
+        IntlSetRoutineAddress(kCountId[i], a);
+}
+
+static void CountOn(void)
+{
+    MemHandle h;
+    UInt8    *code;
+    UInt32   *cnt;
+    UInt16    i, card, n = 0;
+    LocalID   id;
+
+    if (GetF(kFtrCountC) != 0) {
+        StrCopy(gMsg, "count already ON");
+        return;
+    }
+    h = DmGetResource(kCountRes, 0);
+    if (h == NULL) {
+        StrCopy(gMsg, "count resource missing");
+        return;
+    }
+    cnt = MemPtrNew(kCountN * 4);
+    if (cnt == NULL) {
+        DmReleaseResource(h);
+        StrCopy(gMsg, "no memory");
+        return;
+    }
+    MemSet(cnt, kCountN * 4, 0);
+    MemPtrSetOwner(cnt, 0);   /* 앱이 끝나도 남긴다 */
+    code = MemHandleLock(h);
+    DmWrite(code, 0, &cnt, 4);
+    for (i = 0; i < kCountN; i++) {
+        void *o = GetRoutine(i);
+
+        DmWrite(code, 4 + 4 * i, &o, 4);
+    }
+    if (AppDB(&card, &id))
+        DmDatabaseProtect(card, id, true);
+    FtrSet(kHgCreator, kFtrCountH, (UInt32)h);
+    FtrSet(kHgCreator, kFtrCountP, (UInt32)cnt);
+    FtrSet(kHgCreator, kFtrCountC, (UInt32)code);
+    for (i = 0; i < kCountN; i++)
+        if (*(UInt32 *)(code + 4 + 4 * i) != 0) {   /* 원래 주소가 없는 것은 건너뜀 */
+            SetRoutine(i, code + 100 + 18 * i);
+            n++;
+        }
+    StrPrintF(gMsg, "count ON (%u)", n);
+}
+
+static void CountOff(void)
+{
+    UInt8  *code = (UInt8 *)GetF(kFtrCountC);
+    UInt16  i, kept = 0, card;
+    LocalID id;
+
+    if (code == NULL) {
+        StrCopy(gMsg, "count not ON");
+        return;
+    }
+    for (i = 0; i < kCountN; i++) {
+        UInt8 *stub = code + 100 + 18 * i;
+
+        if ((UInt8 *)GetRoutine(i) == stub)
+            SetRoutine(i, (void *)*(UInt32 *)(code + 4 + 4 * i));
+        else if (*(UInt32 *)(code + 4 + 4 * i) != 0)
+            kept++;
+    }
+    if (kept != 0) {   /* 다른 것이 위에 끼워져 있음: 코드를 풀면 안 된다 */
+        StrPrintF(gMsg, "count: %u changed by other, kept", kept);
+        return;
+    }
+    if (AppDB(&card, &id))
+        DmDatabaseProtect(card, id, false);
+    MemHandleUnlock((MemHandle)GetF(kFtrCountH));
+    DmReleaseResource((MemHandle)GetF(kFtrCountH));
+    MemPtrFree((void *)GetF(kFtrCountP));
+    FtrSet(kHgCreator, kFtrCountH, 0);
+    FtrSet(kHgCreator, kFtrCountP, 0);
+    FtrSet(kHgCreator, kFtrCountC, 0);
+    StrCopy(gMsg, "count OFF");
+}
+
+static void DrawCallsPage(void)
+{
+    RectangleType r;
+    Char          s[48];
+    UInt32       *cnt = (UInt32 *)GetF(kFtrCountP);
+    UInt16        i;
+
+    RctSetRectangle(&r, 0, 0, 160, 160);
+    WinEraseRectangle(&r, 0);
+    WinDrawInvertedChars("MnHangul v8 Calls [tap: Main]", 29, 0, 0);
+    StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
+    Row(0, s);
+    for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
+        StrPrintF(s, "%s %lu", kCountName[i], (cnt != NULL) ? cnt[i] : 0UL);
+        WinDrawChars(s, StrLen(s), (i & 1) ? 82 : 2, (1 + i / 2) * kLineH + kLineH);
+    }
+}
+
 static void ClearCounters(void)
 {
     UInt16 i;
@@ -238,6 +374,8 @@ static void ClearCounters(void)
     FtrUnregister(kHgCreator, kFtrRatio);
     for (i = 30; i <= 37; i++)
         FtrUnregister(kHgCreator, i);
+    if (GetF(kFtrCountP) != 0)
+        MemSet((void *)GetF(kFtrCountP), kCountN * 4, 0);
     StrCopy(gMsg, "counters cleared");
 }
 
@@ -326,7 +464,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v7 Font [tap: Sizes]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v8 Font [tap: Sizes]", 29, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -340,7 +478,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v7 Sizes [tap: Main]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v8 Sizes [tap: Calls]", 30, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -373,9 +511,13 @@ static void Draw(void)
         DrawSizesPage();
         return;
     }
+    if (gPage == 3) {
+        DrawCallsPage();
+        return;
+    }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v7 [tap: Font] CJKOS OFF", 33, 0, 0);
+    WinDrawInvertedChars("MnHangul v8 [tap: Font] CJKOS OFF", 33, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch: %s  mode: %s  A378=%lx", Installed() ? "ON" : "off", a,
@@ -438,8 +580,15 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             Int16 row = e.screenY / kLineH - 1;
 
             if (e.screenY < kLineH)
-                gPage = (gPage + 1) % 3;
-            else if (gPage != 0)
+                gPage = (gPage + 1) % kPages;
+            else if (gPage == 3) {
+                if (row == 0) {
+                    if (GetF(kFtrCountC) != 0)
+                        CountOff();
+                    else
+                        CountOn();
+                }
+            } else if (gPage != 0)
                 ;
             else if (row == kRowOn)
                 PatchOn();
@@ -454,7 +603,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         }
         if (!SysHandleEvent(&e) && e.eType == keyDownEvent &&
             (e.data.keyDown.chr == vchrPageUp || e.data.keyDown.chr == vchrPageDown)) {
-            gPage = (e.data.keyDown.chr == vchrPageDown) ? (gPage + 1) % 3 : 0;
+            gPage = (e.data.keyDown.chr == vchrPageDown) ? (gPage + 1) % kPages : 0;
             Draw();
         }
     } while (e.eType != appStopEvent);
