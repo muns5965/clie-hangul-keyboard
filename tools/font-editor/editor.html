@@ -107,6 +107,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
       <button id="btnImport">JSON 불러오기</button>
       <input type="file" id="fileImport" accept=".json,application/json" hidden>
       <button id="btnExport" class="primary">JSON 내보내기</button>
+      <button id="btnResetAll">전체 초기화</button>
     </div>
   </header>
 
@@ -141,11 +142,12 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <button data-shift="0,1" aria-label="아래로 1칸">↓</button>
         <span style="width:8px"></span>
         <button id="btnUndo">되돌리기</button>
-        <button id="btnReset">자동 확대로 되돌리기</button>
+        <button id="btnRedo">다시 실행</button>
+        <button id="btnReset">조각 초기화</button>
         <label class="row" for="ghost"><input type="checkbox" id="ghost" checked> 16 원본 겹쳐보기</label>
       </div>
       <div class="canvas-box"><canvas id="edit" width="480" height="480"></canvas></div>
-      <div class="legend">클릭·드래그로 칠하기(오른쪽 버튼 또는 지우개로 지우기) · Ctrl+Z 되돌리기
+      <div class="legend">클릭·드래그로 칠하기(오른쪽 버튼 또는 지우개로 지우기) · Ctrl+Z 되돌리기 · Ctrl+Y 다시 실행 · 초기화 = 자동 확대 상태로
         <i style="background:var(--base)"></i>기준선(18줄)
         <i style="background:var(--ghost);height:8px"></i>16 원본 위치</div>
     </section>
@@ -175,6 +177,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <div class="note">위 목록이나 견본의 글자를 누르면 그 글자를 이루는 조각으로 바로 갈 수 있습니다.</div>
         <div class="row" style="margin-top:6px"><span class="big" id="pickChar" style="font-size:18px">—</span><canvas id="pickCanvas" width="72" height="72" style="image-rendering:pixelated"></canvas></div>
         <div class="pieces-of" id="pickPieces"></div>
+        <div class="row" style="margin-top:8px"><button id="btnResetGlyph">이 글자의 조각 모두 초기화</button></div>
       </div>
       <div id="exportPanel" hidden>
         <h2>내보내기 내용</h2>
@@ -271,6 +274,8 @@ let tool = "pen";
 let kind = "cho";
 let curSet = 0;
 const undo = [];
+const redo = [];
+const pending = new Map();   // name -> 진행 중인 서버 쓰기 수 (그동안 서버 알림은 무시)
 let db = null;
 let dbWritable = true;
 
@@ -402,6 +407,7 @@ async function persist(name) {
   saveLocal();
   if (!db || !dbWritable) return;
   const prev = writing.get(name) || Promise.resolve();
+  pending.set(name, (pending.get(name) || 0) + 1);
   const job = prev.then(async () => {
     try {
       const ref = db.collection("pieces").doc(name);
@@ -412,11 +418,23 @@ async function persist(name) {
       if (e && e.code === "invalid_argument") { dbWritable = false; setStore("읽기 전용 (이 브라우저에만 저장)", "warn"); }
       else setStore("서버 저장 실패, 이 브라우저에는 저장됨", "warn");
     }
+    const left = (pending.get(name) || 1) - 1;
+    if (left > 0) pending.set(name, left); else pending.delete(name);
   });
   writing.set(name, job);
   return job;
 }
-function commit(name, before) { undo.push({ name, before }); if (undo.length > 200) undo.shift(); persist(name); }
+/* 바뀐 조각들을 하나의 되돌리기 단위로 기록하고 저장 */
+function commitMany(items) {
+  items = items.filter((it) => (it.before ? toHex(it.before) : "") !== (edits.has(it.name) ? toHex(edits.get(it.name)) : ""));
+  if (!items.length) return;
+  undo.push(items.map((it) => ({ name: it.name, before: it.before, after: edits.has(it.name) ? edits.get(it.name).slice() : null })));
+  if (undo.length > 300) undo.shift();
+  redo.length = 0;
+  items.forEach((it) => persist(it.name));
+}
+function commit(name, before) { commitMany([{ name, before }]); }
+function snapshotOf(name) { return edits.has(name) ? edits.get(name).slice() : null; }
 function setEdit(name, arr) {
   const a = DATA.names.indexOf(name);
   if (a >= 0 && arr && toHex(arr) === toHex(auto24[a])) edits.delete(name);
@@ -456,17 +474,40 @@ document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("cli
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const nx = x + dx, ny = y + dy; if (src[y * S + x] && nx >= 0 && nx < S && ny >= 0 && ny < S) out[ny * S + nx] = 1; }
   setEdit(name, out); commit(name, before); redrawAll();
 }));
-document.getElementById("btnReset").addEventListener("click", () => {
-  const name = DATA.names[sel]; if (!edits.has(name)) return;
-  const before = edits.get(name).slice(); edits.delete(name); commit(name, before); redrawAll();
-});
-function doUndo() {
-  const u = undo.pop(); if (!u) return;
-  if (u.before) edits.set(u.name, u.before); else edits.delete(u.name);
-  persist(u.name); const i = DATA.names.indexOf(u.name); if (i >= 0) sel = i; select(sel);
+function resetNames(names) {
+  const items = names.filter((n) => edits.has(n)).map((n) => ({ name: n, before: snapshotOf(n) }));
+  items.forEach((it) => edits.delete(it.name));
+  commitMany(items); redrawAll();
+  return items.length;
 }
+document.getElementById("btnReset").addEventListener("click", () => { resetNames([DATA.names[sel]]); });
+document.getElementById("btnResetGlyph").addEventListener("click", () => {
+  if (picked < 0) return;
+  const names = []; for (let k = 0; k < 3; k++) { const id = SYL[picked * 3 + k]; if (id !== 0xFFFF) names.push(DATA.names[id]); }
+  resetNames(names);
+});
+let confirmAll = 0;
+document.getElementById("btnResetAll").addEventListener("click", (ev) => {
+  const b = ev.currentTarget;
+  if (!edits.size) return;
+  if (Date.now() - confirmAll > 4000) { confirmAll = Date.now(); b.textContent = `정말 ${edits.size}개 모두 초기화?`; setTimeout(() => { b.textContent = "전체 초기화"; }, 4000); return; }
+  confirmAll = 0; b.textContent = "전체 초기화";
+  resetNames([...edits.keys()]);
+});
+function applyStep(list, useBefore) {
+  list.forEach((it) => { const v = useBefore ? it.before : it.after; if (v) edits.set(it.name, v.slice()); else edits.delete(it.name); persist(it.name); });
+  const i = DATA.names.indexOf(list[0].name); if (i >= 0) select(i); else redrawAll();
+}
+function doUndo() { const u = undo.pop(); if (!u) return; redo.push(u); applyStep(u, true); }
+function doRedo() { const r = redo.pop(); if (!r) return; undo.push(r); applyStep(r, false); }
 document.getElementById("btnUndo").addEventListener("click", doUndo);
-document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" && e.target.tagName !== "INPUT") { e.preventDefault(); doUndo(); } });
+document.getElementById("btnRedo").addEventListener("click", doRedo);
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if (k === "z" && !e.shiftKey) { e.preventDefault(); doUndo(); }
+  else if (k === "y" || (k === "z" && e.shiftKey)) { e.preventDefault(); doRedo(); }
+});
 document.getElementById("toolPen").addEventListener("click", () => { tool = "pen"; toggleTool(); });
 document.getElementById("toolErase").addEventListener("click", () => { tool = "erase"; toggleTool(); });
 function toggleTool() { document.getElementById("toolPen").classList.toggle("on", tool === "pen"); document.getElementById("toolErase").classList.toggle("on", tool === "erase"); }
@@ -512,9 +553,9 @@ document.getElementById("fileImport").addEventListener("change", async (ev) => {
     if (o.method && METHODS[o.method] || o.method === "nearest") { method = o.method; methodSel.value = method; lsSet("nd24.method", method); recomputeAuto(); }
     const editedSet = new Set(o.edited || []);
     const changed = [];
-    o.names.forEach((n, k) => { if (!editedSet.has(n) || DATA.names.indexOf(n) < 0) return; edits.set(n, fromHex(o.pieces[k])); changed.push(n); });
-    redrawAll();
-    for (const n of changed) await persist(n);
+    const items = [];
+    o.names.forEach((n, k) => { if (!editedSet.has(n) || DATA.names.indexOf(n) < 0) return; items.push({ name: n, before: snapshotOf(n) }); edits.set(n, fromHex(o.pieces[k])); changed.push(n); });
+    commitMany(items); redrawAll();
     setStore(`불러옴 ${changed.length}개`, "ok");
   } catch (e) { setStore("불러오기 실패: " + e.message, "warn"); }
   ev.target.value = "";
@@ -533,6 +574,7 @@ setStore("이 브라우저에만", "");
   db.collection("pieces").onSnapshot((snap) => {
     snap.docChanges().forEach((ch) => {
       const n = ch.doc.id; if (DATA.names.indexOf(n) < 0) return;
+      if (pending.has(n) || ch.doc.metadata.hasPendingWrites) return;   // 이 화면이 쓰는 중인 조각: 화면 상태가 기준
       if (ch.type === "removed") edits.delete(n);
       else { const d = ch.doc.data(); if (d && typeof d.bits === "string" && d.bits.length === S * 6) edits.set(n, fromHex(d.bits)); }
     });
