@@ -1,5 +1,5 @@
 /*
- * ClieDiag v20 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v21 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -17,6 +17,8 @@
  *      저해상도 앱이면 상태바 대신 CLIÉ 로고가 나오던 것이, 고해상도 앱이 되어 상태바(홈·□→)가 나온다.
  * v20: Info 페이지에 글꼴 측정(조합형 한글 글꼴 크기 결정용). 저해상도(고해상도 전환 전)·고해상도(전환 후) 각각
  *      기본 글꼴들의 줄 높이(h)·기준선(b)·'A'/'W' 폭, CJKOS가 그리는 '가'(B0A1) 폭과 HR 글꼴 값.
+ * v21: 진단 "Font" 페이지 — KS X 1001 "가나다 한글"을 기존 함수(std·bold·large)와 HR 함수(HR std·bold·small)로
+ *      실제로 그려 CJKOS가 각 경로에서 한글을 그리는지 확인. 줄마다 측정 폭(w)도 표시.
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -59,6 +61,7 @@ Err HRWinScreenMode(UInt16 ref, WinScreenModeOperation op, UInt32 *w, UInt32 *h,
                     UInt32 *depth, Boolean *color) HRT(48);
 
 FontID HRFntSetFont(UInt16 ref, FontID f) HRT(57);
+void   HRWinDrawChars(UInt16 ref, const Char *s, Int16 len, Coord x, Coord y) HRT(9);
 
 static UInt16 gHrRef = 0xFFFF;      /* 고해상도 모드로 바꿨으면 HR 참조 번호 */
 static Err    gHrErr = 0;
@@ -150,7 +153,7 @@ typedef struct {
     Char   name[dmDBNameLength];
 } SkwrInfo;
 
-enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain };
+enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain, kPgFont };
 
 #define kAppCreator    'MnDg'
 #define kPrefDebug     0
@@ -214,7 +217,7 @@ static UInt16 TotalPages(void)
 {
     if (!gDebug)
         return 1;                                    /* Main만 */
-    return 1 + PagesOf(&gInfo) + PagesOf(&gLibr) + 4; /* Main + Info + Libr + SkWr + SkEv + SkRaw + Events */
+    return 1 + PagesOf(&gInfo) + PagesOf(&gLibr) + 5; /* Main + Info + Libr + Font + SkWr + SkEv + SkRaw + Events */
 }
 
 /* 현재 페이지 종류와, Info/Libr이면 버퍼와 하위 페이지 번호 */
@@ -237,10 +240,12 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
         return kPgLibr;
     }
     if (pg == pi + pl)
-        return kPgSkwr;
+        return kPgFont;
     if (pg == pi + pl + 1)
-        return kPgSkev;
+        return kPgSkwr;
     if (pg == pi + pl + 2)
+        return kPgSkev;
+    if (pg == pi + pl + 3)
         return kPgSkraw;
     return kPgEvents;
 }
@@ -771,6 +776,66 @@ static void DrawMainPage(void)
     DrawRow(11, "loader: off > install > reset");
 }
 
+/* "가나다 한글" (KS X 1001, EUC-KR) */
+static UInt16 KoSample(Char *k)
+{
+    k[0] = (Char)0xB0; k[1] = (Char)0xA1;   /* 가 */
+    k[2] = (Char)0xB3; k[3] = (Char)0xAA;   /* 나 */
+    k[4] = (Char)0xB4; k[5] = (Char)0xD9;   /* 다 */
+    k[6] = ' ';
+    k[7] = (Char)0xC7; k[8] = (Char)0xD1;   /* 한 */
+    k[9] = (Char)0xB1; k[10] = (Char)0xDB;  /* 글 */
+    return 11;
+}
+
+/* 기존 함수로 한 줄: 이름(std 글꼴) + 견본(해당 글꼴) + 폭 */
+static void FontRow(UInt16 row, const Char *name, FontID f)
+{
+    Char   k[12], s[16];
+    UInt16 n = KoSample(k);
+    FontID old;
+    Coord  y = (row + 1) * kLineH;
+
+    WinDrawChars(name, StrLen(name), 0, y);
+    old = FntSetFont(f);
+    WinDrawChars(k, n, 40, y);
+    StrPrintF(s, "w%d", FntCharsWidth(k, n));
+    FntSetFont(old);
+    WinDrawChars(s, StrLen(s), 135, y);
+}
+
+/* HR 함수로 한 줄 (고해상도 좌표 = 2배) */
+static void HrFontRow(UInt16 row, const Char *name, FontID f)
+{
+    Char   k[12], s[16];
+    UInt16 n = KoSample(k);
+    FontID old;
+    Coord  y = (row + 1) * kLineH;
+
+    WinDrawChars(name, StrLen(name), 0, y);
+    if (gHrRef == 0xFFFF) {
+        WinDrawChars("n/a", 3, 40, y);
+        return;
+    }
+    old = HRFntSetFont(gHrRef, f);
+    HRWinDrawChars(gHrRef, k, n, 80, y * 2);
+    StrPrintF(s, "w%d", FntCharsWidth(k, n));
+    HRFntSetFont(gHrRef, old);
+    WinDrawChars(s, StrLen(s), 135, y);
+}
+
+static void DrawFontPage(void)
+{
+    DrawRow(0, "-- WinDrawChars (existing API) --");
+    FontRow(1, "std", stdFont);
+    FontRow(2, "bold", boldFont);
+    FontRow(4, "large", largeFont);
+    DrawRow(6, "-- HRWinDrawChars (HR lib) --");
+    HrFontRow(7, "HR std", 8);
+    HrFontRow(9, "HR bold", 9);
+    HrFontRow(11, "HR small", 2);
+}
+
 static void Draw(void)
 {
     RectangleType r;
@@ -799,6 +864,10 @@ static void Draw(void)
         start = (Int16)(sub * kVisible);
         for (i = 0; i < kVisible && start + i < (Int16)b->n; i++)
             DrawRow((UInt16)i, b->t[start + i]);
+        break;
+    case kPgFont:
+        StrPrintF(title, "%u/%u Font (KS X 1001)", gPage + 1, TotalPages());
+        DrawFontPage();
         break;
     case kPgSkwr:
         StrPrintF(title, "%u/%u SkWr", gPage + 1, TotalPages());
