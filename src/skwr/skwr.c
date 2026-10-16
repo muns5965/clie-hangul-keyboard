@@ -65,7 +65,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      12
+#define kSkBuild      13
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -97,6 +97,11 @@
 #define kFtrHires     54
 #define kFtrCoreBuild 55
 #define kEvtStop      4
+/* 13단계 진단: 최근 이벤트 16개 고리(#60~#75), 다음 칸 번호 #76.
+ * 칸 = tick 하위 16비트 << 16 | 이벤트 종류 << 8 | event[14] 하위 4비트 << 4 | 처리 후 hires 값(0/1) */
+#define kFtrEvLog     60
+#define kFtrEvIdx     76
+#define kEvLogN       16
 
 #define kStEng        0x0001
 #define kStNum        0x0002
@@ -1002,6 +1007,19 @@ static inline Boolean DoKey(UInt16 k)
     return true;
 }
 
+/* 13단계 진단: 이벤트 순서 기록 (동작 변경 없음) */
+static inline void EvLog(UInt8 e, const UInt8 *event)
+{
+#ifndef MNSK_HOST_TEST
+    UInt32 i = GetFtr(kFtrEvIdx) % kEvLogN;
+
+    FtrSet(kSkCreator, kFtrEvLog + i,
+           ((UInt32)(TimGetTicks() & 0xFFFF) << 16) | ((UInt32)e << 8) |
+           ((UInt32)(event[14] & 0xF) << 4) | (GetFtr(kFtrHires) != 0 ? 1 : 0));
+    FtrSet(kSkCreator, kFtrEvIdx, i + 1);
+#endif
+}
+
 Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
 {
     UInt8 e;
@@ -1074,6 +1092,7 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
         DrawKeys((UInt32)slot);
         break;
     }
+    EvLog(e, event);
     return 0;
 }
 
