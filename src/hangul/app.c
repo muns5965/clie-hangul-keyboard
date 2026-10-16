@@ -18,6 +18,7 @@
  *     (fontType firstChar lastChar maxWidth kernMax nDescent fRectWidth fRectHeight owTLoc ascent descent
  *     leading rowWords)와 SDK 구조로 계산한 표 위치, 'A'·0xC7의 오프셋/폭 항목을 보인다(2c 임시 글꼴 설계용).
  *     위 버튼(PageUp)으로 Main 페이지.
+ * v5: 메시지 줄이 맨 아래 기록 줄(12)과 겹치던 것 수정(빈 줄 1로 옮김). 맨 위 제목 줄을 탭해도 페이지 전환.
  */
 
 #include <PalmOS.h>
@@ -275,10 +276,9 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v4 Font (up: Main)", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v5 Font [tap: Main]", 28, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 13 * kLineH);
 }
 
 static void Draw(void)
@@ -292,7 +292,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v4 (dn: Font) CJKOS OFF", 32, 0, 0);
+    WinDrawInvertedChars("MnHangul v5 [tap: Font] CJKOS OFF", 33, 0, 0);
 
     StrPrintF(s, "patch: %s  box: %s  A378=%lx", Installed() ? "ON" : "off",
               GetF(kFtrBox) ? "ON" : "off", (UInt32)SysGetTrapAddress(kTrapBlt));
@@ -329,7 +329,7 @@ static void Draw(void)
     StrPrintF(s, "hi font %s  p1 %s", a, b);
     Row(12, s);
 
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 13 * kLineH);   /* 내용 13줄(0~12) 아래 */
+    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);   /* 빈 줄 1 (맨 아래는 줄 12까지 참) */
 }
 
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
@@ -346,7 +346,9 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < 160) {
             Int16 row = e.screenY / kLineH - 1;
 
-            if (gPage != 0)
+            if (e.screenY < kLineH)
+                gPage = (gPage == 0) ? 1 : 0;
+            else if (gPage != 0)
                 ;
             else if (row == kRowOn)
                 PatchOn();
