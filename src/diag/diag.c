@@ -1,5 +1,5 @@
 /*
- * ClieDiag v17 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v18 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -9,6 +9,8 @@
  * v16: Main에 "[soft reset: hold 3s]" — 3초 동안 누르고 있으면 SysReset(), 중간에 떼면 취소.
  *      로더 업데이트(설치 → 바로 리셋)를 앱 안에서 끝내기 위해.
  * v17: 누를 수 있는 줄은 둥근 테두리 버튼, 디버그는 네모 체크박스로 그린다. 누르면 버튼이 반전된다.
+ * v18: 리셋 버튼은 폭 고정(거의 화면 전체)·조금 높게, 가운데 정렬. 누르는 동안 "Hold... N"만 표시하고
+ *      "release to cancel"은 맨 아래 상태줄에(글자가 길어져 버튼이 화면 밖으로 넘치던 문제).
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -102,6 +104,7 @@ static UInt32   gPenMoves = 0;
 static Boolean  gHoldLast = false;  /* 조작 결과를 바로 뒤 penUp이 덮어쓰지 않게 */
 static Boolean  gDebug = false;     /* 진단 페이지 표시 (앱 설정 kPrefDebug) */
 static Int16    gBtnW[kVisible];    /* 줄별 버튼 너비(0 = 버튼 없음). Draw 때마다 새로 정한다 */
+static Boolean  gBtnWide[kVisible]; /* 넓은 버튼(리셋) */
 
 static SkwrInfo gSkwr[kMaxSkwr];
 static UInt16   gSkwrN = 0;
@@ -380,10 +383,28 @@ static void DrawRow(UInt16 row, const Char *s)
     WinDrawChars(s, StrLen(s), 0, (row + 1) * kLineH);
 }
 
-/* 버튼 안쪽 영역 (테두리는 이 바깥 1픽셀, 한 줄 높이 안에 들어간다) */
+/* 버튼 안쪽 영역 (테두리는 이 바깥 1픽셀). 보통 버튼은 한 줄 높이 안,
+ * 넓은 버튼은 위 줄(빈 줄)로 3픽셀 올라가 높이 13, 폭은 화면 거의 전체 */
 static void BtnRect(UInt16 row, Int16 w, RectangleType *r)
 {
-    RctSetRectangle(r, 3, (row + 1) * kLineH + 1, w, kLineH - 2);
+    if (row < kVisible && gBtnWide[row])
+        RctSetRectangle(r, 3, (row + 1) * kLineH - 3, kScreenW - 6, kLineH + 2);
+    else
+        RctSetRectangle(r, 3, (row + 1) * kLineH + 1, w, kLineH - 2);
+}
+
+/* 넓은 버튼 (글자 가운데) */
+static void DrawWideButton(UInt16 row, const Char *label)
+{
+    RectangleType r;
+    Int16         tw = FntCharsWidth(label, StrLen(label));
+
+    gBtnWide[row] = true;
+    gBtnW[row] = kScreenW - 6;
+    BtnRect(row, gBtnW[row], &r);
+    WinDrawChars(label, StrLen(label), r.topLeft.x + (r.extent.x - tw) / 2,
+                 r.topLeft.y + (r.extent.y - kLineH) / 2);
+    WinDrawRectangleFrame(roundFrame, &r);
 }
 
 /* 둥근 테두리 버튼 */
@@ -650,7 +671,7 @@ static void DrawMainPage(void)
     else              Row2(5, "  load: ", "lock failed");
 
     Row2(6, "keyboard: ", SkFtr(58) ? "on" : "off");
-    DrawButton(kMainRowReset, "Soft Reset (hold 3s)");
+    DrawWideButton(kMainRowReset, "Soft Reset (hold 3s)");
     DrawCheck(kMainRowDebug, "Debug", gDebug);
     DrawRow(10, "core: off > install > on");
     DrawRow(11, "loader: off > install > reset");
@@ -666,6 +687,7 @@ static void Draw(void)
 
     kind = PageKind(&b, &sub, &subN);
     MemSet(gBtnW, sizeof(gBtnW), 0);
+    MemSet(gBtnWide, sizeof(gBtnWide), 0);
 
     RctSetRectangle(&r, 0, 0, kScreenW, kScreenW);
     WinEraseRectangle(&r, 0);
@@ -731,20 +753,28 @@ static void HoldReset(void)
     RectangleType r;
     Char          s[kLineLen];
 
-    RctSetRectangle(&r, 0, (kMainRowReset + 1) * kLineH, kScreenW, kLineH);
+    /* 넓은 버튼 영역(테두리 포함)을 지우고 다시 그린다. 취소 안내는 맨 아래 상태줄에 */
+    RctSetRectangle(&r, 0, (kMainRowReset + 1) * kLineH - 4, kScreenW, kLineH + 4);
+    {
+        RectangleType st;
+
+        RctSetRectangle(&st, 0, (kVisible + 1) * kLineH, kScreenW, kLineH);
+        WinEraseRectangle(&st, 0);
+        WinDrawInvertedChars("release to cancel", 17, 0, (kVisible + 1) * kLineH);
+    }
     while (down) {
         left = (Int16)(kResetHoldSec - (TimGetTicks() - t0) / tps);
         if (left <= 0) {
             WinEraseRectangle(&r, 0);
-            DrawButton(kMainRowReset, "Resetting...");
+            DrawWideButton(kMainRowReset, "Resetting...");
             InvertButton(kMainRowReset);
             SysReset();
             return;
         }
         if (left != shown) {
             WinEraseRectangle(&r, 0);
-            StrPrintF(s, "Reset in %d (release: cancel)", left);
-            DrawButton(kMainRowReset, s);
+            StrPrintF(s, "Hold... %d", left);
+            DrawWideButton(kMainRowReset, s);
             InvertButton(kMainRowReset);
             shown = left;
         }

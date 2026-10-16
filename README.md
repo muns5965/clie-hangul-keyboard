@@ -101,7 +101,7 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 
 주의: 컴파일러를 소스에서 빌드할 때는 `make -j1`로 해야 한다. 병렬 빌드 시 `cc1plus` 생성 전에 libgcc2 빌드가 시작돼 실패한다.
 
-## bin/ClieDiag.prc (상태·진단, v17)
+## bin/ClieDiag.prc (상태·진단, v18)
 
 소스: `src/diag/diag.c`, 빌드: `./tools/build-diag.sh`. 크리에이터 ID `MnDg`. 160×160 호환 모드로 실행된다. 소니 라이브러리 함수는 호출하지 않는다.
 
@@ -110,6 +110,7 @@ Main의 `Debug` 체크박스를 탭하면 아래 진단 페이지가 나타난�
 v14부터 복구용 DiagRescue(크리에이터 `todo`, To Do 버튼 대체)는 폐기 — 로더 11은 DisS 없이 교체된다.
 기기에 남은 DiagRescue는 SkWr 진단 페이지의 `Delete DiagRescue` 버튼으로 지운다(런처 삭제는 같은 크리에이터 `todo`의 To Do 데이터까지 지울 수 있음).
 v17: 누를 수 있는 줄은 둥근 테두리 버튼(누르면 반전), 디버그는 네모 체크박스로 표시.
+v18: 리셋 버튼 폭 고정·가운데 정렬, 누르는 동안 `Hold... N`(취소 안내는 맨 아래 줄).
 v16: Main의 `Soft Reset (hold 3s)` 줄을 3초 누르고 있으면 소프트 리셋(`SysReset`), 중간에 떼면 취소.
 v15: Events의 INT(실크 펜 가로채기)는 맨 아래 `INT` 버튼으로만 전환(아래 절반 탭으로 실수로 켜져 홈 아이콘이 막힌 일이 있음).
 - **로더 11 실측 (2026-10-16)**: 마지막 DisS 교체 후 Main `loader: build 11`, `protect: released` 확인.
