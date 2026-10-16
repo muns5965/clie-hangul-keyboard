@@ -14,7 +14,8 @@
  *
  * 리소스 배치: 오프셋 0 = 진입점 6개의 오프셋 표(.long, 리소스 기준), 24 = 원래 루틴 주소 6개(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
- * 한글 폭은 patch.c 그리기와 같게(모드 #22): glyph 모드이고 글꼴 높이 16~40이면 18픽셀(좌표 배율로 나눔),
+ * 한글 폭은 patch.c 그리기 결과와 같게(모드 #22): glyph 모드이고 글꼴 높이 8~15(저해상도)면 9(v12),
+ * 16~40이면 18픽셀(좌표 배율로 나눔),
  * box 모드(또는 작은 글꼴)면 "[]" 폭, off면 두 바이트의 라틴 폭. 좌표 배율 = 'W'의 글꼴 픽셀 폭 ÷ FntCharWidth('W').
  */
 
@@ -180,6 +181,8 @@ Int16 HgCharWidth(WChar c)
         return FntCharsWidth(box, 2);
     }
     f = (const Int16 *)FntGetFontPtr();
+    if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0)
+        return kGlyphW / 2;   /* v12: 저해상도 글꼴 → 그릴 때 2배 고해상도(width.c와 같은 규칙) */
     if (mode == 2 && f != NULL && f[7] >= 16 && f[7] <= 40 && Ftr(23) != 0) {
         Int16  coord = FntCharWidth('W');
         UInt16 px = PixW(f, 'W'), ratio = 1;

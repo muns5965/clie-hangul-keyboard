@@ -8,8 +8,9 @@
  *   3 FntWordWrap(chars, maxWidth)                        한 줄 길이(줄바꿈 위치)
  *   4 FntWidthToOffset(chars, len, px, *leading, *trunc)  위치 → 글자 오프셋(커서)
  * 안전장치: 처리 범위에 0xA1~0xFE 바이트가 없으면(영문만) 원래 함수를 그대로 부른다.
- * 한글 2바이트 글자 폭(좌표 단위)은 그리기(patch.c)·Intl 폭(intl.c)과 같은 규칙:
- *   모드 #22 = glyph이고 글꼴 높이 16~40 → 18픽셀 ÷ 좌표 배율('W' 픽셀 폭 ÷ 원래 FntCharWidth('W'))
+ * 한글 2바이트 글자 폭(좌표 단위)은 그리기(patch.c) 결과와 같게(Intl 폭 intl.c도 같은 규칙):
+ *   모드 #22 = glyph이고 폭 잴 때 글꼴 높이 8~15(저해상도, 그릴 때 2배 고해상도 글꼴) → 18 ÷ 2 = 9 (v12)
+ *   글꼴 높이 16~40 → 18픽셀 ÷ 좌표 배율('W' 픽셀 폭 ÷ 원래 FntCharWidth('W'))
  *   box 모드 또는 작은 글꼴 → "[]" 폭, off → 두 바이트의 라틴 폭
  * 1바이트 글자는 원래 FntCharsWidth로 잰다. 탭은 fntTabChrWidth(20) 배수 위치로.
  * 줄바꿈: 공백 뒤에서 끊는 것을 우선하고, 공백이 없으면 글자 경계(2바이트를 자르지 않음)에서 끊는다.
@@ -107,6 +108,12 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
         return ((CharsWidthFn)Orig(0))(b, 2);
     }
     f = (const Int16 *)FntGetFontPtr();
+    /* v12: 폭을 잴 때는 저해상도 글꼴(높이 8~15)인데 그릴 때 Sony가 2배 고해상도 글꼴로 바꿔 넘긴다(v11 실측:
+     * 폭 잴 때 11, 그릴 때 22 ×2). 그러면 그리기는 16×16 한글을 배율 2로 그리므로 폭 = 18 ÷ 2 */
+    if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {
+        FtrSet(kHgCreator, 62, ((UInt32)(kGlyphW / 2) << 16) | (2 << 8) | (UInt8)f[7]);
+        return kGlyphW / 2;
+    }
     if (mode == 2 && f != NULL && f[7] >= 16 && f[7] <= 40 && Ftr(23) != 0) {
         const UInt16 *owt = (const UInt16 *)((const UInt8 *)f + 16 + (UInt16)f[8] * 2);
         Int16         first = f[1], last = f[2], coord = W1('W');
