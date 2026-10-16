@@ -1,5 +1,5 @@
 /*
- * MnHangul v21 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v22 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,9 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v22: 추가 글꼴 MnHgFont24.prc(타입 HgFt, 리소스 HgJb 2 = 24×24 조합형 묶음 판 2)가 있으면 Patch ON 때 잠가 연결(#92 주소,
+ *      #93 핸들, #94 DB LocalID, DB 보호). 메모 큰 글자(그릴 때 30/15 ×2, 폭 잴 때 높이 15)에 24×24, 칸 폭 26(저해상도 13).
+ *      Patch OFF·All OFF 때 잠금·보호를 풀어 글꼴만 바꿔 설치할 수 있게 한다.
  * v21: Sizes 아래에 글꼴 높이/번호(0 std 1 bold 2 large)별 횟수 — 폭 잴 때(#84~#87)·그릴 때(#88~#91).
  * v20: Kbd 페이지가 키보드 14단계 기록 위치(#64~#79, 다음 칸 #80)를 읽음(#60은 로더가 써서 옮김).
  * v19: Patch ON 한 번에 Mode glyph(off였으면) + Intl ON + Width ON (리셋 후 설정이 지워지므로).
@@ -187,6 +190,8 @@ static Boolean Installed(void)
 }
 
 /* 글자 데이터 HgFn 0·1 잠금(앱이 끝나도 DB 보호 중이라 주소 유지) */
+static void Lock24(void);
+
 static void LockGlyphs(void)
 {
     UInt16 i;
@@ -197,12 +202,62 @@ static void LockGlyphs(void)
         FtrSet(kHgCreator, kGlyphHFtr[i], (UInt32)h);
         FtrSet(kHgCreator, kGlyphPtrFtr[i], (h != NULL) ? (UInt32)MemHandleLock(h) : 0);
     }
+    Lock24();
+}
+
+/* v22: 추가 글꼴(HgFt/MnHg) 리소스 HgJb 2를 잠가 #92에. DB는 닫고 잠금만 유지, 지워지지 않게 보호 */
+#define kFtrF24P   92
+#define kFtrF24H   93
+#define kFtrF24Id  94
+static void Lock24(void)
+{
+    DmSearchStateType st;
+    UInt16            card = 0;
+    LocalID           id = 0;
+    DmOpenRef         db;
+    MemHandle         h;
+    const UInt8      *p;
+
+    if (GetF(kFtrF24P) != 0)
+        return;
+    if (DmGetNextDatabaseByTypeCreator(true, &st, 'HgFt', kHgCreator, true, &card, &id) != errNone || id == 0)
+        return;
+    db = DmOpenDatabase(card, id, dmModeReadOnly);
+    if (db == NULL)
+        return;
+    h = DmGet1Resource(kGlyphRes, 2);
+    p = (h != NULL) ? MemHandleLock(h) : NULL;
+    DmCloseDatabase(db);
+    if (p == NULL)
+        return;
+    if (p[0] != 'H' || p[1] != 'J' || p[2] != 2 || p[3] != 24) {   /* 형식이 다르면 쓰지 않음 */
+        MemHandleUnlock(h);
+        return;
+    }
+    DmDatabaseProtect(card, id, true);
+    FtrSet(kHgCreator, kFtrF24H, (UInt32)h);
+    FtrSet(kHgCreator, kFtrF24Id, (UInt32)id);
+    FtrSet(kHgCreator, kFtrF24P, (UInt32)p);
+}
+
+static void Unlock24(void)
+{
+    UInt32 h = GetF(kFtrF24H), id = GetF(kFtrF24Id);
+
+    FtrSet(kHgCreator, kFtrF24P, 0);
+    FtrSet(kHgCreator, kFtrF24H, 0);
+    FtrSet(kHgCreator, kFtrF24Id, 0);
+    if (h != 0)
+        MemHandleUnlock((MemHandle)h);
+    if (id != 0)
+        DmDatabaseProtect(0, (LocalID)id, false);
 }
 
 static void UnlockGlyphs(void)
 {
     UInt16 i;
 
+    Unlock24();
     for (i = 0; i < kGlyphN; i++) {
         UInt32 h = GetF(kGlyphHFtr[i]);
 
@@ -377,7 +432,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v21 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v22 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -602,7 +657,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v21 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v22 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -717,7 +772,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v21 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v22 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -754,7 +809,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v21 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v22 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -792,7 +847,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v21 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v22 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -844,7 +899,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v21 Kbd [tap: Main]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v22 Kbd [tap: Main]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -901,11 +956,11 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v21 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v22 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
-    StrPrintF(s, "patch %s  %s  font %s  prot %u%s", Installed() ? "ON" : "off", a,
-              (GetF(kFtrGlyph0) && GetF(kFtrGlyph1)) ? "ok" : "-", ProtectCount(),
+    StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
+              (GetF(kFtrGlyph0) && GetF(kFtrGlyph1)) ? "ok" : "-", GetF(kFtrF24P) ? "+24" : "", ProtectCount(),
               ProtectCount() ? "" : " ok");
     Row(0, s);
     Button(kRowOn, "Patch ON");

@@ -78,16 +78,30 @@ static inline UInt32 Pair(const Int16 *p)
  * #23 = 16 묶음 주소, #24 = 12 묶음 주소(앱이 Patch ON 때 잠가 둠). 글자 칸 폭 = 글자 폭 + 양옆 1 */
 #define kCell16   18      /* 16 글자 칸 폭(고해상도 픽셀, CJKOS 고해상도 std와 같음) */
 #define kCell12   13      /* 12 글자 칸 폭(글자 11 + 1 + 1) */
+#define kCell24   26      /* v22: 24 글자 칸 폭(추가 글꼴 MnHgFont24, 묶음 판 2 = 한 줄 4바이트) */
 
 static inline UInt16 RdW(const UInt8 *p)
 {
     return ((UInt16)p[0] << 8) | p[1];
 }
 
+/* v22: 묶음 그림 한 줄을 32비트(왼쪽 = 비트 31)로. 판 1 = 2바이트 줄, 판 2 = 4바이트 줄 */
+static inline UInt32 RdRow(const UInt8 *pk, const UInt8 *p)
+{
+    if (pk[2] >= 2)
+        return ((UInt32)RdW(p) << 16) | RdW(p + 2);
+    return (UInt32)RdW(p) << 16;
+}
+
+static inline UInt16 RowBytes(const UInt8 *pk)
+{
+    return pk[2] >= 2 ? 4 : 2;
+}
+
 /* 아래 세 함수는 진입점(오프셋 4)보다 뒤에 놓이도록 파일 끝에 정의한다 */
 static UInt16  RankToSyl(UInt16 r);
-static void    Compose(const UInt8 *pk, UInt16 sy, UInt16 *rows);
-static Boolean GlyphRows(const UInt8 *pk, UInt8 lead, UInt8 trail, UInt16 *rows);
+static void    Compose(const UInt8 *pk, UInt16 sy, UInt32 *rows);
+static Boolean GlyphRows(const UInt8 *pk, UInt8 lead, UInt8 trail, UInt32 *rows);
 
 /* KS X 1001 2바이트 글자인지 (앞·뒤 0xA1~0xFE) */
 static inline Boolean IsPair(const UInt8 *c, UInt16 i, UInt16 len)
@@ -140,28 +154,31 @@ static inline void MakeTmpFont(UInt16 *t, const Int16 *src, UInt16 cw)
 }
 
 /* 글자 그림 rows(H줄, NULL이면 H×(cw-2) 네모)를 임시 글꼴 그림 칸 (1, top)에 넣는다 */
-static inline void SetGlyph(UInt16 *t, const UInt16 *rows, UInt16 H, UInt16 cw, UInt16 top, UInt16 fh)
+static inline void SetGlyph(UInt16 *t, const UInt32 *rows, UInt16 H, UInt16 cw, UInt16 top, UInt16 fh)
 {
-    UInt16 y, edge = (UInt16)(0xFFFF << (16 - (cw - 2)));
+    UInt16 y;
+    UInt32 edge = 0xFFFFFFFFUL << (32 - (cw - 2));
 
     for (y = 0; y < H && y + top < fh; y++) {   /* 칸보다 긴 줄은 버림(12×12 글자를 11칸에: 12번째 줄은 한글에서 늘 빈 줄) */
-        UInt16 v;
+        UInt32 v;
 
         if (rows != NULL)
             v = rows[y];
         else
-            v = (y == 0 || y == H - 1) ? edge : (0x8000 | (0x8000 >> (cw - 3)));
-        t[13 + (y + top) * 2] = v >> 1;
-        t[13 + (y + top) * 2 + 1] = (v & 1) << 15;
+            v = (y == 0 || y == H - 1) ? edge : (0x80000000UL | (0x80000000UL >> (cw - 3)));
+        v >>= 1;                                 /* 왼쪽 1칸 띄움. v22: 줄은 32비트(왼쪽 = 비트 31) */
+        t[13 + (y + top) * 2] = (UInt16)(v >> 16);
+        t[13 + (y + top) * 2 + 1] = (UInt16)v;
     }
 }
 
 /* 글자 세로 시작 줄(칸 안으로 제한).
  * 16: 한글(1~13줄)을 영문 대문자 높이에 맞춤 = ascent − 15 (std 18 → 3, v6과 같음)
- * 12: 묶음의 기준선(위에서 10줄)을 글꼴 기준선에 맞춤 = ascent − 10 */
+ * 12: 묶음의 기준선(위에서 10줄)을 글꼴 기준선에 맞춤 = ascent − 10
+ * 24: 16의 1.5배 = ascent − 22 */
 static inline UInt16 GlyphTop(const Int16 *f, UInt16 H)
 {
-    Int16 top = f[9] - (H == 16 ? 15 : 10);
+    Int16 top = f[9] - (H == 24 ? 22 : H == 16 ? 15 : 10);   /* v22: 24는 16의 1.5배(대문자 높이 맞춤) */
 
     if (top < 0)
         top = 0;
@@ -204,8 +221,8 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
 {
     RectangleType r = *rc;
     UInt16        i = 0, px = 0, n = 0;
-    UInt16        H = pk[3], cw = (H == 16) ? kCell16 : kCell12, top = GlyphTop(font, H);
-    UInt16        rows[16];
+    UInt16        H = pk[3], cw = (H == 24) ? kCell24 : (H == 16) ? kCell16 : kCell12, top = GlyphTop(font, H);
+    UInt32        rows[24];
     UInt32        res = 0;
     UInt8         one = kTmpChar;
 
@@ -292,12 +309,13 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
     if (hi && GetF(22) == 2 && p2 != NULL && p6 != NULL) {
         const Int16 *f = (const Int16 *)p6;
         Int16        rh = ((const Int16 *)p2)[3];
-        const UInt8 *p16 = (const UInt8 *)GetF(23), *p12 = (const UInt8 *)GetF(24);
+        const UInt8 *p16 = (const UInt8 *)GetF(23), *p12 = (const UInt8 *)GetF(24), *p24 = (const UInt8 *)GetF(92);
 
         Int16        fh = f[7];
 
         /* v7: 글꼴 높이 16~40, 배율(글꼴 높이 ÷ 사각형 높이) 1 또는 2. v14: 12~15는 12×12 묶음 */
-        const UInt8 *pk = (fh >= 16) ? p16 : (fh >= 11) ? p12 : NULL;   /* v15: 11칸도 12×12 */
+        /* v15: 11칸도 12×12. v22: 28 이상(메모 큰 글자 30/15)은 추가 글꼴 24×24가 있으면 그것 */
+        const UInt8 *pk = (fh >= 28 && p24 != NULL) ? p24 : (fh >= 16) ? p16 : (fh >= 11) ? p12 : NULL;
 
         if (fh <= 40 && pk != NULL && rh > 0 && (fh == rh || fh == rh * 2)) {
             UInt16 *tmp = MemPtrNew(TmpWords(fh) * 2);
@@ -359,9 +377,9 @@ static UInt16 RankToSyl(UInt16 r)
 }
 
 /* 묶음 pk에서 음절 sy를 rows[]에 조합(특수 글자 → 예외표 → 벌 규칙). gen-johab.py compose()와 같은 방법 */
-static void Compose(const UInt8 *pk, UInt16 sy, UInt16 *rows)
+static void Compose(const UInt8 *pk, UInt16 sy, UInt32 *rows)
 {
-    UInt16 H = pk[3], Nc = pk[6], Nj = pk[7], rb = H * 2, i, k;
+    UInt16 H = pk[3], Nc = pk[6], Nj = pk[7], w = RowBytes(pk), rb = H * w, i, k;
     UInt16 oP = RdW(pk + 112), oE = RdW(pk + 116), nE = RdW(pk + 118), oS = RdW(pk + 120), nS = RdW(pk + 122);
     UInt16 L = sy / 588, V = (sy % 588) / 28, T = sy % 28, hasT = T ? 1 : 0;
     UInt16 id[3];
@@ -377,7 +395,7 @@ static void Compose(const UInt8 *pk, UInt16 sy, UInt16 *rows)
 
         if (v == sy) {
             for (i = 0; i < H; i++)
-                rows[i] = RdW(pk + oS + mid * (2 + rb) + 2 + i * 2);
+                rows[i] = RdRow(pk, pk + oS + mid * (2 + rb) + 2 + i * w);
             return;
         }
         if (v < sy)
@@ -407,23 +425,23 @@ static void Compose(const UInt8 *pk, UInt16 sy, UInt16 *rows)
     for (k = 0; k < 3; k++)
         if (id[k] != 0xFFFF)
             for (i = 0; i < H; i++)
-                rows[i] |= RdW(pk + oP + id[k] * rb + i * 2);
+                rows[i] |= RdRow(pk, pk + oP + (UInt32)id[k] * rb + i * w);
 }
 
 /* 2바이트 글자 하나의 그림: 완성형 한글 → 조합, 자모 행(0xA4) → 묶음의 자모표, 그 밖 → NULL(네모) */
-static Boolean GlyphRows(const UInt8 *pk, UInt8 lead, UInt8 trail, UInt16 *rows)
+static Boolean GlyphRows(const UInt8 *pk, UInt8 lead, UInt8 trail, UInt32 *rows)
 {
-    UInt16 H = pk[3], i;
+    UInt16 H = pk[3], w = RowBytes(pk), i;
 
     if (lead >= 0xB0 && lead <= 0xC8) {
         Compose(pk, RankToSyl((lead - 0xB0) * 94 + (trail - 0xA1)), rows);
         return true;
     }
     if (lead == 0xA4) {
-        const UInt8 *j = pk + RdW(pk + 124) + (trail - 0xA1) * H * 2;
+        const UInt8 *j = pk + RdW(pk + 124) + (trail - 0xA1) * H * w;
 
         for (i = 0; i < H; i++)
-            rows[i] = RdW(j + i * 2);
+            rows[i] = RdRow(pk, j + i * w);
         return true;
     }
     return false;

@@ -188,6 +188,8 @@ Int16 HgCharWidth(WChar c)
         WinLog(kWinSeenW);   /* v16 진단 */
         if (WinOffscreen() && Ftr(24) != 0)
             return kCell12W;   /* v17: offscreen 창 = ×1, 12×12 칸(width.c와 같은 규칙) */
+        if (f[7] >= 14 && Ftr(92) != 0)
+            return kCell24W / 2;   /* v22: 큰 글자 → 그릴 때 30 ×2, 24×24 */
         return kGlyphW / 2;
     }   /* v12: 저해상도 글꼴 → 그릴 때 2배 고해상도(width.c와 같은 규칙) */
     if (mode == 2 && f != NULL && f[7] >= 16 && f[7] <= 40 && Ftr(23) != 0) {
@@ -196,6 +198,8 @@ Int16 HgCharWidth(WChar c)
 
         if (coord > 0 && px >= (UInt16)coord * 2 - 1)
             ratio = 2;
+        if (f[7] >= 28 && Ftr(92) != 0)
+            return (kCell24W + ratio - 1) / ratio;   /* v22 */
         return (kGlyphW + ratio - 1) / ratio;
     }
     box[0] = '[';

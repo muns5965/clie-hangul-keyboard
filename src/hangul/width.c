@@ -119,6 +119,10 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
             FtrSet(kHgCreator, 62, ((UInt32)kCell12W << 16) | (1 << 8) | (UInt8)f[7]);
             return kCell12W;
         }
+        if (f[7] >= 14 && Ftr(92) != 0) {       /* v22: 큰 글자(저해상도 15, v21 실측 15/7) → 그릴 때 30 ×2, 24×24 */
+            FtrSet(kHgCreator, 62, ((UInt32)(kCell24W / 2) << 16) | (2 << 8) | (UInt8)f[7]);
+            return kCell24W / 2;
+        }
         FtrSet(kHgCreator, 62, ((UInt32)(kGlyphW / 2) << 16) | (2 << 8) | (UInt8)f[7]);
         return kGlyphW / 2;
     }
@@ -131,6 +135,10 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
             px = owt['W' - first] & 0xFF;
         if (coord > 0 && px >= (UInt16)coord * 2 - 1)
             ratio = 2;
+        if (f[7] >= 28 && Ftr(92) != 0) {       /* v22: 28 이상은 24×24 칸 */
+            FtrSet(kHgCreator, 62, ((UInt32)((kCell24W + ratio - 1) / ratio) << 16) | (ratio << 8) | (UInt8)f[7]);
+            return (kCell24W + ratio - 1) / ratio;
+        }
         FtrSet(kHgCreator, 62, ((UInt32)((kGlyphW + ratio - 1) / ratio) << 16) | (ratio << 8) | (UInt8)f[7]);
         return (kGlyphW + ratio - 1) / ratio;
     }
