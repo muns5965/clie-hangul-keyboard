@@ -1,5 +1,5 @@
 /*
- * ClieDiag v19 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v20 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -15,6 +15,8 @@
  *      Sony 문서(Programmer's Companion): 고해상도 모드에서 기존 API는 좌표를 그대로(160 기준) 쓰고
  *      글자는 고해상도 글꼴로 그려진다. 펜 좌표도 기존 기준. 그래서 그리기 코드는 그대로다.
  *      저해상도 앱이면 상태바 대신 CLIÉ 로고가 나오던 것이, 고해상도 앱이 되어 상태바(홈·□→)가 나온다.
+ * v20: Info 페이지에 글꼴 측정(조합형 한글 글꼴 크기 결정용). 저해상도(고해상도 전환 전)·고해상도(전환 후) 각각
+ *      기본 글꼴들의 줄 높이(h)·기준선(b)·'A'/'W' 폭, CJKOS가 그리는 '가'(B0A1) 폭과 HR 글꼴 값.
  *
  *   Main   : 로더(SkWr) 설치·빌드·보호 해제, 본체(SkCo) 설치·빌드·불러오기 결과, 자판 켜짐, 업데이트 방법
  *
@@ -56,6 +58,8 @@ Err HRClose(UInt16 ref) SYS_TRAP(sysLibTrapClose);
 Err HRWinScreenMode(UInt16 ref, WinScreenModeOperation op, UInt32 *w, UInt32 *h,
                     UInt32 *depth, Boolean *color) HRT(48);
 
+FontID HRFntSetFont(UInt16 ref, FontID f) HRT(57);
+
 static UInt16 gHrRef = 0xFFFF;      /* 고해상도 모드로 바꿨으면 HR 참조 번호 */
 static Err    gHrErr = 0;
 
@@ -86,6 +90,21 @@ static void StopHires(void)
     HRClose(gHrRef);
     gHrRef = 0xFFFF;
 }
+
+/* ---------------------------------------------------------------- 글꼴 측정 (v20)
+ * 현재 글꼴의 줄 높이·기준선·폭을 한 줄로. '가'는 KS X 1001 0xB0A1 2바이트(CJKOS가 폭을 계산) */
+static void FontLine(Char *o, const Char *tag, const Char *name)
+{
+    Char a = 'A', w = 'W', ko[2];
+
+    ko[0] = (Char)0xB0;
+    ko[1] = (Char)0xA1;
+    StrPrintF(o, "%s %s h%d b%d A%d W%d ko%d", tag, name, FntLineHeight(), FntBaseLine(),
+              FntCharsWidth(&a, 1), FntCharsWidth(&w, 1), FntCharsWidth(ko, 2));
+}
+
+/* 기본(기존 API) 글꼴 측정 */
+static void MeasureFonts(const Char *tag);
 
 /* ---------------------------------------------------------------- SkWr 시험 */
 
@@ -227,6 +246,37 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
 }
 
 /* ---------------------------------------------------------------- 정보 수집 */
+
+static void MeasureFonts(const Char *tag)
+{
+    FontID old = FntGetFont();
+
+    FntSetFont(stdFont);       FontLine(NextLine(&gInfo), tag, "std");
+    FntSetFont(boldFont);      FontLine(NextLine(&gInfo), tag, "bold");
+    FntSetFont(largeFont);     FontLine(NextLine(&gInfo), tag, "large");
+    FntSetFont(largeBoldFont); FontLine(NextLine(&gInfo), tag, "lgbold");
+    FntSetFont(old);
+}
+
+/* 고해상도 모드에서 HR 글꼴 측정 (HRFntSetFont 뒤 기존 Fnt 함수로 값 읽기, SilkExtn과 같은 방식) */
+static void MeasureHrFonts(void)
+{
+    FontID old;
+
+    if (gHrRef == 0xFFFF) {
+        StrCopy(NextLine(&gInfo), "hr fonts: n/a (lo-res)");
+        return;
+    }
+    old = HRFntSetFont(gHrRef, 8);   /* hrStdFont */
+    FontLine(NextLine(&gInfo), "HR", "std");
+    HRFntSetFont(gHrRef, 9);         /* hrBoldFont */
+    FontLine(NextLine(&gInfo), "HR", "bold");
+    HRFntSetFont(gHrRef, 2);         /* hrSmallFont */
+    FontLine(NextLine(&gInfo), "HR", "small");
+    HRFntSetFont(gHrRef, 10);        /* hrLargeFont */
+    FontLine(NextLine(&gInfo), "HR", "large");
+    HRFntSetFont(gHrRef, old);
+}
 
 static void CollectInfo(void)
 {
@@ -909,8 +959,11 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (PrefGetAppPreferences(kAppCreator, kPrefDebug, &gDebug, &size, true) == noPreferenceFound)
             gDebug = false;
     }
-    StartHires();
     CollectInfo();
+    MeasureFonts("lo");          /* 고해상도 전환 전 = 저해상도 */
+    StartHires();
+    MeasureFonts("hi");          /* 고해상도 모드, 기존 API 글꼴 */
+    MeasureHrFonts();
     CollectLibr();
     CollectSkwr();
     Draw();
