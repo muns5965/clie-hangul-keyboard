@@ -11,6 +11,7 @@ on:
       - 'tools/build-*.sh'
       - 'tools/prc-info.sh'
       - 'tools/test-compose.sh'
+      - 'tools/test-johab.sh'
       - 'test/**'
       - '.github/workflows/build-prc.yml'
   pull_request:
@@ -89,7 +90,7 @@ jobs:
           fi
 
       # 한글 조합 로직을 PC용으로 컴파일해 시험 (test/compose_test.py)
-      - name: Test Hangul composition
+      - name: Test Hangul composition (keyboard, johab glyphs)
         shell: bash
         run: |
           apt-get install -y -qq gcc python3 > /dev/null
@@ -98,6 +99,11 @@ jobs:
             exit 1
           fi
           echo "::notice::compose test: $(echo "$out" | tail -1)"
+          if ! out=$(tools/test-johab.sh 2>&1); then
+            echo "$out" | grep -E "FAIL|rror" | head -10 | while read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
+          echo "::notice::johab test: $(echo "$out" | tail -1)"
 
       # PRC 구조(DB 이름·타입·크리에이터·리소스)와 날짜를 뺀 해시를 실행 요약에 표시
       - name: Inspect PRCs

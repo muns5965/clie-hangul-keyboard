@@ -8,7 +8,7 @@
 #   2b) 호출 세기 코드(src/hangul/count.s) → 리소스 HgCt 0(폭·글자 경계 함수 호출 수 조사).
 #   2c) 글자 경계 코드(src/hangul/intl.c) → 리소스 HgIt 0(Intl 루틴 6개 교체, 3a 단계).
 #   2d) 폭 계산 코드(src/hangul/width.c) → 리소스 HgWd 0(폭 함수 트랩 5개 교체, 3b 단계).
-#   3) 글자 데이터 HgFn 0·1·2(완성형 2,350자 + 자모 행)(src/hangul/data, 시험용 Neo둥근모 16×16, OFL).
+#   3) 조합형 글꼴 묶음 HgJb 0(Neo둥근모 16×16)·1(물마루 기반 12×12)(src/hangul/data, OFL, tools/gen-johab.py).
 # 패치 코드 검사(하나라도 어긋나면 실패): .data/.bss 0, PatchOrig 오프셋 0, PatchBlt 오프셋 4,
 #   %a5 참조 없음, 재배치 없음.
 set -euo pipefail
@@ -95,7 +95,8 @@ m68k-palmos-objdump -d width.coff > width.dis
 # 2) 앱
 m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar "$root/src/hangul/app.c" -o app 2>&1 | tee build.log
 m68k-palmos-obj-res app
-# 3) 글자 데이터(시험용 Neo둥근모 16×16 완성형, tools/gen-hangul16.py로 생성해 커밋된 파일)
-cp "$root/src/hangul/data/HgFn0000.bin" "$root/src/hangul/data/HgFn0001.bin" "$root/src/hangul/data/HgFn0002.bin" .
-build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgFn0000.bin HgFn0001.bin HgFn0002.bin
+# 3) 조합형 글꼴 묶음(tools/gen-johab.py로 생성해 커밋된 파일): HgJb 0 = 16×16, HgJb 1 = 12×12
+cp "$root/src/hangul/data/HgJ16.bin" HgJb0000.bin
+cp "$root/src/hangul/data/HgJ12.bin" HgJb0001.bin
+build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgJb0000.bin HgJb0001.bin
 ls -l "$root/bin/MnHangul.prc"

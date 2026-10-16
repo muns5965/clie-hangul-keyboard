@@ -1,5 +1,5 @@
 /*
- * MnHangul v13 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v14 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -40,6 +40,8 @@
  *     페이지: Main → Font → Sizes → Calls → Width.
  * v12: 한글 폭 수정(width.c·intl.c). 폭을 잴 때 저해상도 글꼴(높이 8~15)이면 9 — 그릴 때 2배 고해상도라서.
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
+ * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
+ *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
  */
 
 #include <PalmOS.h>
@@ -55,7 +57,7 @@
 #define kFtrGlyph1    24
 #define kFtrGlyphH0   25
 #define kFtrGlyphH1   26
-#define kGlyphN       3        /* HgFn 0·1 완성형, 2 자모 행 */
+#define kGlyphN       2        /* v14: HgJb 0 = 조합형 16×16(Neo둥근모), HgJb 1 = 조합형 12×12 */
 #define kFtrIntlH     45
 #define kFtrIntlC     46
 #define kIntlRes      'HgIt'
@@ -67,15 +69,15 @@
 static const UInt16 kWidthTrap[kWidthN] = {
     sysTrapFntCharsWidth, sysTrapFntLineWidth, sysTrapFntCharsInWidth, sysTrapFntWordWrap, sysTrapFntWidthToOffset
 };
-static const UInt16 kGlyphPtrFtr[kGlyphN] = { 23, 24, 43 };
-static const UInt16 kGlyphHFtr[kGlyphN]   = { 25, 26, 44 };
+static const UInt16 kGlyphPtrFtr[kGlyphN] = { 23, 24 };
+static const UInt16 kGlyphHFtr[kGlyphN]   = { 25, 26 };
 static const UInt16 kIntlSel[kIntlN] = {
     intlTxtCharAttr, intlTxtGetPreviousChar, intlTxtGetNextChar,
     intlTxtSetNextChar, intlTxtCharBounds, intlTxtCharWidth
 };
 #define kFtrGlyphCnt  27
 #define kFtrRatio     28
-#define kGlyphRes     'HgFn'
+#define kGlyphRes     'HgJb'
 
 #define kLineH        11
 #define kRowOn        2
@@ -367,7 +369,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v13 Width [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v14 Width [tap: Main]", 30, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -574,7 +576,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v13 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v14 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -685,7 +687,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v13 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v14 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -699,7 +701,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v13 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v14 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -742,11 +744,11 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v13 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v14 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s  prot %u%s", Installed() ? "ON" : "off", a,
-              (GetF(kFtrGlyph0) && GetF(kFtrGlyph1) && GetF(43)) ? "ok" : "-", ProtectCount(),
+              (GetF(kFtrGlyph0) && GetF(kFtrGlyph1)) ? "ok" : "-", ProtectCount(),
               ProtectCount() ? "" : " ok");
     Row(0, s);
     Button(kRowOn, "Patch ON");

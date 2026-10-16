@@ -12,8 +12,8 @@
  *     문자열을 라틴 구간과 2바이트 글자로 나눠, 라틴 구간은 원래 글꼴로, 2바이트 글자는 p6 머리를 본뜬
  *     1글자 임시 글꼴(폭 18, 높이 22, 글자 'H' 하나)로 원래 함수를 부른다. 좌표 배율 = 글꼴 높이 ÷ 사각형 높이
  *     (1 또는 2, 실측 v3). 라틴 폭은 p6 폭 표(SDK FontType 구조, 실측 v4)에서 계산한다.
- *     완성형 한글(앞 0xB0~0xC8)은 글자 데이터(#23·#24 포인터, 앱이 HgFn 0·1을 잠가 둠),
- *     자모 행 0xA4(v9, #43 = HgFn 2), 그 밖의 2바이트는 네모.
+ *     v14: 글자는 조합형 묶음(HgJb 0 = Neo둥근모 16×16, HgJb 1 = 12×12)에서 조합한다(#23·#24).
+ *     칸 높이 16~40 → 16×16(칸 폭 18), 12~15 → 12×12(칸 폭 13). 자모 행 0xA4는 묶음의 자모표, 그 밖의 2바이트는 네모.
  *     조건이 안 맞으면(저해상도 글꼴 등) 2b처럼 "[]"로 그린다.
  * v7: 글꼴 높이 22만이 아니라 16~40(배율 1·2)이면 그린다(메모장 큰 글꼴 등). 세로 위치는 ascent - 15.
  *     한글 호출마다 (글꼴 높이, 사각형 높이) 조합별 횟수를 #30~#37에 센다.
@@ -71,9 +71,22 @@ static inline UInt32 Pair(const Int16 *p)
     return (p == NULL) ? 0xFFFFFFFFUL : (((UInt32)(UInt16)p[0] << 16) | (UInt16)p[1]);
 }
 
-#define kGlyphW   18      /* 한글 한 글자 폭(고해상도 픽셀, CJKOS 고해상도 std와 같음) */
 #define kTmpChar  0x48    /* 임시 글꼴의 유일한 글자 */
-#define kSplit    1175    /* HgFn 0 = 순위 0~1174, HgFn 1 = 나머지 */
+
+/* v14 조합형 글꼴 묶음(tools/gen-johab.py 형식, 리소스 HgJb 0 = 16×16, HgJb 1 = 12×12).
+ * #23 = 16 묶음 주소, #24 = 12 묶음 주소(앱이 Patch ON 때 잠가 둠). 글자 칸 폭 = 글자 폭 + 양옆 1 */
+#define kCell16   18      /* 16 글자 칸 폭(고해상도 픽셀, CJKOS 고해상도 std와 같음) */
+#define kCell12   13      /* 12 글자 칸 폭(글자 11 + 1 + 1) */
+
+static inline UInt16 RdW(const UInt8 *p)
+{
+    return ((UInt16)p[0] << 8) | p[1];
+}
+
+/* 아래 세 함수는 진입점(오프셋 4)보다 뒤에 놓이도록 파일 끝에 정의한다 */
+static UInt16  RankToSyl(UInt16 r);
+static void    Compose(const UInt8 *pk, UInt16 sy, UInt16 *rows);
+static Boolean GlyphRows(const UInt8 *pk, UInt8 lead, UInt8 trail, UInt16 *rows);
 
 /* KS X 1001 2바이트 글자인지 (앞·뒤 0xA1~0xFE) */
 static inline Boolean IsPair(const UInt8 *c, UInt16 i, UInt16 len)
@@ -103,7 +116,7 @@ static inline UInt16 CharW(const Int16 *f, UInt8 c)
  *   owTLoc(워드 8) = (폭 표 바이트 위치 - 16) / 2 */
 #define TmpWords(h)  (13 + (h) * 2 + 6)
 
-static inline void MakeTmpFont(UInt16 *t, const Int16 *src)
+static inline void MakeTmpFont(UInt16 *t, const Int16 *src, UInt16 cw)
 {
     UInt16 h = src[7], loc = 13 + h * 2, i;
 
@@ -112,45 +125,47 @@ static inline void MakeTmpFont(UInt16 *t, const Int16 *src)
     t[0] = src[0];
     t[1] = kTmpChar;
     t[2] = kTmpChar;
-    t[3] = kGlyphW;
-    t[6] = kGlyphW;
+    t[3] = cw;
+    t[6] = cw;
     t[7] = h;
     t[8] = ((loc + 3) * 2 - 16) / 2;
     t[9] = src[9];
     t[10] = src[10];
     t[12] = 2;
-    t[loc + 1] = kGlyphW;
-    t[loc + 2] = kGlyphW;
-    t[loc + 3] = kGlyphW;
+    t[loc + 1] = cw;
+    t[loc + 2] = cw;
+    t[loc + 3] = cw;
     t[loc + 5] = 0xFFFF;
 }
 
-/* 16×16 글자 g(32바이트, NULL이면 네모)를 임시 글꼴 그림 칸 (1, top)에 넣는다 */
-static inline void SetGlyph(UInt16 *t, const UInt8 *g, UInt16 top)
+/* 글자 그림 rows(H줄, NULL이면 H×(cw-2) 네모)를 임시 글꼴 그림 칸 (1, top)에 넣는다 */
+static inline void SetGlyph(UInt16 *t, const UInt16 *rows, UInt16 H, UInt16 cw, UInt16 top)
 {
-    UInt16 y;
+    UInt16 y, edge = (UInt16)(0xFFFF << (16 - (cw - 2)));
 
-    for (y = 0; y < 16; y++) {
+    for (y = 0; y < H; y++) {
         UInt16 v;
 
-        if (g != NULL)
-            v = ((UInt16)g[y * 2] << 8) | g[y * 2 + 1];
+        if (rows != NULL)
+            v = rows[y];
         else
-            v = (y == 0 || y == 15) ? 0xFFFF : 0x8001;
+            v = (y == 0 || y == H - 1) ? edge : (0x8000 | (0x8000 >> (cw - 3)));
         t[13 + (y + top) * 2] = v >> 1;
         t[13 + (y + top) * 2 + 1] = (v & 1) << 15;
     }
 }
 
-/* 글자 세로 시작 줄: 한글(1~13줄)을 영문 대문자 높이에 맞춘다. ascent - 15 (std 18 → 3, v6과 같음), 칸 안으로 제한 */
-static inline UInt16 GlyphTop(const Int16 *f)
+/* 글자 세로 시작 줄(칸 안으로 제한).
+ * 16: 한글(1~13줄)을 영문 대문자 높이에 맞춤 = ascent − 15 (std 18 → 3, v6과 같음)
+ * 12: 묶음의 기준선(위에서 10줄)을 글꼴 기준선에 맞춤 = ascent − 10 */
+static inline UInt16 GlyphTop(const Int16 *f, UInt16 H)
 {
-    Int16 top = f[9] - 15;
+    Int16 top = f[9] - (H == 16 ? 15 : 10);
 
     if (top < 0)
         top = 0;
-    if (top > f[7] - 16)
-        top = f[7] - 16;
+    if (top > f[7] - (Int16)H)
+        top = f[7] - (Int16)H;
     return top;
 }
 
@@ -171,36 +186,28 @@ static inline void CountSize(Int16 fh, Int16 rh)
     }
 }
 
-/* 2c: 라틴 구간·2바이트 글자로 나눠 그린다 */
+/* 2c: 라틴 구간·2바이트 글자로 나눠 그린다. pk = 이 칸 크기에 쓸 조합형 묶음 */
 static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, void *p3,
                                 const UInt8 *chars, UInt16 len, const Int16 *font, void *p7,
-                                UInt16 ratio, UInt16 *tmp, UInt32 g0, UInt32 g1)
+                                UInt16 ratio, UInt16 *tmp, const UInt8 *pk)
 {
-    UInt32        g2 = GetF(43);
     RectangleType r = *rc;
     UInt16        i = 0, px = 0, n = 0;
+    UInt16        H = pk[3], cw = (H == 16) ? kCell16 : kCell12, top = GlyphTop(font, H);
+    UInt16        rows[16];
     UInt32        res = 0;
     UInt8         one = kTmpChar;
 
-    UInt16        top = GlyphTop(font);
-
-    MakeTmpFont(tmp, font);
+    MakeTmpFont(tmp, font, cw);
     while (i < len) {
         if (IsPair(chars, i, len)) {
-            const UInt8 *g = NULL;
+            Boolean ok = GlyphRows(pk, chars[i], chars[i + 1], rows);
 
-            if (chars[i] >= 0xB0 && chars[i] <= 0xC8) {
-                UInt16 rank = (chars[i] - 0xB0) * 94 + (chars[i + 1] - 0xA1);
-
-                g = (rank < kSplit) ? (const UInt8 *)g0 + rank * 32
-                                    : (const UInt8 *)g1 + (rank - kSplit) * 32;
-            } else if (chars[i] == 0xA4 && g2 != 0)
-                g = (const UInt8 *)g2 + (chars[i + 1] - 0xA1) * 32;
-            SetGlyph(tmp, g, top);
+            SetGlyph(tmp, ok ? rows : NULL, H, cw, top);
             r.topLeft.x = rc->topLeft.x + px / ratio;
-            r.extent.x = kGlyphW / ratio;
+            r.extent.x = cw / ratio;
             res = orig(p1, &r, p3, &one, 1, tmp, p7);
-            px += kGlyphW;
+            px += cw;
             i += 2;
             n++;
         } else {
@@ -269,17 +276,19 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
     if (hi && GetF(22) == 2 && p2 != NULL && p6 != NULL) {
         const Int16 *f = (const Int16 *)p6;
         Int16        rh = ((const Int16 *)p2)[3];
-        UInt32       g0 = GetF(23), g1 = GetF(24);
+        const UInt8 *p16 = (const UInt8 *)GetF(23), *p12 = (const UInt8 *)GetF(24);
 
         Int16        fh = f[7];
 
-        /* v7: 글꼴 높이 16~40, 배율(글꼴 높이 ÷ 사각형 높이) 1 또는 2 */
-        if (fh >= 16 && fh <= 40 && rh > 0 && (fh == rh || fh == rh * 2) && g0 != 0 && g1 != 0) {
+        /* v7: 글꼴 높이 16~40, 배율(글꼴 높이 ÷ 사각형 높이) 1 또는 2. v14: 12~15는 12×12 묶음 */
+        const UInt8 *pk = (fh >= 16) ? p16 : (fh >= 12) ? p12 : NULL;
+
+        if (fh <= 40 && pk != NULL && rh > 0 && (fh == rh || fh == rh * 2)) {
             UInt16 *tmp = MemPtrNew(TmpWords(fh) * 2);
 
             if (tmp != NULL) {
                 UInt32 r = DrawGlyphs((BltFn)orig, p1, (const RectangleType *)p2, p3, chars, len, f, p7,
-                                      (UInt16)(fh / rh), tmp, g0, g1);
+                                      (UInt16)(fh / rh), tmp, pk);
 
                 MemPtrFree(tmp);
                 return r;
@@ -311,3 +320,98 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
     }
     return ((BltFn)orig)(p1, p2, p3, chars, len, p6, p7);
 }
+
+/* KS X 1001 완성형 순위(0~2349) → 유니코드 음절 번호(0~11171). 판정표 ksc_table.h(키보드와 같은 표) */
+static UInt16 RankToSyl(UInt16 r)
+{
+    const UInt8  *bits;
+    const UInt16 *cum;
+    UInt16        b = 0, k, sy;
+
+    asm("lea KscBits(%%pc),%0" : "=a" (bits));
+    asm("lea KscCum(%%pc),%0" : "=a" (cum));
+    while (b + 1 < 44 && cum[b + 1] <= r)
+        b++;
+    k = r - cum[b];
+    for (sy = b * 256; sy < 11172; sy++)
+        if (bits[sy >> 3] & (0x80 >> (sy & 7))) {
+            if (k == 0)
+                return sy;
+            k--;
+        }
+    return 0;
+}
+
+/* 묶음 pk에서 음절 sy를 rows[]에 조합(특수 글자 → 예외표 → 벌 규칙). gen-johab.py compose()와 같은 방법 */
+static void Compose(const UInt8 *pk, UInt16 sy, UInt16 *rows)
+{
+    UInt16 H = pk[3], Nc = pk[6], Nj = pk[7], rb = H * 2, i, k;
+    UInt16 oP = RdW(pk + 112), oE = RdW(pk + 116), nE = RdW(pk + 118), oS = RdW(pk + 120), nS = RdW(pk + 122);
+    UInt16 L = sy / 588, V = (sy % 588) / 28, T = sy % 28, hasT = T ? 1 : 0;
+    UInt16 id[3];
+    Int16  lo, hi;
+
+    for (i = 0; i < H; i++)
+        rows[i] = 0;
+    lo = 0;
+    hi = (Int16)nS - 1;
+    while (lo <= hi) {                      /* 특수 글자(통째 그림) */
+        Int16  mid = (lo + hi) / 2;
+        UInt16 v = RdW(pk + oS + mid * (2 + rb));
+
+        if (v == sy) {
+            for (i = 0; i < H; i++)
+                rows[i] = RdW(pk + oS + mid * (2 + rb) + 2 + i * 2);
+            return;
+        }
+        if (v < sy)
+            lo = mid + 1;
+        else
+            hi = mid - 1;
+    }
+    id[0] = pk[10 + V * 2 + hasT] * 19 + L;
+    id[1] = Nc * 19 + pk[52 + L * 2 + hasT] * 21 + V;
+    id[2] = T ? Nc * 19 + Nj * 21 + pk[90 + V] * 27 + T - 1 : 0xFFFF;
+    lo = 0;
+    hi = (Int16)nE - 1;
+    while (lo <= hi) {                      /* 예외표 */
+        Int16  mid = (lo + hi) / 2;
+        UInt16 v = RdW(pk + oE + mid * 8);
+
+        if (v == sy) {
+            for (k = 0; k < 3; k++)
+                id[k] = RdW(pk + oE + mid * 8 + 2 + k * 2);
+            break;
+        }
+        if (v < sy)
+            lo = mid + 1;
+        else
+            hi = mid - 1;
+    }
+    for (k = 0; k < 3; k++)
+        if (id[k] != 0xFFFF)
+            for (i = 0; i < H; i++)
+                rows[i] |= RdW(pk + oP + id[k] * rb + i * 2);
+}
+
+/* 2바이트 글자 하나의 그림: 완성형 한글 → 조합, 자모 행(0xA4) → 묶음의 자모표, 그 밖 → NULL(네모) */
+static Boolean GlyphRows(const UInt8 *pk, UInt8 lead, UInt8 trail, UInt16 *rows)
+{
+    UInt16 H = pk[3], i;
+
+    if (lead >= 0xB0 && lead <= 0xC8) {
+        Compose(pk, RankToSyl((lead - 0xB0) * 94 + (trail - 0xA1)), rows);
+        return true;
+    }
+    if (lead == 0xA4) {
+        const UInt8 *j = pk + RdW(pk + 124) + (trail - 0xA1) * H * 2;
+
+        for (i = 0; i < H; i++)
+            rows[i] = RdW(j + i * 2);
+        return true;
+    }
+    return false;
+}
+
+/* KS X 1001 판정표(키보드와 같은 표, tools/gen-ksc-table.py). .text 끝에 둔다(오프셋 0·4 배치 유지) */
+#include "../skwr/ksc_table.h"

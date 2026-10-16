@@ -1,6 +1,6 @@
 # Neo둥근모 글꼴 라이선스
 
-`HgFn0000.bin`, `HgFn0001.bin`은 Neo둥근모(NeoDunggeunmo) 1.600의 한글 글자를 16×16 비트맵으로 변환한 것이다(`tools/gen-hangul16.py`).
+`HgJ16.bin`(16×16 조합형 묶음)과 `tools/font-editor/index.html`의 조각 데이터는 Neo둥근모(NeoDunggeunmo) 1.600의 한글 조각·자모를 기기용 형식으로 바꾼 것이다(`tools/gen-johab.py`, `tools/font-editor/build.py`).
 이 데이터는 SIL Open Font License 1.1을 따른다.
 
 Original font was released under the public domain by Jungtae Kim in 1990s. Conversion and additional character design by Dalgona. <me@dalgona.dev>
