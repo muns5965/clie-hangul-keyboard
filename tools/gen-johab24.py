@@ -15,7 +15,7 @@
        가로 시작 = int((24 − 폭) / 2 + 0.5), 세로 시작 = (24 − 높이) // 2) 순서로 정한다.
     조각을 고치면 ③ 글자는 따라 바뀐다. 나머지 43칸(옛한글·채움)은 빈칸.
 검사: 11,172자 전부, 조각 이름으로 직접 겹친 그림과 기기 방식(규칙→조각 번호) 조합 결과가 같아야 한다.
-      낱자모 51자 모두 그림이 있고 서로 달라야 하며, ③ 글자는 지금 조각으로 다시 만든 그림과 같아야 한다.
+      낱자모 51자 모두 그림이 있고 서로 달라야 한다(③ 글자는 매번 조각에서 만든다).
 
 사용: python3 tools/gen-johab24.py <neodgm24-pieces.json> [미리보기.png]
 """
@@ -72,7 +72,6 @@ def main():
     assert len(out) < 65000
 
     # 검사: 기기 방식(규칙) 조합 == 조각 이름으로 직접 겹친 그림
-    CHO = list(range(19))
     bad = 0
     names = {pid(n): n for n in by_name}
     for s in range(11172):
@@ -118,6 +117,7 @@ def jamo_from_pieces(c, by_name):
         n = 'jong_1_%02d' % (JONG.index(c) + 1)
     rows = by_name[n]
     ys = [y for y in range(S) if rows[y]]
+    assert ys, 'empty piece ' + n
     m = 0
     for r in rows:
         m |= r
@@ -140,7 +140,7 @@ def jamo_table(js, by_name):
         assert hj.get('format') == 'mnhangul-jamo' and hj.get('size') == S, 'not a 24×24 jamo file: ' + hp
         hand = hj['glyphs']
     over = js.get('jamo') or {}
-    table, src = [[0] * S for _ in range(94)], []
+    table, src, used = [[0] * S for _ in range(94)], [], []
     for k in range(51):
         c = chr(0x3131 + k)
         kc = c.encode('euc_kr')[1] - 0xA1
@@ -152,9 +152,10 @@ def jamo_table(js, by_name):
             table[kc], how = jamo_from_pieces(c, by_name), 'pieces'
         assert any(table[kc]), 'empty jamo ' + c
         src.append(how)
+        used.append(kc)
     for c in list(over) + list(hand):
         assert c in [chr(0x3131 + k) for k in range(51)], 'unknown jamo key ' + c
-    assert len({tuple(table[k]) for k in range(51)}) == 51, 'duplicate jamo shapes'
+    assert len(set(used)) == 51 and len({tuple(table[k]) for k in used}) == 51, 'duplicate jamo shapes'
     return table, src
 
 
@@ -177,7 +178,7 @@ def preview(pk, path):
     lines = ['다람쥐 헌 쳇바퀴에 타고파', '키스의 고유조건은 입술끼리', '똠방각하 펲시 뷁 쓁 읢 갉',
              '가나다라마바사아자차카타파하']
     o_j = struct.unpack_from('>H', pk, 124)[0]
-    jl = 'ㄱㄴㄷㄹㅁㅂㅅㅇㅈㅊㅋㅌㅍㅎㅏㅑㅓㅕㅗㅛㅜㅠㅡㅣ'
+    jl = 'ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ ㅏㅐㅓㅔㅗㅘㅜㅝㅡㅢㅣ'
     rows_txt = lines + [jl]
     cw, sc = 26, 3
     W = max(len(t) for t in rows_txt) * cw * sc + 20
