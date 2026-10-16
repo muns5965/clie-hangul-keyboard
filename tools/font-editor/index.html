@@ -61,7 +61,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
 .sets button { min-width: 38px; padding: 3px 6px; font-family: var(--font-mono); font-size: 12px; }
 .jamo { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-top: 10px; }
 .jamo button { position: relative; display: grid; justify-items: center; gap: 2px; padding: 4px 2px; }
-.jamo button canvas { width: 24px; height: 24px; image-rendering: pixelated; }
+.jamo button canvas { image-rendering: pixelated; }
 .jamo button span { font-size: 12px; color: var(--muted); }
 .jamo button.on span { color: var(--accent-ink); }
 .jamo button.edited::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: var(--mark); }
@@ -163,7 +163,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <div class="render"><canvas id="r24x2"></canvas></div>
         <div class="note">16 원본 (2배) — 기기에서 글자 크기 차이 그대로</div>
         <div class="render"><canvas id="r16x2"></canvas></div>
-        <div class="note">24 실제 픽셀 (1배)</div>
+        <div class="note">24 실제 픽셀 (1배, 글자 1픽셀 = 화면 픽셀 정수 배)</div>
         <div class="render"><canvas id="r24x1"></canvas></div>
       </div>
       <div>
@@ -288,14 +288,19 @@ function compose16(s) { const out = new Uint8Array(256); for (let k = 0; k < 3; 
 
 /* ---------- 그리기 ---------- */
 const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+/* 화면 배율(devicePixelRatio)이 정수가 아니면(휴대폰 2.625 등) 브라우저가 캔버스를 늘리면서 픽셀 폭이 들쭉날쭉해진다.
+   그래서 글자 1픽셀 = 정수 개의 실제 화면 픽셀이 되도록 캔버스를 화면 픽셀 단위로 만들고 CSS 크기로 되돌린다. */
+const DPR = () => window.devicePixelRatio || 1;
+function unit(scale) { return Math.max(1, Math.round(scale * DPR())); }
+function fit(cv, w, h) { cv.width = w; cv.height = h; cv.style.width = (w / DPR()) + "px"; cv.style.height = (h / DPR()) + "px"; }
 function drawBitmap(ctx, a, size, ox, oy, scale, color) {
   ctx.fillStyle = color;
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (a[y * size + x]) ctx.fillRect(ox + x * scale, oy + y * scale, scale, scale);
 }
 function cellSize() { const box = document.querySelector(".canvas-box"); const w = Math.max(240, Math.min(560, box.clientWidth)); return Math.floor(w / S); }
 function drawEditor() {
-  const cv = document.getElementById("edit"), cs = cellSize(), W = cs * S;
-  if (cv.width !== W) { cv.width = W; cv.height = W; }
+  const cv = document.getElementById("edit"), cs = Math.max(1, Math.round(cellSize() * DPR())), W = cs * S;
+  if (cv.width !== W) fit(cv, W, W);
   const ctx = cv.getContext("2d");
   ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, W, W);
   if (document.getElementById("ghost").checked) {
@@ -319,7 +324,8 @@ function drawSample(id, size, scale, compose) {
   const chars = Array.from(text);
   const gap = Math.round(size / 8), adv = size + gap, pad = 4;
   const cv = document.getElementById(id), ctx = cv.getContext("2d");
-  cv.width = Math.max(1, (chars.length * adv) * scale + pad * 2); cv.height = size * scale + pad * 2;
+  scale = unit(scale);
+  fit(cv, Math.max(1, (chars.length * adv) * scale + pad * 2), size * scale + pad * 2);
   ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, cv.width, cv.height);
   const hits = [];
   chars.forEach((ch, i) => {
@@ -336,9 +342,9 @@ function drawUsers() {
   const list = usersOf[sel].filter((s) => !only || KSC.size === 0 || KSC.has(s));
   const LIMIT = 160;
   list.slice(0, LIMIT).forEach((s) => {
-    const cv = document.createElement("canvas"); cv.width = 48; cv.height = 48; cv.title = String.fromCodePoint(0xAC00 + s);
-    const ctx = cv.getContext("2d"); ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, 48, 48);
-    drawBitmap(ctx, compose24(s), S, 0, 0, 2, css("--pix"));
+    const cv = document.createElement("canvas"), u = unit(2); fit(cv, S * u, S * u); cv.title = String.fromCodePoint(0xAC00 + s);
+    const ctx = cv.getContext("2d"); ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, cv.width, cv.height);
+    drawBitmap(ctx, compose24(s), S, 0, 0, u, css("--pix"));
     cv.addEventListener("click", () => pick(s));
     box.appendChild(cv);
   });
@@ -350,7 +356,8 @@ function pick(s) {
   picked = s;
   document.getElementById("pickChar").textContent = String.fromCodePoint(0xAC00 + s);
   const cv = document.getElementById("pickCanvas"), ctx = cv.getContext("2d");
-  ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, 72, 72); drawBitmap(ctx, compose24(s), S, 0, 0, 3, css("--pix"));
+  const u = unit(3); fit(cv, S * u, S * u);
+  ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, cv.width, cv.height); drawBitmap(ctx, compose24(s), S, 0, 0, u, css("--pix"));
   const box = document.getElementById("pickPieces"); box.textContent = "";
   for (let k = 0; k < 3; k++) {
     const id = SYL[s * 3 + k]; if (id === 0xFFFF) continue;
@@ -380,8 +387,8 @@ function drawLeft() {
   const jb = document.getElementById("jamo"); jb.textContent = "";
   ids.forEach((i) => {
     const b = document.createElement("button"); b.classList.toggle("on", i === sel); b.classList.toggle("edited", edits.has(DATA.names[i]));
-    const cv = document.createElement("canvas"); cv.width = 24; cv.height = 24; const ctx = cv.getContext("2d");
-    drawBitmap(ctx, piece(i), S, 0, 0, 1, i === sel ? css("--accent-ink") : css("--pix"));
+    const cv = document.createElement("canvas"), u = unit(1); fit(cv, S * u, S * u); const ctx = cv.getContext("2d");
+    drawBitmap(ctx, piece(i), S, 0, 0, u, i === sel ? css("--accent-ink") : css("--pix"));
     const sp = document.createElement("span"); sp.textContent = jamoLabel(i);
     b.append(cv, sp); b.title = DATA.names[i];
     b.addEventListener("click", () => select(i));
