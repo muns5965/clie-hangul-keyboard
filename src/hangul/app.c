@@ -1,5 +1,5 @@
 /*
- * MnHangul v9 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계)
+ * MnHangul v10 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -32,6 +32,9 @@
  * v9: 3a 글자 경계. Main 5번째 줄 오른쪽 [Intl ON/OFF] = Intl 루틴 6개(CharAttr, PrevChar, NextChar, SetNext,
  *     CharBounds, CharWidth)를 리소스 HgIt 0(src/hangul/intl.c)의 EUC-KR 판으로 교체(IntlSetRoutineAddress).
  *     기록 #45 핸들, #46 코드 주소. 글자 데이터에 자모 행 HgFn 2 추가(#43 포인터, #44 핸들, Patch ON 때 잠금).
+ * v10: 3b 폭. Main 4번째 줄 오른쪽 [Width ON/OFF] = 폭 함수 트랩 5개(FntCharsWidth, FntLineWidth, FntCharsInWidth,
+ *     FntWordWrap, FntWidthToOffset)를 리소스 HgWd 0(src/hangul/width.c)으로 교체. 기록 #47 핸들, #48 코드 주소.
+ *     첫 줄에 prot N = 지금 켜진 기능 수(각각 DB 삭제 보호 1개). 0이어야 MnHangul을 덮어써 설치할 수 있다.
  */
 
 #include <PalmOS.h>
@@ -52,6 +55,13 @@
 #define kFtrIntlC     46
 #define kIntlRes      'HgIt'
 #define kIntlN        6
+#define kFtrWidthH    47
+#define kFtrWidthC    48
+#define kWidthRes     'HgWd'
+#define kWidthN       5
+static const UInt16 kWidthTrap[kWidthN] = {
+    sysTrapFntCharsWidth, sysTrapFntLineWidth, sysTrapFntCharsInWidth, sysTrapFntWordWrap, sysTrapFntWidthToOffset
+};
 static const UInt16 kGlyphPtrFtr[kGlyphN] = { 23, 24, 43 };
 static const UInt16 kGlyphHFtr[kGlyphN]   = { 25, 26, 44 };
 static const UInt16 kIntlSel[kIntlN] = {
@@ -253,6 +263,76 @@ static void IntlOff(void)
     StrCopy(gMsg, "intl OFF");
 }
 
+/* 3b: 폭 함수 트랩 5개 교체 */
+static void WidthOn(void)
+{
+    MemHandle h;
+    UInt8    *code;
+    UInt16    i, card;
+    LocalID   id;
+
+    if (GetF(kFtrWidthC) != 0) {
+        StrCopy(gMsg, "width already ON");
+        return;
+    }
+    h = DmGetResource(kWidthRes, 0);
+    if (h == NULL) {
+        StrCopy(gMsg, "width resource missing");
+        return;
+    }
+    code = MemHandleLock(h);
+    for (i = 0; i < kWidthN; i++) {
+        void *o = SysGetTrapAddress(kWidthTrap[i]);
+
+        DmWrite(code, 20 + 4 * i, &o, 4);
+    }
+    if (AppDB(&card, &id))
+        DmDatabaseProtect(card, id, true);
+    FtrSet(kHgCreator, kFtrWidthH, (UInt32)h);
+    FtrSet(kHgCreator, kFtrWidthC, (UInt32)code);
+    for (i = 0; i < kWidthN; i++)
+        SysSetTrapAddress(kWidthTrap[i], code + ((UInt32 *)code)[i]);
+    StrCopy(gMsg, "width ON (5)");
+}
+
+static void WidthOff(void)
+{
+    UInt8  *code = (UInt8 *)GetF(kFtrWidthC);
+    UInt16  i, kept = 0, card;
+    LocalID id;
+
+    if (code == NULL) {
+        StrCopy(gMsg, "width not ON");
+        return;
+    }
+    for (i = 0; i < kWidthN; i++) {
+        UInt8 *entry = code + ((UInt32 *)code)[i];
+
+        if ((UInt8 *)SysGetTrapAddress(kWidthTrap[i]) == entry)
+            SysSetTrapAddress(kWidthTrap[i], (void *)((UInt32 *)code)[5 + i]);
+        else
+            kept++;
+    }
+    if (kept != 0) {
+        StrPrintF(gMsg, "width: %u changed by other, kept", kept);
+        return;
+    }
+    if (AppDB(&card, &id))
+        DmDatabaseProtect(card, id, false);
+    MemHandleUnlock((MemHandle)GetF(kFtrWidthH));
+    DmReleaseResource((MemHandle)GetF(kFtrWidthH));
+    FtrSet(kHgCreator, kFtrWidthH, 0);
+    FtrSet(kHgCreator, kFtrWidthC, 0);
+    StrCopy(gMsg, "width OFF");
+}
+
+/* 켜진 기능 수 = 걸려 있는 DB 삭제 보호 수 */
+static UInt16 ProtectCount(void)
+{
+    return (GetF(kFtrEntry) ? 1 : 0) + (GetF(kFtrCountC) ? 1 : 0) +
+           (GetF(kFtrIntlC) ? 1 : 0) + (GetF(kFtrWidthC) ? 1 : 0);
+}
+
 static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
 {
     RectangleType r;
@@ -441,7 +521,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v9 Calls [tap: Main]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v10 Calls [tap: Main]", 30, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -550,7 +630,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v9 Font [tap: Sizes]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v10 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -564,7 +644,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v9 Sizes [tap: Calls]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v10 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -603,11 +683,11 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v9 [tap: Font] CJKOS OFF", 33, 0, 0);
+    WinDrawInvertedChars("MnHangul v10 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
-    StrPrintF(s, "patch: %s  mode: %s  A378=%lx", Installed() ? "ON" : "off", a,
-              (UInt32)SysGetTrapAddress(kTrapBlt));
+    StrPrintF(s, "patch: %s  mode: %s  prot %u%s", Installed() ? "ON" : "off", a, ProtectCount(),
+              ProtectCount() ? "" : " (can install)");
     Row(0, s);
     Button(kRowOn, "Patch ON");
     Button(kRowOff, "Patch OFF");
@@ -620,10 +700,10 @@ static void Draw(void)
     StrPrintF(s, "glyph %s/%s/%s", GetF(kFtrGlyph0) ? "ok" : "-", GetF(kFtrGlyph1) ? "ok" : "-",
               GetF(43) ? "ok" : "-");
     WinDrawChars(s, StrLen(s), 80, (kRowOff + 1) * kLineH);
-    StrPrintF(s, "2c calls %lu x%lu", GetF(kFtrGlyphCnt), GetF(kFtrRatio));
-    WinDrawChars(s, StrLen(s), 80, (kRowBox + 1) * kLineH);
+    ButtonAt(84, kRowBox, GetF(kFtrWidthC) ? "Width: ON" : "Width: off");
 
-    StrPrintF(s, "calls %lu  hi %lu  drawn %lu", GetF(0), GetF(9), GetF(19));
+    StrPrintF(s, "calls %lu hi %lu drawn %lu 2c %lu x%lu", GetF(0), GetF(9), GetF(19),
+              GetF(kFtrGlyphCnt), GetF(kFtrRatio));
     Row(6, s);
     Hex(a, GetF(2));
     StrPrintF(s, "last len %lu  %s", GetF(1), a);
@@ -682,7 +762,12 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 PatchOn();
             else if (row == kRowOff)
                 PatchOff();
-            else if (row == kRowBox)
+            else if (row == kRowBox && e.screenX >= 84) {
+                if (GetF(kFtrWidthC) != 0)
+                    WidthOff();
+                else
+                    WidthOn();
+            } else if (row == kRowBox)
                 ToggleBox();
             else if (row == kRowClear && e.screenX >= 84) {
                 if (GetF(kFtrIntlC) != 0)
