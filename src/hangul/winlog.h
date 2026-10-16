@@ -20,6 +20,19 @@
 #define kWinSeen2 4
 #define kWinSeenX 8
 
+/* v17: 현재 그리기 창이 화면 밖(offscreen, windowFlags 0x4000)인가.
+ * v16 실측: 키보드 실크 창 C000(offscreen) = Sony가 hires로 바꾸지 않아 ×1로 그림,
+ *          일반 화면 창 1A00·0000 = ×2. 저해상도 글꼴(높이 8~15)에서만 쓴다 */
+#define kWinOffscreen 0x4000
+#define kCell12W      13      /* patch.c kCell12과 같음(12×12 글자 칸, ×1) */
+
+static inline Boolean WinOffscreen(void)
+{
+    const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
+
+    return w != NULL && (*(const UInt16 *)(w + 8) & kWinOffscreen) != 0;
+}
+
 static inline void WinLog(UInt16 seen)
 {
     const UInt8 *w = (const UInt8 *)WinGetDrawWindow();

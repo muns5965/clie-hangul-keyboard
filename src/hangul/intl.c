@@ -184,6 +184,8 @@ Int16 HgCharWidth(WChar c)
     f = (const Int16 *)FntGetFontPtr();
     if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {
         WinLog(kWinSeenW);   /* v16 진단 */
+        if (WinOffscreen() && Ftr(24) != 0)
+            return kCell12W;   /* v17: offscreen 창 = ×1, 12×12 칸(width.c와 같은 규칙) */
         return kGlyphW / 2;
     }   /* v12: 저해상도 글꼴 → 그릴 때 2배 고해상도(width.c와 같은 규칙) */
     if (mode == 2 && f != NULL && f[7] >= 16 && f[7] <= 40 && Ftr(23) != 0) {
