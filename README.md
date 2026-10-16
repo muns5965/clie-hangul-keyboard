@@ -30,7 +30,7 @@ ROM의 Sony 확장 `SilkExtn`(타입 `extn`, 크리에이터 `SeSi`)이 그린�
 NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 Fatal Exception). 대신 ROM을 분석해 찾은
 **`SkWr` 플러그인**("SilkWare") 구조를 쓴다. 아래는 모두 ROM 역분석과 에뮬레이터 실측으로 확인한 내용이다.
 
-### 1. SkWr 플러그인이 불리는 방식
+### 1. SkWr 플러그인 호출 방식 (SilkExtn → 플러그인)
 - 부팅 때 `SilkExtn`이 타입 **`SkWr`**인 DB를 모두 찾아(내장 1개 + 외부 최대 3개) 각 DB의 `code 0` 리소스 **맨 앞 주소로 바로 jsr** 한다.
   일반 앱이 아니므로 시작 코드·A5(전역변수)가 없다 → **전역변수·문자열 상수·초기화된 배열 금지**, 위치 독립 코드로 짠다.
 - 호출 형식: `Err entry(UInt32 *slot, UInt8 *event, void *out)`, 반환 0 = 등록 유지(0이 아니면 등록 취소).
