@@ -1,5 +1,5 @@
 /*
- * MnHangul 패치 코드 (리소스 HgPt 0) — 2a·2b 단계: BltDrawChars(트랩 0xA378) 통과 시험·한글 자리표시
+ * MnHangul 패치 코드 (리소스 HgPt 0) — 2a·2b·2c: BltDrawChars(트랩 0xA378) 통과 시험·자리표시·한글 그리기
  *
  * BltDrawChars는 SDK에 원형이 없는 내부 함수다. ROM 호출부(0x50D8C, 0x2BC4B8) 역분석으로 본 인자(34바이트 중 26):
  *   p1 포인터(그리기 상태로 추정), p2 사각형 포인터, p3 점 포인터, p4 문자열, p5 길이(16비트),
@@ -8,6 +8,12 @@
  * 2b: 자리표시 켜짐(#22 != 0)이면 KS X 1001 2바이트 글자(앞·뒤 바이트 0xA1~0xFE)마다 "[]"로 바꾼
  *     사본을 원래 함수에 넘긴다. 바이트 수가 같아 위치·폭·좌표계(저해상도/고해상도)는 원래 함수가
  *     그대로 처리하므로 좌표계를 몰라도 안전하다. 2바이트를 한 글자 단위로 끊는지 확인하는 단계.
+ * 2c: 모드 2(#22 = 2)이고 글꼴 높이가 22(고해상도 std)이면 한글을 16×16 글자로 그린다.
+ *     문자열을 라틴 구간과 2바이트 글자로 나눠, 라틴 구간은 원래 글꼴로, 2바이트 글자는 p6 머리를 본뜬
+ *     1글자 임시 글꼴(폭 18, 높이 22, 글자 'H' 하나)로 원래 함수를 부른다. 좌표 배율 = 글꼴 높이 ÷ 사각형 높이
+ *     (1 또는 2, 실측 v3). 라틴 폭은 p6 폭 표(SDK FontType 구조, 실측 v4)에서 계산한다.
+ *     완성형 한글(앞 0xB0~0xC8)은 글자 데이터(#23·#24 포인터, 앱이 HgFn 0·1을 잠가 둠), 그 밖의 2바이트는 네모.
+ *     조건이 안 맞으면(저해상도 글꼴 등) 2b처럼 "[]"로 그린다.
  *
  * 리소스 배치: 오프셋 0 = 원래 함수 주소 칸(4바이트, 앱이 DmWrite로 기록), 오프셋 4 = 진입점 PatchBlt.
  * 어느 앱에서든 불리므로 전역변수·A5·재배치 금지(빌드 스크립트가 검사).
@@ -17,7 +23,8 @@
  *   #6 p3 점 (x<<16|y), #7 p1, #8 p7,
  *   #9 0x80 이상 바이트가 든 호출 수, #10~#13 그 마지막 호출의 길이·첫 4바이트·사각형 xy·wh
  *   #14 마지막 호출 글꼴 (fontType<<16 | fRectHeight), #15 hi 호출 글꼴, #16 hi 호출 p3, #17 hi 호출 p1, #18 hi 호출 p6
- *   #19 자리표시로 바꾼 글자 수, #22 자리표시 켜짐(앱이 설정, 패치는 읽기만)
+ *   #19 자리표시·한글로 그린 글자 수, #22 모드(0 끔, 1 box, 2 glyph; 앱이 설정, 패치는 읽기만)
+ *   #23·#24 글자 데이터 HgFn 0·1 포인터(앱이 설정), #27 2c로 그린 호출 수, #28 마지막 2c 호출 배율
  */
 
 #include <PalmOS.h>
@@ -59,6 +66,123 @@ static inline UInt32 First4(const UInt8 *c, UInt16 len)
 static inline UInt32 Pair(const Int16 *p)
 {
     return (p == NULL) ? 0xFFFFFFFFUL : (((UInt32)(UInt16)p[0] << 16) | (UInt16)p[1]);
+}
+
+#define kGlyphW   18      /* 한글 한 글자 폭(고해상도 픽셀, CJKOS 고해상도 std와 같음) */
+#define kCellTop  3       /* 22줄 칸 안에서 16줄 글자의 시작 줄 */
+#define kTmpChar  0x48    /* 임시 글꼴의 유일한 글자 */
+#define kSplit    1175    /* HgFn 0 = 순위 0~1174, HgFn 1 = 나머지 */
+
+/* KS X 1001 2바이트 글자인지 (앞·뒤 0xA1~0xFE) */
+static inline Boolean IsPair(const UInt8 *c, UInt16 i, UInt16 len)
+{
+    return i + 1 < len && c[i] >= 0xA1 && c[i] <= 0xFE && c[i + 1] >= 0xA1 && c[i + 1] <= 0xFE;
+}
+
+/* 글꼴 f(SDK FontType)에서 글자 c의 폭(픽셀). 없는 글자는 '없는 글자' 칸의 폭 */
+static inline UInt16 CharW(const Int16 *f, UInt8 c)
+{
+    const UInt16 *owt = (const UInt16 *)((const UInt8 *)f + 16 + (UInt16)f[8] * 2);
+    Int16         first = f[1], last = f[2];
+    UInt16        e;
+
+    if ((Int16)c < first || (Int16)c > last)
+        e = owt[last - first + 1];
+    else {
+        e = owt[c - first];
+        if (e == 0xFFFF)
+            e = owt[last - first + 1];
+    }
+    return e & 0xFF;
+}
+
+/* 1글자 임시 글꼴(63워드 = 126바이트):
+ *   워드 0~12 머리, 13~56 그림(22줄 × 2워드), 57~59 위치표(글자, 없는 글자, 끝), 60~62 폭 표(글자, 없는 글자, 끝)
+ *   owTLoc(워드 8): 폭 표 바이트 위치 120 = 16 + 52*2 */
+static inline void MakeTmpFont(UInt16 *t, const Int16 *src)
+{
+    UInt16 i;
+
+    for (i = 0; i < 63; i++)
+        t[i] = 0;
+    t[0] = src[0];
+    t[1] = kTmpChar;
+    t[2] = kTmpChar;
+    t[3] = kGlyphW;
+    t[6] = kGlyphW;
+    t[7] = src[7];
+    t[8] = 52;
+    t[9] = src[9];
+    t[10] = src[10];
+    t[12] = 2;
+    t[58] = kGlyphW;
+    t[59] = kGlyphW;
+    t[60] = kGlyphW;
+    t[62] = 0xFFFF;
+}
+
+/* 16×16 글자 g(32바이트, NULL이면 네모)를 임시 글꼴 그림 칸에 (1, kCellTop) 위치로 넣는다 */
+static inline void SetGlyph(UInt16 *t, const UInt8 *g)
+{
+    UInt16 y;
+
+    for (y = 0; y < 16; y++) {
+        UInt16 v;
+
+        if (g != NULL)
+            v = ((UInt16)g[y * 2] << 8) | g[y * 2 + 1];
+        else
+            v = (y == 0 || y == 15) ? 0xFFFF : 0x8001;
+        t[13 + (y + kCellTop) * 2] = v >> 1;
+        t[13 + (y + kCellTop) * 2 + 1] = (v & 1) << 15;
+    }
+}
+
+/* 2c: 라틴 구간·2바이트 글자로 나눠 그린다 */
+static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, void *p3,
+                                const UInt8 *chars, UInt16 len, const Int16 *font, void *p7,
+                                UInt16 ratio, UInt16 *tmp, UInt32 g0, UInt32 g1)
+{
+    RectangleType r = *rc;
+    UInt16        i = 0, px = 0, n = 0;
+    UInt32        res = 0;
+    UInt8         one = kTmpChar;
+
+    MakeTmpFont(tmp, font);
+    while (i < len) {
+        if (IsPair(chars, i, len)) {
+            const UInt8 *g = NULL;
+
+            if (chars[i] >= 0xB0 && chars[i] <= 0xC8) {
+                UInt16 rank = (chars[i] - 0xB0) * 94 + (chars[i + 1] - 0xA1);
+
+                g = (rank < kSplit) ? (const UInt8 *)g0 + rank * 32
+                                    : (const UInt8 *)g1 + (rank - kSplit) * 32;
+            }
+            SetGlyph(tmp, g);
+            r.topLeft.x = rc->topLeft.x + px / ratio;
+            r.extent.x = kGlyphW / ratio;
+            res = orig(p1, &r, p3, &one, 1, tmp, p7);
+            px += kGlyphW;
+            i += 2;
+            n++;
+        } else {
+            UInt16 start = i, w = 0;
+
+            while (i < len && !IsPair(chars, i, len)) {
+                w += CharW(font, chars[i]);
+                i++;
+            }
+            r.topLeft.x = rc->topLeft.x + px / ratio;
+            r.extent.x = (w + ratio - 1) / ratio;
+            res = orig(p1, &r, p3, chars + start, i - start, (void *)font, p7);
+            px += w;
+        }
+    }
+    FtrSet(kHgCreator, 19, GetF(19) + n);
+    FtrSet(kHgCreator, 27, GetF(27) + 1);
+    FtrSet(kHgCreator, 28, ratio);
+    return res;
 }
 
 /* FontType: +0 fontType, +14 fRectHeight */
@@ -103,6 +227,23 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
     }
     if (orig == 0)
         return 0;
+    if (hi && GetF(22) == 2 && p2 != NULL && p6 != NULL) {
+        const Int16 *f = (const Int16 *)p6;
+        Int16        rh = ((const Int16 *)p2)[3];
+        UInt32       g0 = GetF(23), g1 = GetF(24);
+
+        if (f[7] == 22 && (rh == 22 || rh == 11) && g0 != 0 && g1 != 0) {
+            UInt16 *tmp = MemPtrNew(126);
+
+            if (tmp != NULL) {
+                UInt32 r = DrawGlyphs((BltFn)orig, p1, (const RectangleType *)p2, p3, chars, len, f, p7,
+                                      (UInt16)(22 / rh), tmp, g0, g1);
+
+                MemPtrFree(tmp);
+                return r;
+            }
+        }
+    }
     if (hi && GetF(22) != 0) {
         UInt8 *buf = MemPtrNew(len);
 

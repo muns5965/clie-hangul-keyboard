@@ -1,5 +1,5 @@
 /*
- * MnHangul v4 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험 + 2b 한글 자리표시 + 글꼴 구조 덤프)
+ * MnHangul v6 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험, 2b 자리표시, 2c 16×16 한글 그리기, 글꼴 덤프)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -19,6 +19,9 @@
  *     leading rowWords)와 SDK 구조로 계산한 표 위치, 'A'·0xC7의 오프셋/폭 항목을 보인다(2c 임시 글꼴 설계용).
  *     위 버튼(PageUp)으로 Main 페이지.
  * v5: 메시지 줄이 맨 아래 기록 줄(12)과 겹치던 것 수정(빈 줄 1로 옮김). 맨 위 제목 줄을 탭해도 페이지 전환.
+ * v6: Box 버튼 → Mode 버튼(off → box → glyph 순환, #22 = 0/1/2). Patch ON 때 글자 데이터 리소스 HgFn 0·1
+ *     (Neo둥근모 16×16 완성형, 시험용)을 잠가 포인터를 #23·#24, 핸들을 #25·#26에 둔다(Patch OFF 때 해제).
+ *     버튼 오른쪽에 한글 견본(기존 함수 WinDrawChars, 고해상도 모드 = 배율 2 경우)을 그린다.
  */
 
 #include <PalmOS.h>
@@ -29,7 +32,14 @@
 #define kFtrHandle    20
 #define kFtrEntry     21
 #define kFtrMax       19
-#define kFtrBox       22
+#define kFtrBox       22      /* 모드: 0 off, 1 box, 2 glyph */
+#define kFtrGlyph0    23
+#define kFtrGlyph1    24
+#define kFtrGlyphH0   25
+#define kFtrGlyphH1   26
+#define kFtrGlyphCnt  27
+#define kFtrRatio     28
+#define kGlyphRes     'HgFn'
 
 #define kLineH        11
 #define kRowOn        2
@@ -108,6 +118,35 @@ static Boolean Installed(void)
     return e != 0 && (UInt32)SysGetTrapAddress(kTrapBlt) == e;
 }
 
+/* 글자 데이터 HgFn 0·1 잠금(앱이 끝나도 DB 보호 중이라 주소 유지) */
+static void LockGlyphs(void)
+{
+    UInt16 i;
+
+    for (i = 0; i < 2; i++) {
+        MemHandle h = DmGetResource(kGlyphRes, i);
+
+        FtrSet(kHgCreator, kFtrGlyphH0 + i, (UInt32)h);
+        FtrSet(kHgCreator, kFtrGlyph0 + i, (h != NULL) ? (UInt32)MemHandleLock(h) : 0);
+    }
+}
+
+static void UnlockGlyphs(void)
+{
+    UInt16 i;
+
+    for (i = 0; i < 2; i++) {
+        UInt32 h = GetF(kFtrGlyphH0 + i);
+
+        FtrSet(kHgCreator, kFtrGlyph0 + i, 0);
+        FtrSet(kHgCreator, kFtrGlyphH0 + i, 0);
+        if (h != 0) {
+            MemHandleUnlock((MemHandle)h);
+            DmReleaseResource((MemHandle)h);
+        }
+    }
+}
+
 static void PatchOn(void)
 {
     MemHandle h;
@@ -137,6 +176,7 @@ static void PatchOn(void)
     }
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, true);
+    LockGlyphs();
     FtrSet(kHgCreator, kFtrHandle, (UInt32)h);
     FtrSet(kHgCreator, kFtrEntry, (UInt32)(p + 4));
     err = SysSetTrapAddress(kTrapBlt, p + 4);
@@ -160,6 +200,7 @@ static void PatchOff(void)
     }
     orig = *(const UInt32 *)(e - 4);
     SysSetTrapAddress(kTrapBlt, (void *)orig);
+    UnlockGlyphs();
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     if (h != 0) {
@@ -171,15 +212,18 @@ static void PatchOff(void)
     StrPrintF(gMsg, "OFF orig=%lx", orig);
 }
 
+static void ModeText(Char *o, UInt32 m)
+{
+    StrCopy(o, (m == 2) ? "glyph" : (m == 1) ? "box" : "off");
+}
+
 static void ToggleBox(void)
 {
-    if (GetF(kFtrBox) != 0) {
-        FtrSet(kHgCreator, kFtrBox, 0);
-        StrCopy(gMsg, "box off");
-    } else {
-        FtrSet(kHgCreator, kFtrBox, 1);
-        StrCopy(gMsg, Installed() ? "box on" : "box on (needs Patch ON)");
-    }
+    UInt32 m = (GetF(kFtrBox) + 1) % 3;
+
+    FtrSet(kHgCreator, kFtrBox, m);
+    ModeText(gMsg, m);
+    StrCat(gMsg, Installed() ? " mode" : " mode (needs Patch ON)");
 }
 
 static void ClearCounters(void)
@@ -187,7 +231,9 @@ static void ClearCounters(void)
     UInt16 i;
 
     for (i = 0; i <= kFtrMax; i++)
-        FtrUnregister(kHgCreator, i);   /* #20~#22(핸들·진입점·Box)는 지우지 않는다 */
+        FtrUnregister(kHgCreator, i);   /* #20~#26(핸들·진입점·모드·글자 데이터)은 지우지 않는다 */
+    FtrUnregister(kHgCreator, kFtrGlyphCnt);
+    FtrUnregister(kHgCreator, kFtrRatio);
     StrCopy(gMsg, "counters cleared");
 }
 
@@ -276,7 +322,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v5 Font [tap: Main]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v6 Font [tap: Main]", 28, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -292,17 +338,25 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v5 [tap: Font] CJKOS OFF", 33, 0, 0);
+    WinDrawInvertedChars("MnHangul v6 [tap: Font] CJKOS OFF", 33, 0, 0);
 
-    StrPrintF(s, "patch: %s  box: %s  A378=%lx", Installed() ? "ON" : "off",
-              GetF(kFtrBox) ? "ON" : "off", (UInt32)SysGetTrapAddress(kTrapBlt));
+    ModeText(a, GetF(kFtrBox));
+    StrPrintF(s, "patch: %s  mode: %s  A378=%lx", Installed() ? "ON" : "off", a,
+              (UInt32)SysGetTrapAddress(kTrapBlt));
     Row(0, s);
     Button(kRowOn, "Patch ON");
     Button(kRowOff, "Patch OFF");
-    Button(kRowBox, GetF(kFtrBox) ? "Box OFF" : "Box ON");
+    StrPrintF(s, "Mode: %s", a);
+    Button(kRowBox, s);
     Button(kRowClear, "Clear counters");
+    /* 한글 견본: 한글 OK 가각 (EUC-KR) */
+    WinDrawChars("\xC7\xD1\xB1\xDB OK \xB0\xA1\xB0\xA2", 12, 80, (kRowOn + 1) * kLineH);
+    StrPrintF(s, "glyph %s/%s", GetF(kFtrGlyph0) ? "ok" : "-", GetF(kFtrGlyph1) ? "ok" : "-");
+    WinDrawChars(s, StrLen(s), 80, (kRowOff + 1) * kLineH);
+    StrPrintF(s, "2c calls %lu x%lu", GetF(kFtrGlyphCnt), GetF(kFtrRatio));
+    WinDrawChars(s, StrLen(s), 80, (kRowBox + 1) * kLineH);
 
-    StrPrintF(s, "calls %lu  hi %lu  boxed %lu", GetF(0), GetF(9), GetF(19));
+    StrPrintF(s, "calls %lu  hi %lu  drawn %lu", GetF(0), GetF(9), GetF(19));
     Row(6, s);
     Hex(a, GetF(2));
     StrPrintF(s, "last len %lu  %s", GetF(1), a);
