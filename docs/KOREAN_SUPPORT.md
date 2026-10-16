@@ -138,6 +138,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v17: 저해상도 글꼴(8~15) 한글 폭 = 그리기 창이 offscreen이면 13(12×12 ×1), 아니면 9(16×16 ×2). width.c·intl.c 같은 규칙(winlog.h WinOffscreen).
 - v18: Kbd 페이지(키보드 13단계 이벤트 순서 진단, docs/DEVELOPMENT_HISTORY.md 13단계).
 - v19: Patch ON 한 번에 Mode glyph(off였으면) + Intl ON + Width ON.
+- v20: Kbd 페이지가 키보드 14단계 기록 위치(#64~#80)를 읽음.
   남은 문제: 11/11 ×1 칸은 폭을 잴 때 글꼴(11)이 2배 그리기 칸과 같아 폭 9로 계산됨(실제 12) → 앱 확인 후 구분 방법 결정.
 - 진행 순서(디버그 먼저): ① 바뀐 함수 조사(**완료**, 실측 1) ② `BltDrawChars` 하나만 교체해 표시 시험(CJKOS 끈 복사본 세션)
   ③ 폭·글자 경계 ④ 글꼴 3벌(16 → 12 → 24).

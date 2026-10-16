@@ -65,7 +65,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      13
+#define kSkBuild      14
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -97,10 +97,10 @@
 #define kFtrHires     54
 #define kFtrCoreBuild 55
 #define kEvtStop      4
-/* 13단계 진단: 최근 이벤트 16개 고리(#60~#75), 다음 칸 번호 #76.
+/* 13단계 진단: 최근 이벤트 16개 고리(14단계부터 #64~#79, 다음 칸 번호 #80. #56~#60은 로더가 씀).
  * 칸 = tick 하위 16비트 << 16 | 이벤트 종류 << 8 | event[14] 하위 4비트 << 4 | 처리 후 hires 값(0/1) */
-#define kFtrEvLog     60
-#define kFtrEvIdx     76
+#define kFtrEvLog     64
+#define kFtrEvIdx     80
 #define kEvLogN       16
 
 #define kStEng        0x0001
@@ -1089,6 +1089,11 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
     case kEvtDisp:
         RawFtr(kFtrDispRaw, event);
         FtrSet(kSkCreator, kFtrHires, event[14]);
+        /* 14단계(B2): 화면 전환 Disp는 hires 0 → 약 0.1초(9~12 tick) 뒤 1로 쌍으로 온다(13단계 실측 6쌍, 예외 없음).
+         * hires 기기에서 0이면 그리지 않고 상태만 저장 → 뒤이은 Disp 1에서 hires로 그려 저해상도 깜빡임을 없앤다.
+         * Draw(5)는 저장된 상태대로 그대로 그린다(시스템이 다시 그리라고 하면 저해상도라도 그림) */
+        if (event[14] == 0 && HrRef() != 0xFFFF)
+            break;
         DrawKeys((UInt32)slot);
         break;
     }

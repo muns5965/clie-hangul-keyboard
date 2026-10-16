@@ -1,4 +1,4 @@
-# 개발 이력 (1~12단계, ROM 역분석, ClieDiag 변경 기록)
+# 개발 이력 (1~14단계, ROM 역분석, ClieDiag 변경 기록)
 
 > 과거 기록을 보존하는 문서다. 여기 나오는 옛 절차·가설은 **현행 방식이 아니다**.
 > 현행 구조는 [ARCHITECTURE.md](ARCHITECTURE.md), 현행 절차는 [RECOVERY.md](RECOVERY.md). (README에서 옮김. 문서 분리 시점 커밋 `117932a` — 개발 이력 참고용이며 현행 소스 버전 표시가 아님)
@@ -151,3 +151,10 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
   MnHangul v17 Sizes 횟수(11/11 ×1 667, 22/22 ×1 30)로 보면 다시 그릴 때마다 저해상도·hires를 한 번씩 그리는 것으로 보임(추정).
 - 13단계 진단(동작 변경 없음): 최근 이벤트 16개 고리 기록(MnSk #60~#75, 다음 칸 #76) = tick, 종류, event[14], 처리 후 hires.
   MnHangul v18 Kbd 페이지에서 본다. 결과로 B2(hires가 곧 올 때 저해상도 그리기 건너뛰기) 또는 B3(저해상도도 자모를 선으로) 결정.
+- 13단계 결과(MnHangul v19 Kbd): Disp는 매번 hires 0 → 9~12 tick 뒤 1로 쌍(6쌍, 예외 없음). Start는 처음부터 1. Stop의 event[14]는 2(의미 없음).
+- 교훈: 본체 교체는 반드시 □→로 끈 뒤. 켠 채 설치하면 로더가 잠근 옛 본체 핸들을 Stop 때 풀다 "MemoryMgr.c Chunk under-locked"(리셋으로 복구).
+
+## 14단계: 저해상도 프레임 건너뛰기(B2)
+
+- Disp hires 0이고 HR 라이브러리가 있으면 그리지 않고 상태만 저장 → 뒤이은 Disp 1에서 hires로 그림. Draw(5)는 그대로.
+- 진단 기록 위치를 #64~#79(다음 칸 #80)로 옮김(13단계의 #60은 로더 보호 해제 결과와 겹쳤음, 동작 영향 없음). MnHangul v20 Kbd 페이지.
