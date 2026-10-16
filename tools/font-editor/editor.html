@@ -107,6 +107,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
       <button id="btnImport">JSON 불러오기</button>
       <input type="file" id="fileImport" accept=".json,application/json" hidden>
       <button id="btnExport" class="primary">JSON 내보내기</button>
+      <button id="btnSnap">중간 저장</button>
       <button id="btnResetAll">전체 초기화</button>
     </div>
   </header>
@@ -179,6 +180,15 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <div class="row" style="margin-top:6px"><span class="big" id="pickChar" style="font-size:18px">—</span><canvas id="pickCanvas" width="72" height="72" style="image-rendering:pixelated"></canvas></div>
         <div class="pieces-of" id="pickPieces"></div>
         <div class="row" style="margin-top:8px"><button id="btnResetGlyph">이 글자의 조각 모두 초기화</button></div>
+      </div>
+      <div>
+        <h2>중간 저장본</h2>
+        <div class="note">맨 위 <b>중간 저장</b>을 누를 때마다 그 시점의 수정 내용 전체와 확대 방식을 따로 보관합니다(최근 30개). 고친 내용은 누르지 않아도 바로바로 저장됩니다.</div>
+        <div class="row" style="margin-top:6px">
+          <select id="snapList" aria-label="중간 저장본"><option value="">(저장본 없음)</option></select>
+          <button id="btnRestore">이 저장본으로 되돌리기</button>
+        </div>
+        <div class="note" id="snapInfo"></div>
       </div>
       <div id="exportPanel" hidden>
         <h2>내보내기 내용</h2>
@@ -538,6 +548,52 @@ document.getElementById("kscOnly").addEventListener("change", drawUsers);
 document.getElementById("sampleText").addEventListener("input", drawSamples);
 document.getElementById("r24x2").addEventListener("click", (ev) => { const r = ev.target.getBoundingClientRect(); const x = (ev.clientX - r.left) * (ev.target.width / r.width); const h = sampleHits.find((t) => x >= t.x0 && x < t.x1); if (h) pick(h.s); });
 const methodSel = document.getElementById("method"); methodSel.value = method;
+/* ---------- 중간 저장본 (db: snapshots/<시각>) ---------- */
+const SNAP_MAX = 30;
+let snaps = [];   // [{id, at, count, method, edits}]
+function fmtTime(ms) { const d = new Date(ms); const p = (n) => String(n).padStart(2, "0"); return `${d.getMonth() + 1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`; }
+function drawSnaps() {
+  const sel = document.getElementById("snapList"); const keep = sel.value; sel.textContent = "";
+  if (!snaps.length) { const o = document.createElement("option"); o.value = ""; o.textContent = "(저장본 없음)"; sel.appendChild(o); }
+  snaps.forEach((sn) => { const o = document.createElement("option"); o.value = sn.id; o.textContent = `${fmtTime(sn.at)} · 수정 ${sn.count}개 · ${sn.method}`; sel.appendChild(o); });
+  if (keep && snaps.some((x) => x.id === keep)) sel.value = keep;
+}
+document.getElementById("btnSnap").addEventListener("click", async (ev) => {
+  const b = ev.currentTarget; b.disabled = true;
+  try {
+    // 1) 아직 서버에 못 올린 조각을 먼저 올림
+    await Promise.all([...dirty].map((n) => persist(n)));
+    await Promise.all([...writing.values()]);
+    // 2) 지금 상태 전체를 저장본으로
+    const at = Date.now(), o = {}; edits.forEach((a, n) => { o[n] = toHex(a); });
+    const body = { at, method, count: edits.size, edits: o };
+    if (db && dbWritable) {
+      await db.collection("snapshots").doc(String(at)).set(body);
+      const old = snaps.slice(SNAP_MAX - 1);   // 새 것 포함 최대 SNAP_MAX개
+      for (const x of old) { try { await db.collection("snapshots").doc(x.id).delete(); } catch (e) { /* 다음에 */ } }
+      setStore(`중간 저장 ${fmtTime(at)} (수정 ${edits.size}개)`, "ok");
+    } else {
+      const list = lsGet("nd24.snaps", []); list.unshift({ id: String(at), ...body }); lsSet("nd24.snaps", list.slice(0, SNAP_MAX));
+      snaps = lsGet("nd24.snaps", []); drawSnaps();
+      setStore(`중간 저장(이 브라우저) ${fmtTime(at)}`, "warn");
+    }
+  } catch (e) { setStore("중간 저장 실패: " + ((e && e.message) || e), "warn"); }
+  b.disabled = false;
+});
+let confirmRestore = 0;
+document.getElementById("btnRestore").addEventListener("click", (ev) => {
+  const b = ev.currentTarget, id = document.getElementById("snapList").value;
+  const sn = snaps.find((x) => x.id === id); if (!sn) return;
+  if (Date.now() - confirmRestore > 4000) { confirmRestore = Date.now(); b.textContent = "정말 되돌릴까요? 한 번 더"; setTimeout(() => { b.textContent = "이 저장본으로 되돌리기"; }, 4000); return; }
+  confirmRestore = 0; b.textContent = "이 저장본으로 되돌리기";
+  if (sn.method && sn.method !== method) { applyMethod(sn.method); if (db && dbWritable) db.doc("settings/main").set({ method: sn.method }).catch(() => {}); }
+  const names = new Set([...edits.keys(), ...Object.keys(sn.edits || {})]);
+  const items = [...names].map((n) => ({ name: n, before: snapshotOf(n) }));
+  names.forEach((n) => { const h = sn.edits && sn.edits[n]; if (h) edits.set(n, fromHex(h)); else edits.delete(n); });
+  commitMany(items); redrawAll();
+  document.getElementById("snapInfo").textContent = `${fmtTime(sn.at)} 저장본으로 되돌림 (되돌리기 버튼으로 취소 가능)`;
+});
+
 function applyMethod(m) { if (!(m in METHODS) && m !== "nearest") return; method = m; methodSel.value = m; lsSet("nd24.method", m); recomputeAuto(); redrawAll(); }
 methodSel.addEventListener("change", async () => {
   applyMethod(methodSel.value);
@@ -595,9 +651,13 @@ pick(0);
 setStore("이 브라우저에만", "");
 (async () => {
   try { db = window.claude ? await claude.use("db") : null; } catch (e) { db = null; }
-  if (!db) { setStore("이 브라우저에만", "warn"); return; }
+  if (!db) { setStore("이 브라우저에만", "warn"); snaps = lsGet("nd24.snaps", []); drawSnaps(); return; }
   /* 자동 확대 방식도 서버에 두어 PC·휴대폰이 같은 방식을 쓴다(고치지 않은 조각이 기기마다 달라 보이지 않게) */
   db.doc("settings/main").onSnapshot((d) => { const m = d.exists && d.data().method; if (m && m !== method) applyMethod(m); }, () => {});
+  db.collection("snapshots").onSnapshot((snap) => {
+    snaps = snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((x) => x.edits).sort((a, b) => b.at - a.at);
+    drawSnaps();
+  }, () => {});
   let first = true;
   db.collection("pieces").onSnapshot((snap) => {
     if (first && !snap.metadata.fromCache) {
