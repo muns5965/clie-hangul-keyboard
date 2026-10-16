@@ -1,5 +1,5 @@
 /*
- * MnHangul v1 — CJKOS 대체 한글 모듈 시험 앱 (2a 단계: BltDrawChars 통과 시험)
+ * MnHangul v2 — CJKOS 대체 한글 모듈 시험 앱 (2a 단계: BltDrawChars 통과 시험)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -10,6 +10,8 @@
  *
  * 화면: 상태, [Patch ON] [Patch OFF] [Clear counters], 패치 기록(feature 'MnHg' #0~#13, patch.c 참고).
  * 위/아래 버튼 또는 화면 탭으로 다시 그린다(기록 새로고침).
+ * v2: 고해상도 모드(ClieDiag v19와 같은 방식: HR 라이브러리 HRWinScreenMode 320x320, 끝날 때 복귀).
+ *     맨 아래 메시지 줄이 화면 밖으로 잘리던 것 수정.
  */
 
 #include <PalmOS.h>
@@ -27,6 +29,36 @@
 #define kRowClear     5
 
 static Char gMsg[40] = "-";
+
+/* 고해상도 모드 (소니 헤더 없이 필요한 트랩만 선언, sysLibTrapCustom + 순번) */
+Err HROpen(UInt16 ref)  SYS_TRAP(sysLibTrapOpen);
+Err HRClose(UInt16 ref) SYS_TRAP(sysLibTrapClose);
+Err HRWinScreenMode(UInt16 ref, WinScreenModeOperation op, UInt32 *w, UInt32 *h,
+                    UInt32 *depth, Boolean *color) SYS_TRAP(sysLibTrapCustom + 48);
+static UInt16 gHrRef = 0xFFFF;
+
+static void StartHires(void)
+{
+    UInt16 ref;
+    UInt32 w = 320, h = 320;
+
+    if (SysLibFind("Sony HR Library", &ref) != errNone || HROpen(ref) != errNone)
+        return;
+    if (HRWinScreenMode(ref, winScreenModeSet, &w, &h, NULL, NULL) != errNone) {
+        HRClose(ref);
+        return;
+    }
+    gHrRef = ref;
+}
+
+static void StopHires(void)
+{
+    if (gHrRef == 0xFFFF)
+        return;
+    HRWinScreenMode(gHrRef, winScreenModeSetToDefaults, NULL, NULL, NULL, NULL);
+    HRClose(gHrRef);
+    gHrRef = 0xFFFF;
+}
 
 static UInt32 GetF(UInt16 n)
 {
@@ -150,7 +182,7 @@ static void Draw(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v1 (2a pass-through)", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v2 (2a pass-through)", 29, 0, 0);
 
     StrPrintF(s, "patch: %s  trap A378=%lx", Installed() ? "ON" : "off",
               (UInt32)SysGetTrapAddress(kTrapBlt));
@@ -161,28 +193,28 @@ static void Draw(void)
     Button(kRowClear, "Clear counters");
 
     StrPrintF(s, "calls %lu  hi-byte calls %lu", GetF(0), GetF(9));
-    Row(7, s);
+    Row(6, s);
     Hex(a, GetF(2));
     StrPrintF(s, "last len %lu  %s", GetF(1), a);
-    Row(8, s);
+    Row(7, s);
     Hex(a, GetF(4));
     Hex(b, GetF(5));
     StrPrintF(s, "rect %s %s", a, b);
-    Row(9, s);
+    Row(8, s);
     Hex(a, GetF(10));
     Hex(b, GetF(11));
     StrPrintF(s, "hi: len %s  %s", a, b);
-    Row(10, s);
+    Row(9, s);
     Hex(a, GetF(12));
     Hex(b, GetF(13));
     StrPrintF(s, "hi rect %s %s", a, b);
-    Row(11, s);
+    Row(10, s);
     Hex(a, GetF(7));
     Hex(b, GetF(3));
     StrPrintF(s, "p1 %s p6 %s", a, b);
-    Row(12, s);
+    Row(11, s);
 
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 14 * kLineH);
+    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 13 * kLineH);   /* 내용 12줄(1~12) 아래 */
 }
 
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
@@ -192,6 +224,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
 
+    StartHires();
     Draw();
     do {
         EvtGetEvent(&e, evtWaitForever);
@@ -211,5 +244,6 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             (e.data.keyDown.chr == vchrPageUp || e.data.keyDown.chr == vchrPageDown))
             Draw();
     } while (e.eType != appStopEvent);
+    StopHires();
     return 0;
 }
