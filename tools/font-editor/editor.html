@@ -95,8 +95,8 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
     <label class="row" for="method">자동 확대
       <select id="method">
         <option value="stroke">획 비례 (가로획 1→2, 세로획 2→3)</option>
-        <option value="thin">가는 획 (가로획 1→1, 세로획 2→2)</option>
         <option value="mid">중간 (가로획 1→1, 세로획 2→3)</option>
+        <option value="thin">가는 획 (가로획 1→1, 세로획 2→2)</option>
         <option value="nearest">단순 1.5배</option>
       </select>
     </label>
@@ -223,23 +223,25 @@ try {
 } catch (e) { /* euc-kr 디코더가 없으면 전체 표시 */ }
 
 /* ---------- 16 → 24 자동 확대 ---------- */
-const METHODS = { stroke: [2, 3], thin: [1, 2], mid: [1, 3] };
+/* 방식별 굵기: [가로 방향(세로획 폭) 1칸, 2칸], [세로 방향(가로획 두께) 1칸, 2칸] */
+const METHODS = {
+  stroke: { x: [2, 3], y: [2, 3] },   // 획 비례: 가로획 1→2, 세로획 2→3
+  mid:    { x: [2, 3], y: [1, 2] },   // 중간: 가로획 1→1, 세로획 2→3
+  thin:   { x: [1, 2], y: [1, 2] },   // 가는 획: 가로획 1→1, 세로획 2→2
+};
+/* 한 줄(16칸 → 24칸). 모든 구간의 시작을 같은 격자 f(r) = round(r × 1.5)에 맞춰,
+   구간 길이와 관계없이 획이 만나는 모서리가 어긋나지 않게 한다.
+   1칸 구간 → t1칸, 2칸 구간(획 굵기) → t2칸, 3칸 이상(획 길이) → 끝도 같은 규칙(마지막 1·2칸이 획 굵기와 맞게). */
+const f15 = (r) => Math.round(r * 1.5);
 function scaleLine(src, n, t1, t2) {
   const out = new Uint8Array(Math.round(n * 1.5));
   let i = 0;
   while (i < n) {
     if (!src[i]) { i++; continue; }
     let j = i; while (j < n && src[j]) j++;
-    const L = j - i;
-    if (L <= 2) {
-      const T = L === 1 ? t1 : t2;
-      const c = (i + L / 2) * 1.5;
-      const s = Math.round(c - T / 2);
-      for (let k = s; k < s + T; k++) if (k >= 0 && k < out.length) out[k] = 1;
-    } else {
-      const s = Math.round(i * 1.5), e = Math.round(j * 1.5);
-      for (let k = s; k < e; k++) out[k] = 1;
-    }
+    const L = j - i, s = f15(i);
+    const e = L === 1 ? s + t1 : L === 2 ? s + t2 : Math.max(f15(j - 1) + t1, f15(j - 2) + t2);
+    for (let k = s; k < e && k < out.length; k++) out[k] = 1;
     i = j;
   }
   return out;
@@ -250,14 +252,13 @@ function upscale(a16, method) {
     for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) out[y * S + x] = a16[Math.floor(y * 2 / 3) * 16 + Math.floor(x * 2 / 3)];
     return out;
   }
-  const [t1, t2] = METHODS[method] || METHODS.stroke;
+  const m = METHODS[method] || METHODS.stroke;
   const mid = new Uint8Array(16 * S);              // 가로만 늘린 것: 16줄 × 24칸
-  // 가로 방향 짧은 구간 = 세로획 굵기(2칸 → t2). 1칸 구간(점·사선 끝)은 t2 - 1.
-  for (let y = 0; y < 16; y++) mid.set(scaleLine(a16.subarray(y * 16, y * 16 + 16), 16, t2 - 1, t2), y * S);
+  for (let y = 0; y < 16; y++) mid.set(scaleLine(a16.subarray(y * 16, y * 16 + 16), 16, m.x[0], m.x[1]), y * S);
   for (let x = 0; x < S; x++) {
     const col = new Uint8Array(16);
     for (let y = 0; y < 16; y++) col[y] = mid[y * S + x];
-    const sc = scaleLine(col, 16, t1, t1 === 1 ? 2 : 3); // 세로 방향 짧은 구간 = 가로획 굵기(1 → t1)
+    const sc = scaleLine(col, 16, m.y[0], m.y[1]);
     for (let y = 0; y < S; y++) out[y * S + x] = sc[y];
   }
   return out;
