@@ -133,7 +133,8 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <span class="chip" id="curState">자동 확대</span>
       </div>
       <div class="row" style="margin-bottom:8px">
-        <button id="toolPen" class="on">펜</button>
+        <button id="toolAuto" class="on" title="빈 칸에서 시작하면 칠하고, 칠한 칸에서 시작하면 지움">자동</button>
+        <button id="toolPen">펜</button>
         <button id="toolErase">지우개</button>
         <span style="width:8px"></span>
         <button data-shift="-1,0" aria-label="왼쪽으로 1칸">←</button>
@@ -147,7 +148,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <label class="row" for="ghost"><input type="checkbox" id="ghost" checked> 16 원본 겹쳐보기</label>
       </div>
       <div class="canvas-box"><canvas id="edit" width="480" height="480"></canvas></div>
-      <div class="legend">클릭·드래그로 칠하기(오른쪽 버튼 또는 지우개로 지우기) · Ctrl+Z 되돌리기 · Ctrl+Y 다시 실행 · 초기화 = 자동 확대 상태로
+      <div class="legend">자동: 빈 칸에서 시작하면 칠하고 칠한 칸에서 시작하면 지움 · Shift+드래그 = 지우기 · Ctrl+Z 되돌리기 · Ctrl+Y 다시 실행 · 초기화 = 자동 확대 상태로
         <i style="background:var(--base)"></i>기준선(18줄)
         <i style="background:var(--ghost);height:8px"></i>16 원본 위치</div>
     </section>
@@ -271,7 +272,7 @@ let method = lsGet("nd24.method", "stroke");
 let auto24 = [];
 const edits = new Map();          // name -> Uint8Array(576)
 let sel = 0;
-let tool = "pen";
+let tool = "auto";
 let kind = "cho";
 let curSet = 0;
 const undo = [];
@@ -454,7 +455,7 @@ let painting = null;
 const editCv = document.getElementById("edit");
 function cellAt(ev) { const r = editCv.getBoundingClientRect(); const x = Math.floor((ev.clientX - r.left) / r.width * S); const y = Math.floor((ev.clientY - r.top) / r.height * S); return x >= 0 && x < S && y >= 0 && y < S ? [x, y] : null; }
 /* 오른쪽 버튼 = 지우기. 편집 칸 근처에서는 브라우저 메뉴를 막는다(캡처 단계, 문서 전체에서 판정) */
-document.addEventListener("contextmenu", (e) => { if (e.target.closest && e.target.closest(".canvas-box, #edit")) { e.preventDefault(); e.stopPropagation(); } }, true);
+document.addEventListener("contextmenu", (e) => { if (!(e.target.closest && e.target.closest("input, textarea"))) { e.preventDefault(); e.stopPropagation(); } }, true);
 editCv.addEventListener("contextmenu", (e) => { e.preventDefault(); return false; });
 editCv.addEventListener("mousedown", (e) => { if (e.button === 2) e.preventDefault(); });
 editCv.addEventListener("pointerdown", (ev) => {
@@ -464,7 +465,8 @@ editCv.addEventListener("pointerdown", (ev) => {
   const name = DATA.names[sel];
   const before = edits.has(name) ? edits.get(name).slice() : null;
   const work = piece(sel).slice();
-  const val = ev.button === 2 || tool === "erase" ? 0 : 1;
+  /* 자동: 누른 칸이 칠해져 있으면 지우고 비어 있으면 칠함. Shift를 누르고 있거나 오른쪽 버튼이면 지움 */
+  const val = ev.button === 2 || ev.shiftKey || tool === "erase" ? 0 : tool === "pen" ? 1 : work[c[1] * S + c[0]] ? 0 : 1;
   painting = { name, before, work, val };
   work[c[1] * S + c[0]] = val; edits.set(name, work); drawEditor();
 });
@@ -522,7 +524,8 @@ document.addEventListener("keydown", (e) => {
 });
 document.getElementById("toolPen").addEventListener("click", () => { tool = "pen"; toggleTool(); });
 document.getElementById("toolErase").addEventListener("click", () => { tool = "erase"; toggleTool(); });
-function toggleTool() { document.getElementById("toolPen").classList.toggle("on", tool === "pen"); document.getElementById("toolErase").classList.toggle("on", tool === "erase"); }
+document.getElementById("toolAuto").addEventListener("click", () => { tool = "auto"; toggleTool(); });
+function toggleTool() { ["Auto", "Pen", "Erase"].forEach((t) => document.getElementById("tool" + t).classList.toggle("on", tool === t.toLowerCase())); }
 document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("click", () => { kind = b.dataset.kind; curSet = 0; const i = info.findIndex((f) => f.kind === kind && f.set === 0); select(i); }));
 document.getElementById("ghost").addEventListener("change", drawEditor);
 document.getElementById("kscOnly").addEventListener("change", drawUsers);
