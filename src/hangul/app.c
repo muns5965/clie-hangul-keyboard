@@ -1,5 +1,5 @@
 /*
- * MnHangul v2 — CJKOS 대체 한글 모듈 시험 앱 (2a 단계: BltDrawChars 통과 시험)
+ * MnHangul v3 — CJKOS 대체 한글 모듈 시험 앱 (2a 통과 시험 + 2b 한글 자리표시)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -8,10 +8,12 @@
  * 시험 기간에는 부팅 때 자동으로 켜지 않는다. 문제가 생기면 리셋 한 번으로 원래대로 돌아간다.
  * 반드시 CJKOS를 끈 상태(같은 함수를 CJKOS도 바꿈)의 CloudpilotEmu 백업 복사본에서 시험한다.
  *
- * 화면: 상태, [Patch ON] [Patch OFF] [Clear counters], 패치 기록(feature 'MnHg' #0~#13, patch.c 참고).
+ * 화면: 상태, [Patch ON] [Patch OFF] [Box ON/OFF] [Clear counters], 패치 기록(feature 'MnHg', patch.c 참고).
+ * Box: 패치가 켜진 동안 2바이트 한글을 "[]"로 바꿔 그린다(#22). Patch ON은 기록만 한다.
  * 위/아래 버튼 또는 화면 탭으로 다시 그린다(기록 새로고침).
  * v2: 고해상도 모드(ClieDiag v19와 같은 방식: HR 라이브러리 HRWinScreenMode 320x320, 끝날 때 복귀).
  *     맨 아래 메시지 줄이 화면 밖으로 잘리던 것 수정.
+ * v3: Box 버튼, 글꼴(fontType/fRectHeight)·p3·p1 기록 표시(저해상도/고해상도 좌표 구분 단서).
  */
 
 #include <PalmOS.h>
@@ -21,11 +23,13 @@
 #define kTrapBlt      0xA378
 #define kFtrHandle    20
 #define kFtrEntry     21
-#define kFtrMax       13
+#define kFtrMax       19
+#define kFtrBox       22
 
 #define kLineH        11
-#define kRowOn        3
-#define kRowOff       4
+#define kRowOn        2
+#define kRowOff       3
+#define kRowBox       4
 #define kRowClear     5
 
 static Char gMsg[40] = "-";
@@ -161,12 +165,23 @@ static void PatchOff(void)
     StrPrintF(gMsg, "OFF orig=%lx", orig);
 }
 
+static void ToggleBox(void)
+{
+    if (GetF(kFtrBox) != 0) {
+        FtrSet(kHgCreator, kFtrBox, 0);
+        StrCopy(gMsg, "box off");
+    } else {
+        FtrSet(kHgCreator, kFtrBox, 1);
+        StrCopy(gMsg, Installed() ? "box on" : "box on (needs Patch ON)");
+    }
+}
+
 static void ClearCounters(void)
 {
     UInt16 i;
 
     for (i = 0; i <= kFtrMax; i++)
-        FtrUnregister(kHgCreator, i);
+        FtrUnregister(kHgCreator, i);   /* #20~#22(핸들·진입점·Box)는 지우지 않는다 */
     StrCopy(gMsg, "counters cleared");
 }
 
@@ -175,46 +190,75 @@ static void Hex(Char *o, UInt32 v)
     StrPrintF(o, "%lx", v);
 }
 
+/* x<<16|y → "x,y" (부호 있음) */
+static void XY(Char *o, UInt32 v)
+{
+    if (v == 0xFFFFFFFFUL)
+        StrCopy(o, "null");
+    else
+        StrPrintF(o, "%d,%d", (Int16)(v >> 16), (Int16)(v & 0xFFFF));
+}
+
+/* w<<16|h → "wxh" */
+static void WH(Char *o, UInt32 v)
+{
+    if (v == 0xFFFFFFFFUL)
+        StrCopy(o, "null");
+    else
+        StrPrintF(o, "%dx%d", (Int16)(v >> 16), (Int16)(v & 0xFFFF));
+}
+
+/* fontType<<16|fRectHeight → "type/h" */
+static void Font(Char *o, UInt32 v)
+{
+    StrPrintF(o, "%x/%d", (UInt16)(v >> 16), (Int16)(v & 0xFFFF));
+}
+
 static void Draw(void)
 {
     RectangleType r;
-    Char          s[48], a[12], b[12];
+    Char          s[48], a[16], b[16], c[16];
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v2 (2a pass-through)", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v3 (2b) CJKOS OFF only", 31, 0, 0);
 
-    StrPrintF(s, "patch: %s  trap A378=%lx", Installed() ? "ON" : "off",
-              (UInt32)SysGetTrapAddress(kTrapBlt));
+    StrPrintF(s, "patch: %s  box: %s  A378=%lx", Installed() ? "ON" : "off",
+              GetF(kFtrBox) ? "ON" : "off", (UInt32)SysGetTrapAddress(kTrapBlt));
     Row(0, s);
-    Row(1, "test with CJKOS OFF, backup copy");
     Button(kRowOn, "Patch ON");
     Button(kRowOff, "Patch OFF");
+    Button(kRowBox, GetF(kFtrBox) ? "Box OFF" : "Box ON");
     Button(kRowClear, "Clear counters");
 
-    StrPrintF(s, "calls %lu  hi-byte calls %lu", GetF(0), GetF(9));
+    StrPrintF(s, "calls %lu  hi %lu  boxed %lu", GetF(0), GetF(9), GetF(19));
     Row(6, s);
     Hex(a, GetF(2));
     StrPrintF(s, "last len %lu  %s", GetF(1), a);
     Row(7, s);
-    Hex(a, GetF(4));
-    Hex(b, GetF(5));
-    StrPrintF(s, "rect %s %s", a, b);
+    XY(a, GetF(4));
+    WH(b, GetF(5));
+    XY(c, GetF(6));
+    StrPrintF(s, "rect %s %s  p3 %s", a, b, c);
     Row(8, s);
-    Hex(a, GetF(10));
-    Hex(b, GetF(11));
-    StrPrintF(s, "hi: len %s  %s", a, b);
+    Font(a, GetF(14));
+    Hex(b, GetF(7));
+    StrPrintF(s, "font %s  p1 %s", a, b);
     Row(9, s);
-    Hex(a, GetF(12));
-    Hex(b, GetF(13));
-    StrPrintF(s, "hi rect %s %s", a, b);
+    Hex(b, GetF(11));
+    StrPrintF(s, "hi: len %lu  %s", GetF(10), b);
     Row(10, s);
-    Hex(a, GetF(7));
-    Hex(b, GetF(3));
-    StrPrintF(s, "p1 %s p6 %s", a, b);
+    XY(a, GetF(12));
+    WH(b, GetF(13));
+    XY(c, GetF(16));
+    StrPrintF(s, "hi rect %s %s  p3 %s", a, b, c);
     Row(11, s);
+    Font(a, GetF(15));
+    Hex(b, GetF(17));
+    StrPrintF(s, "hi font %s  p1 %s", a, b);
+    Row(12, s);
 
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 13 * kLineH);   /* 내용 12줄(1~12) 아래 */
+    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 13 * kLineH);   /* 내용 13줄(0~12) 아래 */
 }
 
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
@@ -235,6 +279,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 PatchOn();
             else if (row == kRowOff)
                 PatchOff();
+            else if (row == kRowBox)
+                ToggleBox();
             else if (row == kRowClear)
                 ClearCounters();
             Draw();

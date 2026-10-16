@@ -1,10 +1,13 @@
 /*
- * MnHangul 패치 코드 (리소스 HgPt 0) — 2a 단계: BltDrawChars(트랩 0xA378) 통과 시험
+ * MnHangul 패치 코드 (리소스 HgPt 0) — 2a·2b 단계: BltDrawChars(트랩 0xA378) 통과 시험·한글 자리표시
  *
  * BltDrawChars는 SDK에 원형이 없는 내부 함수다. ROM 호출부(0x50D8C, 0x2BC4B8) 역분석으로 본 인자(34바이트 중 26):
  *   p1 포인터(그리기 상태로 추정), p2 사각형 포인터, p3 점 포인터, p4 문자열, p5 길이(16비트),
  *   p6 글꼴 구조체 포인터(FntGetFontPtr 결과), p7 포인터(글꼴 보조로 추정)
  * 2a: 인자를 feature('MnHg')에 기록하고 원래 함수를 그대로 부른다. 화면이 바뀌지 않아야 정상.
+ * 2b: 자리표시 켜짐(#22 != 0)이면 KS X 1001 2바이트 글자(앞·뒤 바이트 0xA1~0xFE)마다 "[]"로 바꾼
+ *     사본을 원래 함수에 넘긴다. 바이트 수가 같아 위치·폭·좌표계(저해상도/고해상도)는 원래 함수가
+ *     그대로 처리하므로 좌표계를 몰라도 안전하다. 2바이트를 한 글자 단위로 끊는지 확인하는 단계.
  *
  * 리소스 배치: 오프셋 0 = 원래 함수 주소 칸(4바이트, 앱이 DmWrite로 기록), 오프셋 4 = 진입점 PatchBlt.
  * 어느 앱에서든 불리므로 전역변수·A5·재배치 금지(빌드 스크립트가 검사).
@@ -13,6 +16,8 @@
  *   #0 호출 수, #1 마지막 길이, #2 마지막 첫 4바이트, #3 p6, #4 p2 사각형 (x<<16|y), #5 (w<<16|h),
  *   #6 p3 점 (x<<16|y), #7 p1, #8 p7,
  *   #9 0x80 이상 바이트가 든 호출 수, #10~#13 그 마지막 호출의 길이·첫 4바이트·사각형 xy·wh
+ *   #14 마지막 호출 글꼴 (fontType<<16 | fRectHeight), #15 hi 호출 글꼴, #16 hi 호출 p3, #17 hi 호출 p1
+ *   #19 자리표시로 바꾼 글자 수, #22 자리표시 켜짐(앱이 설정, 패치는 읽기만)
  */
 
 #include <PalmOS.h>
@@ -56,6 +61,14 @@ static inline UInt32 Pair(const Int16 *p)
     return (p == NULL) ? 0xFFFFFFFFUL : (((UInt32)(UInt16)p[0] << 16) | (UInt16)p[1]);
 }
 
+/* FontType: +0 fontType, +14 fRectHeight */
+static inline UInt32 FontInfo(const void *f)
+{
+    const Int16 *w = (const Int16 *)f;
+
+    return (w == NULL) ? 0xFFFFFFFFUL : (((UInt32)(UInt16)w[0] << 16) | (UInt16)w[7]);
+}
+
 UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7)
 {
     UInt32 orig = OrigAddr();
@@ -71,6 +84,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
     FtrSet(kHgCreator, 6, Pair((const Int16 *)p3));
     FtrSet(kHgCreator, 7, (UInt32)p1);
     FtrSet(kHgCreator, 8, (UInt32)p7);
+    FtrSet(kHgCreator, 14, FontInfo(p6));
     for (i = 0; chars != NULL && i < len; i++)
         if (chars[i] >= 0x80) {
             hi = true;
@@ -82,8 +96,34 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         FtrSet(kHgCreator, 11, First4(chars, len));
         FtrSet(kHgCreator, 12, Pair((const Int16 *)p2));
         FtrSet(kHgCreator, 13, (p2 == NULL) ? 0xFFFFFFFFUL : Pair((const Int16 *)p2 + 2));
+        FtrSet(kHgCreator, 15, FontInfo(p6));
+        FtrSet(kHgCreator, 16, Pair((const Int16 *)p3));
+        FtrSet(kHgCreator, 17, (UInt32)p1);
     }
     if (orig == 0)
         return 0;
+    if (hi && GetF(22) != 0) {
+        UInt8 *buf = MemPtrNew(len);
+
+        if (buf != NULL) {
+            UInt32 r;
+            UInt16 n = 0;
+
+            MemMove(buf, chars, len);
+            for (i = 0; i + 1 < len; ) {
+                if (buf[i] >= 0xA1 && buf[i] <= 0xFE && buf[i + 1] >= 0xA1 && buf[i + 1] <= 0xFE) {
+                    buf[i] = '[';
+                    buf[i + 1] = ']';
+                    i += 2;
+                    n++;
+                } else
+                    i++;
+            }
+            FtrSet(kHgCreator, 19, GetF(19) + n);
+            r = ((BltFn)orig)(p1, p2, p3, buf, len, p6, p7);
+            MemPtrFree(buf);
+            return r;
+        }
+    }
     return ((BltFn)orig)(p1, p2, p3, chars, len, p6, p7);
 }
