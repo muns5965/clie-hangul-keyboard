@@ -9,8 +9,13 @@
   2 판 = 2 (그림 한 줄 = 4바이트, 왼쪽이 비트 31. 24칸이면 비트 31~8)
   3 칸 높이 24, 4 글자 폭 24, 5 기준선 = JSON baseline(18)
   조각 순서·규칙·벌 수는 HgJ16.bin과 같다(조각 번호 = 초 벌×19+L, 중 Nc×19+벌×21+V, 종 Nc×19+Nj×21+벌×27+T−1).
-  자모표(KS X 1001 0xA4A1~0xA4FE)는 HgJ16의 16×16 자모를 편집기의 자동 확대(JSON method)로 24×24로 늘린 것.
+  자모표(KS X 1001 0xA4A1~0xA4FE 94칸, 그림은 현대 자모 0xA4A1~0xA4D3 = U+3131~3163 51자)는 글자마다
+    ① 조각 JSON의 'jamo'(글자 → 24줄 16진수, 편집기가 넣음) → ② src/hangul/data/hangul24-jamo.json(손그림 글자만)
+    → ③ 지금 조각으로 만들기(자음 = 초성 1벌, 겹받침 = 종성 1벌, 모음 = 중성 0벌을 24칸 가운데로:
+       가로 시작 = int((24 − 폭) / 2 + 0.5), 세로 시작 = (24 − 높이) // 2) 순서로 정한다.
+    조각을 고치면 ③ 글자는 따라 바뀐다. 나머지 43칸(옛한글·채움)은 빈칸.
 검사: 11,172자 전부, 조각 이름으로 직접 겹친 그림과 기기 방식(규칙→조각 번호) 조합 결과가 같아야 한다.
+      낱자모 51자 모두 그림이 있고 서로 달라야 하며, ③ 글자는 지금 조각으로 다시 만든 그림과 같아야 한다.
 
 사용: python3 tools/gen-johab24.py <neodgm24-pieces.json> [미리보기.png]
 """
@@ -21,47 +26,6 @@ import sys
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 S = 24
-
-# 편집기(editor.html)와 같은 자동 확대
-METHODS = {'stroke': ((2, 3), (2, 3)), 'mid': ((2, 3), (1, 2)), 'thin': ((1, 2), (1, 2))}
-
-
-def f15(r):
-    return int(r * 1.5 + 0.5)          # JS Math.round와 같게(양수)
-
-
-def scale_line(src, t1, t2):
-    out = [0] * S
-    n, i = len(src), 0
-    while i < n:
-        if not src[i]:
-            i += 1
-            continue
-        j = i
-        while j < n and src[j]:
-            j += 1
-        L, s = j - i, f15(i)
-        e = s + t1 if L == 1 else s + t2 if L == 2 else max(f15(j - 1) + t1, f15(j - 2) + t2)
-        for k in range(s, min(e, S)):
-            out[k] = 1
-        i = j
-    return out
-
-
-def upscale(rows16, method):
-    a = [[(r >> (15 - x)) & 1 for x in range(16)] for r in rows16]
-    if method == 'nearest':
-        g = [[a[y * 2 // 3][x * 2 // 3] for x in range(S)] for y in range(S)]
-    else:
-        (x1, x2), (y1, y2) = METHODS.get(method, METHODS['stroke'])
-        mid = [scale_line(a[y], x1, x2) for y in range(16)]
-        g = [[0] * S for _ in range(S)]
-        for x in range(S):
-            col = scale_line([mid[y][x] for y in range(16)], y1, y2)
-            for y in range(S):
-                g[y][x] = col[y]
-    return [sum(b << (31 - x) for x, b in enumerate(row)) for row in g]
-
 
 def main():
     js = json.load(open(sys.argv[1], encoding='utf-8'))
@@ -90,10 +54,7 @@ def main():
         pieces[pid(name)] = rows
     assert all(p is not None for p in pieces), 'missing pieces'
 
-    jamo = []
-    for k in range(94):
-        r16 = struct.unpack_from('>16H', p16, o_j + k * 32)
-        jamo.append(upscale(r16, js.get('method', 'stroke')) if any(r16) else [0] * S)
+    jamo, src = jamo_table(js, by_name)
 
     out = bytearray(b'HJ' + bytes([2, S, S, js['baseline'], Nc, Nj, Nt, 0]))
     out += p16[10:112]
@@ -127,13 +88,74 @@ def main():
         for i in ids:
             b = [x | y for x, y in zip(b, by_name[names[i]])]
         bad += a != b
-    print('HgJ24.bin: %d bytes, pieces %d, edited %d, method %s, jamo %d, mismatches %d'
-          % (len(out), n_p, len(js.get('edited', [])), js.get('method'), sum(any(j) for j in jamo), bad))
+    print('HgJ24.bin: %d bytes, pieces %d, edited %d, method %s, jamo %d = json %d + hand %d + pieces %d, mismatches %d'
+          % (len(out), n_p, len(js.get('edited', [])), js.get('method'), sum(any(j) for j in jamo),
+             src.count('json'), src.count('hand'), src.count('pieces'), bad))
     if bad:
         sys.exit(1)
     open(os.path.join(root, 'src/hangul/data/HgJ24.bin'), 'wb').write(out)
     if len(sys.argv) > 2:
         preview(bytes(out), sys.argv[2])
+
+
+CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ"
+JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ"
+JONG = "ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ"   # T-1
+
+
+def hex_rows(hx, what):
+    assert isinstance(hx, str) and len(hx) == S * 6, 'bad jamo rows: ' + what
+    return [int(hx[i * 6:i * 6 + 6], 16) << 8 for i in range(S)]
+
+
+def jamo_from_pieces(c, by_name):
+    """낱자모 c를 지금 조각으로: 자음 = 초성 1벌(없으면 종성 1벌, 겹받침), 모음 = 중성 0벌, 24칸 가운데로"""
+    if c in JUNG:
+        n = 'jung_0_%02d' % JUNG.index(c)
+    elif c in CHO:
+        n = 'cho_1_%02d' % CHO.index(c)
+    else:
+        n = 'jong_1_%02d' % (JONG.index(c) + 1)
+    rows = by_name[n]
+    ys = [y for y in range(S) if rows[y]]
+    m = 0
+    for r in rows:
+        m |= r
+    xs = [x for x in range(S) if (m >> (31 - x)) & 1]
+    dx = int((S - (xs[-1] - xs[0] + 1)) / 2 + 0.5) - xs[0]       # JS Math.round와 같게(0.5는 올림)
+    dy = (S - (ys[-1] - ys[0] + 1)) // 2 - ys[0]
+    out = [0] * S
+    for y in ys:
+        r = rows[y] >> dx if dx >= 0 else rows[y] << -dx
+        out[y + dy] = r & 0xFFFFFF00
+    return out
+
+
+def jamo_table(js, by_name):
+    """자모표 94칸과 51자의 출처 목록. ① 조각 JSON 'jamo' → ② 손그림 파일 → ③ 조각에서 만들기"""
+    hand = {}
+    hp = os.path.join(root, 'src/hangul/data/hangul24-jamo.json')
+    if os.path.exists(hp):
+        hj = json.load(open(hp, encoding='utf-8'))
+        assert hj.get('format') == 'mnhangul-jamo' and hj.get('size') == S, 'not a 24×24 jamo file: ' + hp
+        hand = hj['glyphs']
+    over = js.get('jamo') or {}
+    table, src = [[0] * S for _ in range(94)], []
+    for k in range(51):
+        c = chr(0x3131 + k)
+        kc = c.encode('euc_kr')[1] - 0xA1
+        if c in over:
+            table[kc], how = hex_rows(over[c], c), 'json'
+        elif c in hand:
+            table[kc], how = hex_rows(hand[c], c), 'hand'
+        else:
+            table[kc], how = jamo_from_pieces(c, by_name), 'pieces'
+        assert any(table[kc]), 'empty jamo ' + c
+        src.append(how)
+    for c in list(over) + list(hand):
+        assert c in [chr(0x3131 + k) for k in range(51)], 'unknown jamo key ' + c
+    assert len({tuple(table[k]) for k in range(51)}) == 51, 'duplicate jamo shapes'
+    return table, src
 
 
 def compose(pk, s):
