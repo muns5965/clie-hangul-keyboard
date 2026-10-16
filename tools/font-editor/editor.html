@@ -91,7 +91,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
 
 <div class="wrap">
   <header class="top">
-    <h1>Neo둥근모 24 편집기<small>8×4×4 조각 · 16→24</small></h1>
+    <h1>Neo둥근모 24 편집기<small>8×4×4 조각 · 16→24 · 낱자모</small></h1>
     <label class="row" for="method">자동 확대
       <select id="method">
         <option value="stroke">획 비례 (가로획 1→2, 세로획 2→3)</option>
@@ -120,6 +120,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <button data-kind="cho">초성</button>
         <button data-kind="jung">중성</button>
         <button data-kind="jong">종성</button>
+        <button data-kind="jamo">낱자모</button>
       </div>
       <div class="sets" id="sets"></div>
       <div class="setinfo" id="setinfo"></div>
@@ -146,7 +147,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
         <button id="btnUndo">되돌리기</button>
         <button id="btnRedo">다시 실행</button>
         <button id="btnReset">조각 초기화</button>
-        <label class="row" for="ghost"><input type="checkbox" id="ghost" checked> 16 원본 겹쳐보기</label>
+        <label class="row" for="ghost"><input type="checkbox" id="ghost" checked> 겹쳐보기(조각: 16 원본, 낱자모: 기본 모양)</label>
       </div>
       <div class="canvas-box"><canvas id="edit" width="480" height="480"></canvas></div>
       <div class="legend">자동: 빈 칸에서 시작하면 칠하고 칠한 칸에서 시작하면 지움 · Shift+드래그 = 지우기 · Ctrl+Z 되돌리기 · Ctrl+Y 다시 실행 · 초기화 = 자동 확대 상태로
@@ -159,7 +160,7 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
       <div class="sample">
         <h2>견본</h2>
         <label for="sampleText">문장
-          <input type="text" id="sampleText" value="가나다라 한글입력 읽됐뷁쐈 고노도로">
+          <input type="text" id="sampleText" value="가나다라 한글입력 읽됐뷁쐈 고노도로 ㄱㅅㅆㅈㅉㅎㅏㅘ">
         </label>
         <div class="note">24 수정본 (2배)</div>
         <div class="render"><canvas id="r24x2"></canvas></div>
@@ -203,16 +204,21 @@ section.panel { background: var(--panel); border: 1px solid var(--line); border-
 
 <script>
 const DATA = /*DATA*/null;
-const N = DATA.names.length;
+const N = DATA.names.length;       // 조각 수(344). 그 뒤 51칸은 낱자모(이름 jamo_3131 … jamo_3163)
+const NJ = 51;
+const JAMO_CH = Array.from({ length: NJ }, (_, k) => String.fromCodePoint(0x3131 + k));
+const ALL = DATA.names.concat(JAMO_CH.map((c) => "jamo_" + c.codePointAt(0).toString(16)));
+const HAND = DATA.hand || {};      // 손그림 낱자모(src/hangul/data/hangul24-jamo.json)
 const S = 24;                      // 편집 크기
 const BASE24 = 18;                 // 기준선(16의 12줄 × 1.5)
 const CHO = "ㄱㄲㄴㄷㄸㄹㅁㅂㅃㅅㅆㅇㅈㅉㅊㅋㅌㅍㅎ";
 const JUNG = "ㅏㅐㅑㅒㅓㅔㅕㅖㅗㅘㅙㅚㅛㅜㅝㅞㅟㅠㅡㅢㅣ";
 const JONG = " ㄱㄲㄳㄴㄵㄶㄷㄹㄺㄻㄼㄽㄾㄿㅀㅁㅂㅄㅅㅆㅇㅈㅊㅋㅌㅍㅎ";
-const KIND_LABEL = { cho: "초성", jung: "중성", jong: "종성" };
+const KIND_LABEL = { cho: "초성", jung: "중성", jong: "종성", jamo: "낱자모" };
 
 /* ---------- 데이터 ---------- */
-const info = DATA.names.map((n) => { const [k, a, b] = n.split("_"); return { kind: k, set: +a, jamo: +b }; });
+const info = DATA.names.map((n) => { const [k, a, b] = n.split("_"); return { kind: k, set: +a, jamo: +b }; })
+  .concat(JAMO_CH.map((c, k) => ({ kind: "jamo", set: 0, jamo: k })));
 const p16 = DATA.pieces.map((hex) => {
   const a = new Uint8Array(256);
   for (let y = 0; y < 16; y++) { const v = parseInt(hex.substr(y * 4, 4), 16); for (let x = 0; x < 16; x++) a[y * 16 + x] = (v >> (15 - x)) & 1; }
@@ -221,7 +227,7 @@ const p16 = DATA.pieces.map((hex) => {
 const mapBytes = Uint8Array.from(atob(DATA.map), (c) => c.charCodeAt(0));
 const SYL = new Uint16Array(11172 * 3);
 for (let i = 0; i < SYL.length; i++) SYL[i] = (mapBytes[i * 2] << 8) | mapBytes[i * 2 + 1];
-const usersOf = Array.from({ length: N }, () => []);
+const usersOf = Array.from({ length: ALL.length }, () => []);
 for (let s = 0; s < 11172; s++) for (let k = 0; k < 3; k++) { const id = SYL[s * 3 + k]; if (id !== 0xFFFF) usersOf[id].push(s); }
 const KSC = new Set();
 try {
@@ -294,7 +300,28 @@ let dbWritable = true;
 function toHex(a) { let s = ""; for (let y = 0; y < S; y++) { let v = 0; for (let x = 0; x < S; x++) v = (v << 1) | a[y * S + x]; s += v.toString(16).padStart(6, "0"); } return s; }
 function fromHex(h) { const a = new Uint8Array(S * S); for (let y = 0; y < S; y++) { const v = parseInt(h.substr(y * 6, 6), 16); for (let x = 0; x < S; x++) a[y * S + x] = (v >> (S - 1 - x)) & 1; } return a; }
 function recomputeAuto() { auto24 = p16.map((a) => upscale(a, method)); }
-function piece(i) { return edits.get(DATA.names[i]) || auto24[i]; }
+/* 낱자모 기본 모양: 손그림이 있으면 그것, 없으면 지금 조각(자음 = 초성 2벌, 겹받침 = 종성 2벌, 모음 = 중성 1벌)을 24칸 가운데로.
+   가로 시작 = floor((24 − 폭) / 2 + 0.5), 세로 시작 = floor((24 − 높이) / 2). 생성 도구 gen-johab24.py ②·③과 같은 규칙 */
+function jamoSrcIndex(c) {
+  const name = JUNG.includes(c) ? `jung_0_${String(JUNG.indexOf(c)).padStart(2, "0")}`
+    : CHO.includes(c) ? `cho_1_${String(CHO.indexOf(c)).padStart(2, "0")}`
+    : `jong_1_${String(JONG.indexOf(c)).padStart(2, "0")}`;
+  return DATA.names.indexOf(name);
+}
+function jamoBase(k) {
+  const c = JAMO_CH[k];
+  if (HAND[c]) return fromHex(HAND[c]);
+  const src = piece(jamoSrcIndex(c)), out = new Uint8Array(S * S);
+  let x0 = S, x1 = -1, y0 = S, y1 = -1;
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) if (src[y * S + x]) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  if (x1 < 0) return out;
+  const dx = Math.floor((S - (x1 - x0 + 1)) / 2 + 0.5) - x0, dy = Math.floor((S - (y1 - y0 + 1)) / 2) - y0;
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (src[y * S + x]) out[(y + dy) * S + x + dx] = 1;
+  return out;
+}
+function autoOf(i) { return i < N ? auto24[i] : jamoBase(i - N); }
+function piece(i) { return edits.get(ALL[i]) || autoOf(i); }
+function jamoIndexOfChar(ch) { const c = ch.codePointAt(0); return c >= 0x3131 && c <= 0x3163 ? N + c - 0x3131 : -1; }
 function compose24(s) { const out = new Uint8Array(S * S); for (let k = 0; k < 3; k++) { const id = SYL[s * 3 + k]; if (id === 0xFFFF) continue; const p = piece(id); for (let i = 0; i < out.length; i++) out[i] |= p[i]; } return out; }
 function compose16(s) { const out = new Uint8Array(256); for (let k = 0; k < 3; k++) { const id = SYL[s * 3 + k]; if (id === 0xFFFF) continue; const p = p16[id]; for (let i = 0; i < 256; i++) out[i] |= p[i]; } return out; }
 
@@ -317,8 +344,11 @@ function drawEditor() {
   ctx.fillStyle = css("--panel"); ctx.fillRect(0, 0, W, W);
   if (document.getElementById("ghost").checked) {
     ctx.fillStyle = css("--ghost");
-    const a = p16[sel];
-    for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (a[y * 16 + x]) ctx.fillRect(x * 1.5 * cs, y * 1.5 * cs, 1.5 * cs, 1.5 * cs);
+    if (sel >= N) drawBitmap(ctx, jamoBase(sel - N), S, 0, 0, cs, css("--ghost"));   // 낱자모: 손보기 전 기본 모양
+    else {
+      const a = p16[sel];
+      for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (a[y * 16 + x]) ctx.fillRect(x * 1.5 * cs, y * 1.5 * cs, 1.5 * cs, 1.5 * cs);
+    }
   }
   drawBitmap(ctx, piece(sel), S, 0, 0, cs, css("--pix"));
   ctx.strokeStyle = css("--grid"); ctx.lineWidth = 1;
@@ -341,7 +371,12 @@ function drawSample(id, size, scale, compose) {
   ctx.fillStyle = css("--bg"); ctx.fillRect(0, 0, cv.width, cv.height);
   const hits = [];
   chars.forEach((ch, i) => {
-    const s = sylIndex(ch); if (s < 0) return;
+    const s = sylIndex(ch);
+    if (s < 0) {   // 낱자모: 24 견본에만(16 원본 낱자모 데이터는 없음)
+      const j = jamoIndexOfChar(ch);
+      if (j >= 0 && size === S) { drawBitmap(ctx, piece(j), size, pad + i * adv * scale, pad, scale, css("--pix")); hits.push({ x0: pad + i * adv * scale, x1: pad + (i * adv + size) * scale, j }); }
+      return;
+    }
     drawBitmap(ctx, compose(s), size, pad + i * adv * scale, pad, scale, css("--pix"));
     hits.push({ x0: pad + i * adv * scale, x1: pad + (i * adv + size) * scale, s });
   });
@@ -351,6 +386,14 @@ function drawSamples() { drawSample("r24x2", S, 2, compose24); drawSample("r16x2
 function drawUsers() {
   const box = document.getElementById("users"); box.textContent = "";
   const only = document.getElementById("kscOnly").checked;
+  if (sel >= N) {   // 낱자모: 쓰는 음절이 없음. 기본 모양의 출처를 보여 준다
+    const c = JAMO_CH[sel - N], si = jamoSrcIndex(c);
+    document.getElementById("usersTitle").textContent = "낱자모 기본 모양";
+    const note = document.getElementById("usersMore");
+    note.textContent = HAND[c] ? "손그림 글자(조각에서 만들지 않음)" : `조각 ${DATA.names[si]}을(를) 칸 가운데로 옮긴 것. 조각을 고치면 같이 바뀝니다.`;
+    if (!HAND[c] && si >= 0) { const b = document.createElement("button"); b.textContent = `조각 ${DATA.names[si]}로 가기`; b.addEventListener("click", () => select(si)); box.appendChild(b); }
+    return;
+  }
   const list = usersOf[sel].filter((s) => !only || KSC.size === 0 || KSC.has(s));
   const LIMIT = 160;
   list.slice(0, LIMIT).forEach((s) => {
@@ -379,7 +422,7 @@ function pick(s) {
     box.appendChild(b);
   }
 }
-function jamoLabel(i) { const f = info[i]; return f.kind === "cho" ? CHO[f.jamo] : f.kind === "jung" ? JUNG[f.jamo] : JONG[f.jamo]; }
+function jamoLabel(i) { const f = info[i]; return f.kind === "cho" ? CHO[f.jamo] : f.kind === "jung" ? JUNG[f.jamo] : f.kind === "jamo" ? JAMO_CH[f.jamo] : JONG[f.jamo]; }
 function drawLeft() {
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.kind === kind));
   const sets = [...new Set(info.filter((f) => f.kind === kind).map((f) => f.set))].sort((a, b) => a - b);
@@ -388,32 +431,35 @@ function drawLeft() {
   sets.forEach((st) => {
     const b = document.createElement("button"); b.textContent = `${st + 1}벌`; b.classList.toggle("on", st === curSet);
     const ids = info.map((f, i) => (f.kind === kind && f.set === st ? i : -1)).filter((i) => i >= 0);
-    const ed = ids.filter((i) => edits.has(DATA.names[i])).length; if (ed) b.textContent += ` ·${ed}`;
+    const ed = ids.filter((i) => edits.has(ALL[i])).length; if (kind === "jamo") b.textContent = `${NJ}자`; if (ed) b.textContent += ` ·${ed}`;
     b.addEventListener("click", () => { curSet = st; drawLeft(); });
     sb.appendChild(b);
   });
   const ids = info.map((f, i) => (f.kind === kind && f.set === curSet ? i : -1)).filter((i) => i >= 0);
   const ex = [];
   for (const i of ids) for (const s of usersOf[i]) { if (!KSC.size || KSC.has(s)) { ex.push(String.fromCodePoint(0xAC00 + s)); break; } if (ex.length > 6) break; }
-  document.getElementById("setinfo").textContent = `${KIND_LABEL[kind]} ${curSet + 1}벌 예: ${ex.slice(0, 6).join(" ")}`;
+  document.getElementById("setinfo").textContent = kind === "jamo" ? "혼자 쓰는 자모(KS 0xA4A1~). 점 표시 = 손으로 고친 글자. 손그림: " + Object.keys(HAND).join(" ")
+    : `${KIND_LABEL[kind]} ${curSet + 1}벌 예: ${ex.slice(0, 6).join(" ")}`;
   const jb = document.getElementById("jamo"); jb.textContent = "";
   ids.forEach((i) => {
-    const b = document.createElement("button"); b.classList.toggle("on", i === sel); b.classList.toggle("edited", edits.has(DATA.names[i]));
+    const b = document.createElement("button"); b.classList.toggle("on", i === sel); b.classList.toggle("edited", edits.has(ALL[i]));
     const cv = document.createElement("canvas"), u = unit(1); fit(cv, S * u, S * u); const ctx = cv.getContext("2d");
     drawBitmap(ctx, piece(i), S, 0, 0, u, i === sel ? css("--accent-ink") : css("--pix"));
     const sp = document.createElement("span"); sp.textContent = jamoLabel(i);
-    b.append(cv, sp); b.title = DATA.names[i];
+    b.append(cv, sp); b.title = ALL[i];
     b.addEventListener("click", () => select(i));
     jb.appendChild(b);
   });
 }
 function drawHead() {
   const f = info[sel];
-  document.getElementById("curLabel").textContent = `${KIND_LABEL[f.kind]} ${f.set + 1}벌 ${jamoLabel(sel)}`;
-  document.getElementById("curName").textContent = DATA.names[sel];
-  const st = document.getElementById("curState"); const ed = edits.has(DATA.names[sel]);
-  st.textContent = ed ? "수정함" : "자동 확대"; st.className = "chip" + (ed ? " ok" : "");
-  document.getElementById("progress").textContent = `수정 ${edits.size} / ${N}`;
+  document.getElementById("curLabel").textContent = f.kind === "jamo" ? `낱자모 ${jamoLabel(sel)}` : `${KIND_LABEL[f.kind]} ${f.set + 1}벌 ${jamoLabel(sel)}`;
+  document.getElementById("curName").textContent = ALL[sel];
+  const st = document.getElementById("curState"); const ed = edits.has(ALL[sel]);
+  st.textContent = ed ? "수정함" : f.kind !== "jamo" ? "자동 확대" : HAND[JAMO_CH[f.jamo]] ? "손그림" : "조각에서";
+  st.className = "chip" + (ed ? " ok" : "");
+  const nj = [...edits.keys()].filter((n) => n.startsWith("jamo_")).length;
+  document.getElementById("progress").textContent = `수정 ${edits.size - nj} / ${N} · 낱자모 ${nj} / ${NJ}`;
 }
 function redrawAll() { drawLeft(); drawHead(); drawEditor(); drawSamples(); drawUsers(); if (picked >= 0) pick(picked); }
 function select(i) { sel = i; kind = info[i].kind; curSet = info[i].set; redrawAll(); }
@@ -461,8 +507,8 @@ function commitMany(items) {
 function commit(name, before) { commitMany([{ name, before }]); }
 function snapshotOf(name) { return edits.has(name) ? edits.get(name).slice() : null; }
 function setEdit(name, arr) {
-  const a = DATA.names.indexOf(name);
-  if (a >= 0 && arr && toHex(arr) === toHex(auto24[a])) edits.delete(name);
+  const a = ALL.indexOf(name);
+  if (a >= 0 && arr && toHex(arr) === toHex(autoOf(a))) edits.delete(name);
   else if (arr) edits.set(name, arr); else edits.delete(name);
 }
 
@@ -478,7 +524,7 @@ editCv.addEventListener("pointerdown", (ev) => {
   const c = cellAt(ev); if (!c) return;
   if (ev.button === 2) ev.preventDefault();
   editCv.setPointerCapture(ev.pointerId);
-  const name = DATA.names[sel];
+  const name = ALL[sel];
   const before = edits.has(name) ? edits.get(name).slice() : null;
   const work = piece(sel).slice();
   /* 자동: 누른 칸이 칠해져 있으면 지우고 비어 있으면 칠함. Shift를 누르고 있거나 오른쪽 버튼이면 지움 */
@@ -499,7 +545,7 @@ editCv.addEventListener("pointerup", endPaint);
 editCv.addEventListener("pointercancel", endPaint);
 document.querySelectorAll("[data-shift]").forEach((b) => b.addEventListener("click", () => {
   const [dx, dy] = b.dataset.shift.split(",").map(Number);
-  const name = DATA.names[sel], before = edits.has(name) ? edits.get(name).slice() : null;
+  const name = ALL[sel], before = edits.has(name) ? edits.get(name).slice() : null;
   const src = piece(sel), out = new Uint8Array(S * S);
   for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const nx = x + dx, ny = y + dy; if (src[y * S + x] && nx >= 0 && nx < S && ny >= 0 && ny < S) out[ny * S + nx] = 1; }
   setEdit(name, out); commit(name, before); redrawAll();
@@ -510,7 +556,7 @@ function resetNames(names) {
   commitMany(items); redrawAll();
   return items.length;
 }
-document.getElementById("btnReset").addEventListener("click", () => { resetNames([DATA.names[sel]]); });
+document.getElementById("btnReset").addEventListener("click", () => { resetNames([ALL[sel]]); });
 document.getElementById("btnResetGlyph").addEventListener("click", () => {
   if (picked < 0) return;
   const names = []; for (let k = 0; k < 3; k++) { const id = SYL[picked * 3 + k]; if (id !== 0xFFFF) names.push(DATA.names[id]); }
@@ -526,7 +572,7 @@ document.getElementById("btnResetAll").addEventListener("click", (ev) => {
 });
 function applyStep(list, useBefore) {
   list.forEach((it) => { const v = useBefore ? it.before : it.after; if (v) edits.set(it.name, v.slice()); else edits.delete(it.name); persist(it.name); });
-  const i = DATA.names.indexOf(list[0].name); if (i >= 0) select(i); else redrawAll();
+  const i = ALL.indexOf(list[0].name); if (i >= 0) select(i); else redrawAll();
 }
 function doUndo() { const u = undo.pop(); if (!u) return; redo.push(u); applyStep(u, true); }
 function doRedo() { const r = redo.pop(); if (!r) return; undo.push(r); applyStep(r, false); }
@@ -546,7 +592,7 @@ document.querySelectorAll("#tabs button").forEach((b) => b.addEventListener("cli
 document.getElementById("ghost").addEventListener("change", drawEditor);
 document.getElementById("kscOnly").addEventListener("change", drawUsers);
 document.getElementById("sampleText").addEventListener("input", drawSamples);
-document.getElementById("r24x2").addEventListener("click", (ev) => { const r = ev.target.getBoundingClientRect(); const x = (ev.clientX - r.left) * (ev.target.width / r.width); const h = sampleHits.find((t) => x >= t.x0 && x < t.x1); if (h) pick(h.s); });
+document.getElementById("r24x2").addEventListener("click", (ev) => { const r = ev.target.getBoundingClientRect(); const x = (ev.clientX - r.left) * (ev.target.width / r.width); const h = sampleHits.find((t) => x >= t.x0 && x < t.x1); if (h && h.j !== undefined) select(h.j); else if (h) pick(h.s); });
 const methodSel = document.getElementById("method"); methodSel.value = method;
 /* ---------- 중간 저장본 (db: snapshots/<시각>) ---------- */
 const SNAP_MAX = 30;
@@ -605,10 +651,11 @@ if (window.matchMedia) window.matchMedia("(prefers-color-scheme: dark)").addEven
 /* ---------- 내보내기·불러오기 ---------- */
 function exportObject() {
   return {
-    format: "mnhangul-hangul-pieces", version: 1, size: S, baseline: BASE24,
+    format: "mnhangul-hangul-pieces", version: 2, size: S, baseline: BASE24,
     base: DATA.base, method,
-    note: "rows: 24 rows x 24 bits, hex 6 chars per row, MSB = left. edited = names changed by hand.",
-    names: DATA.names, pieces: DATA.names.map((n, i) => toHex(piece(i))), edited: [...edits.keys()],
+    note: "rows: 24 rows x 24 bits, hex 6 chars per row, MSB = left. edited = names changed by hand. jamo = hand-edited standalone jamo only (char -> rows); others are built from pieces/hand file.",
+    names: DATA.names, pieces: DATA.names.map((n, i) => toHex(piece(i))), edited: [...edits.keys()].filter((n) => !n.startsWith("jamo_")),
+    jamo: Object.fromEntries(JAMO_CH.map((c, k) => [c, ALL[N + k]]).filter(([c, n]) => edits.has(n)).map(([c, n]) => [c, toHex(edits.get(n))])),
   };
 }
 document.getElementById("btnExport").addEventListener("click", async () => {
@@ -636,6 +683,11 @@ document.getElementById("fileImport").addEventListener("change", async (ev) => {
     const changed = [];
     const items = [];
     o.names.forEach((n, k) => { if (!editedSet.has(n) || DATA.names.indexOf(n) < 0) return; items.push({ name: n, before: snapshotOf(n) }); edits.set(n, fromHex(o.pieces[k])); changed.push(n); });
+    /* version 2: 손본 낱자모(글자 → 24줄). 없으면(예전 JSON) 건너뜀 */
+    if (o.jamo && typeof o.jamo === "object") Object.entries(o.jamo).forEach(([c, h]) => {
+      const k = JAMO_CH.indexOf(c); if (k < 0 || typeof h !== "string" || h.length !== S * 6) return;
+      const n = ALL[N + k]; items.push({ name: n, before: snapshotOf(n) }); edits.set(n, fromHex(h)); changed.push(n);
+    });
     commitMany(items); redrawAll();
     setStore(`불러옴 ${changed.length}개`, "ok");
   } catch (e) { setStore("불러오기 실패: " + e.message, "warn"); }
@@ -645,7 +697,7 @@ document.getElementById("fileImport").addEventListener("change", async (ev) => {
 /* ---------- 시작 ---------- */
 recomputeAuto();
 const local = lsGet("nd24.edits", {});
-Object.keys(local).forEach((n) => { if (DATA.names.indexOf(n) >= 0) edits.set(n, fromHex(local[n])); });
+Object.keys(local).forEach((n) => { if (ALL.indexOf(n) >= 0) edits.set(n, fromHex(local[n])); });
 select(0);
 pick(0);
 setStore("이 브라우저에만", "");
@@ -671,7 +723,7 @@ setStore("이 브라우저에만", "");
       if (up.length) setStore(`이 기기에만 있던 ${up.length}개 올림`, "ok");
     }
     snap.docChanges().forEach((ch) => {
-      const n = ch.doc.id; if (DATA.names.indexOf(n) < 0) return;
+      const n = ch.doc.id; if (ALL.indexOf(n) < 0) return;
       if (pending.has(n) || ch.doc.metadata.hasPendingWrites) return;   // 이 화면이 쓰는 중인 조각: 화면 상태가 기준
       if (ch.type === "removed") edits.delete(n);
       else { const d = ch.doc.data(); if (d && typeof d.bits === "string" && d.bits.length === S * 6) edits.set(n, fromHex(d.bits)); }

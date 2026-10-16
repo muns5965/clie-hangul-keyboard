@@ -3,7 +3,7 @@
 
 Neo둥근모(OFL 1.1)의 한글 조각(초성 cho_<벌>_<자모>, 중성 jung_.., 종성 jong_..; 8×4×4 벌식, 344개)을
 16×16 비트맵으로 풀고(1픽셀 = 64단위 격자, nonzero), 음절 11,172자마다 쓰는 조각 번호를 뽑아
-editor.html 틀의 /*DATA*/ 자리에 넣는다. 조각은 이동·변형 없이 겹치기만 한다(검사함).
+editor.html 틀의 /*DATA*/ 자리에 넣는다. 낱자모 손그림(src/hangul/data/hangul24-jamo.json)도 함께 넣는다. 조각은 이동·변형 없이 겹치기만 한다(검사함).
 
 사용: python3 tools/font-editor/build.py <neodgm.ttf>   (npm @kfonts/neodgm 0.5.0의 src/neodgm.ttf)
 """
@@ -82,11 +82,15 @@ for comps in syl:
     ids = [index[n] for n in comps] + [0xFFFF] * (3 - len(comps))
     for v in ids:
         mp += bytes([v >> 8, v & 0xFF])
+# 낱자모 손그림(조각에서 만들지 않는 글자, 24×24). 생성 도구 gen-johab24.py의 ②와 같은 파일
+hand = json.load(open(os.path.join(here, '..', '..', 'src', 'hangul', 'data', 'hangul24-jamo.json'), encoding='utf-8'))
+assert hand['format'] == 'mnhangul-jamo' and hand['size'] == 24
 data = {
     'base': 'Neo둥근모 1.600 (OFL 1.1)',
     'names': names,
     'pieces': pieces,
     'map': base64.b64encode(bytes(mp)).decode(),
+    'hand': hand['glyphs'],
 }
 tpl = open(os.path.join(here, 'editor.html'), encoding='utf-8').read()
 out = tpl.replace('/*DATA*/null', json.dumps(data, ensure_ascii=False, separators=(',', ':')))
