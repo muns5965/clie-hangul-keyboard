@@ -25,7 +25,7 @@
  *          일반 화면 창 1A00·0000 = ×2. 저해상도 글꼴(높이 8~15)에서만 쓴다 */
 #define kWinOffscreen 0x4000
 #define kCell12W      13      /* patch.c kCell12과 같음(12×12 글자 칸, ×1) */
-#define kCell24W      26      /* v22: patch.c kCell24와 같음(24×24 글자 칸, #92 = 추가 글꼴 묶음 주소) */
+#define kCell24W      24      /* v22: patch.c kCell24와 같음(24×24 글자 칸, #92 = 추가 글꼴 묶음 주소). v23: 26 → 24 */
 
 static inline Boolean WinOffscreen(void)
 {

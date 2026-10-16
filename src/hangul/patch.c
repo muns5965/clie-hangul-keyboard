@@ -78,7 +78,7 @@ static inline UInt32 Pair(const Int16 *p)
  * #23 = 16 묶음 주소, #24 = 12 묶음 주소(앱이 Patch ON 때 잠가 둠). 글자 칸 폭 = 글자 폭 + 양옆 1 */
 #define kCell16   18      /* 16 글자 칸 폭(고해상도 픽셀, CJKOS 고해상도 std와 같음) */
 #define kCell12   13      /* 12 글자 칸 폭(글자 11 + 1 + 1) */
-#define kCell24   26      /* v22: 24 글자 칸 폭(추가 글꼴 MnHgFont24, 묶음 판 2 = 한 줄 4바이트) */
+#define kCell24   24      /* v22: 24 글자 칸 폭(추가 글꼴 MnHgFont24, 묶음 판 2 = 한 줄 4바이트). v23: 26 → 24(칸 여백 없음, 글꼴 자체 여백만) */
 
 static inline UInt16 RdW(const UInt8 *p)
 {
@@ -166,7 +166,8 @@ static inline void SetGlyph(UInt16 *t, const UInt32 *rows, UInt16 H, UInt16 cw, 
             v = rows[y];
         else
             v = (y == 0 || y == H - 1) ? edge : (0x80000000UL | (0x80000000UL >> (cw - 3)));
-        v >>= 1;                                 /* 왼쪽 1칸 띄움. v22: 줄은 32비트(왼쪽 = 비트 31) */
+        if (cw > H)
+            v >>= 1;                             /* 왼쪽 1칸 띄움(v23: 칸이 글자 폭과 같은 24는 띄우지 않음). 줄은 32비트(왼쪽 = 비트 31) */
         t[13 + (y + top) * 2] = (UInt16)(v >> 16);
         t[13 + (y + top) * 2 + 1] = (UInt16)v;
     }
