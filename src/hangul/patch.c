@@ -321,10 +321,12 @@ static inline Boolean HanLabel(UInt8 c)
     }
     /* v39: 한글 모드는 ⇪ 펜 누름으로 바뀐 #143. 상태가 ⇪ 켜짐이고 마지막 펜이 ⇪가 아니면 한글로 다시 맞춤
      *      (⇪를 막 눌렀을 때는 상태가 한 박자 늦어 맞추지 않는다) */
-    if (caps && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) == 0)
+    if (caps && (GetF(kFtrPenCaps) == 0 || GetF(kFtrPenCaps) == 3) && GetF(kFtrHan) == 0)
         FtrSet(kHgCreator, kFtrHan, 1);
     /* v44: ⇪ 꺼짐 + 일시 쉬프트(자동 쉬프트 등)이고 마지막 펜이 ⇪가 아니면 영문(새 메모에서 시스템이 ⇪를 푼 경우).
-     *      ⇪를 막 누른 경우(빈 메모 자동 쉬프트에서 켜기: 그리는 순간 U g0031)는 펜 판정을 따른다 */
+     *      ⇪를 막 누른 경우(빈 메모 자동 쉬프트에서 켜기: 그리는 순간 U g0031)는 펜 판정을 따른다
+     * v48: 가상 키보드 일반 키를 누른 동안(펜 표시 3)은 적용 안 함 — 한글 모드에서 키를 누르면 Sony가 잠깐
+     *      c0 t3로 바꿔 그 키만 영문으로 남던 문제(v47 실측 LR667·LW674 H0 c0 t3 → 바로 c1) */
     if (!caps && temp != 0 && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) != 0)
         FtrSet(kHgCreator, kFtrHan, 0);
     {   /* v46 진단: (H, p, caps, temp)가 바뀔 때만 기록 */

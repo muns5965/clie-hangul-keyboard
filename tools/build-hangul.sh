@@ -125,7 +125,11 @@ a=$(m68k-palmos-nm ime.coff | awk '$3=="ImBase" {print $1}')
 [ "$((16#$a))" -eq 0 ] || { echo "error: ImBase at $a" >&2; exit 1; }
 a=$(m68k-palmos-nm ime.coff | awk '$3=="ImOrig" {print $1}')
 [ "$((16#$a))" -eq 8 ] || { echo "error: ImOrig at $a" >&2; exit 1; }
-if m68k-palmos-objdump -d ime.coff | grep -q '%a5'; then
+# v48: 코드 뒤 KSC 표(KscBits~) 데이터를 명령어로 풀면 %a5처럼 보여 검사가 타이밍 따라 실패했다 → 코드 구역만 검사
+stop=$(m68k-palmos-nm ime.coff | awk '$3=="KscBits" {print $1}')
+[ -n "$stop" ] || { echo "error: KscBits not found" >&2; exit 1; }
+m68k-palmos-objdump -d --stop-address=0x$stop ime.coff > ime.code.dis
+if grep -q '%a5' ime.code.dis; then
   echo "error: ime references %a5" >&2; exit 1
 fi
 if m68k-palmos-objdump -r ime.coff | grep -qE '^[0-9a-f]{8} '; then
