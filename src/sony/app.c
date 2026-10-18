@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v6 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v7 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v7: 연결 복구 때 ⇪ 실제 상태(#150)를 모름으로, 모를 때 ⇪ 누름은 Graffiti ⇪ 상태의 반대.
  * v6: 가상 실크 펜 누름 때(Sony가 다시 그리기 전) 키 글자 연결 확인·복구, 복구 직후 ⇪ 그림은 실제 상태로 씀.
  * v5: Update는 설치되어 있는 MnHangul도 다음 리셋 한 번 자동 시작을 건너뛰게 한다.
  * v4: 첫 화면 6줄 = 한글 표시 모듈(MnHangul / CJKOS? / none).
@@ -416,7 +417,7 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v6", 12, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v7", 12, 0, 0);
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
     {
@@ -458,7 +459,7 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v6 Debug [tap: back]", 30, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v7 Debug [tap: back]", 30, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);

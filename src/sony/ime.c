@@ -425,7 +425,15 @@ void HgImGet(EventType *event, Int32 timeout)
             /* v45: Sony 실제 상태(마지막 자판 전체 그리기의 ⇪ 그림)의 반대로. 모르면 지금 값을 뒤집음 */
             FtrGet(kSyCr, kFtrSonyCaps, &sc);
             FtrGet(kSyCr, kFtrHan, &v);
-            FtrSet(kSyCr, kFtrHan, (sc & 0x100) ? !(sc & 1) : (v ? 0 : 1));
+            if (sc & 0x100)
+                FtrSet(kSyCr, kFtrHan, !(sc & 1));
+            else {   /* v7: 모르면(시작 직후·연결 복구 직후) 지금 Graffiti ⇪ 상태의 반대(그리기 전이라 지금 상태 = Sony 상태) */
+                Boolean caps = false, num = false, autoS = false;
+                UInt16  temp = 0;
+
+                GrfGetState(&caps, &num, &temp, &autoS);
+                FtrSet(kSyCr, kFtrHan, caps ? 0 : 1);
+            }
             FtrSet(kSyCr, kFtrPenCaps, 1);
             v = 0;
             FtrGet(kSyCr, 108, &v);

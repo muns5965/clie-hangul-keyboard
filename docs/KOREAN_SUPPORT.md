@@ -174,6 +174,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v56 / MnSonyKbd v4: CJKOS 동작 감지 — 실측 1의 CJKOS 교체 함수 중 MnHangul·MnSonyKbd가 바꾸지 않는 FntSetFont·FrmDrawForm·FldHandleEvent·StrCompare가 하나라도 ROM 밖이면 "CJKOS?". MnHangul은 그때 Hangul ON·리셋 자동 시작을 하지 않는다(리셋 순간 CJKOS가 나중에 걸리면 못 알아챔). MnSonyKbd 첫 화면에 한글 표시 모듈 표시.
 - v57 / MnSonyKbd v5: 실측 — MnHangul `Update` 뒤 MnSonyKbd는 자기 자동 시작으로 잠겨 설치 실패. `Update`는 설치되어 있는 다른 모듈의 앱 설정 3번(건너뛰기)도 켠다(설치 안 된 모듈에는 저장하지 않음).
 - MnSonyKbd v6: v5 실측 — CJKOS 끄고 MnHangul ON 뒤 ⇪: 1번째 영문 키 글자(복구가 ⇪ 그림 때라 앞 줄은 패치 없이 그려지고 #151이 없어 기준값 S 안 바뀜), 2번째(끄기) 쌍자음 표시(S 옛 값으로 H=1), 3번째 정상. 수정: 가상 실크 펜 누름 때(Sony가 그리기 전, v38 실측 순서) 먼저 복구, 그림 때 복구했으면 그 그림을 실제 상태로 씀.
+- MnSonyKbd v7: v6 실측 — 복구 뒤 첫 ⇪에서 qwerty 줄만 영문(`한A` 파랑, 아래 줄 자모). 펜 누름 때 복구는 됐지만 ⇪ 판정이 옛 실제 상태(#150)의 반대라 H=0으로 시작. 수정: 복구 때 #150을 모름으로, 모를 때는 그 순간 Graffiti ⇪ 상태의 반대(Sony는 그린 뒤 상태를 바꾸므로 펜 누름 순간 = Sony 현재 상태).
 - v45: ⇪ 펜 누름은 Sony 실제 상태(자판 전체 그리기의 ⇪ 그림, #150)의 반대로 정함. v44 실측: 값을 뒤집는 방식은 한 번 어긋나면 ⇪ 켜기·끄기 모두 1·2줄이 틀림.
 - v44: ⇪ 판정 보완(눌림 표시 그림 무시, ⇪ 꺼짐 + 일시 쉬프트 → 영문). v43 실측: Sony는 줄 순서로 그려 ⇪ 그림이 3줄 맨 앞 — 1·2줄은 그 전에 그려짐. ⇪ 누를 때 눌림 표시로 보통 그림을 먼저 한 번 그림.
 - v43: Sony ⇪ 키 그림(ROM SilkExtn Tbmp 2400 보통·2500 반전, 8비트 글자 0·바탕 0xD8/0x39)을 `한A`(22×18, Galmuri11 OFL)로 바꿔 그리고, 그 그림으로 한글 모드 판정(WinDrawBitmap). v42 실측: 새 메모에서 Sony가 쉬프트 고정을 풀었는데 표시는 한글로 남고 입력은 A.

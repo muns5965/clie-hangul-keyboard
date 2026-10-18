@@ -59,6 +59,7 @@ static inline Boolean SyBltHeal(void)
     cur = (UInt32)SysGetTrapAddress(kSyTrapBlt);
     DmWrite((void *)(ours - 4), 0, &cur, 4);   /* 아래 주소 = 지금 맨 위(ROM 또는 MnHangul) */
     SysSetTrapAddress(kSyTrapBlt, (void *)ours);
+    FtrSet('MnSy', 150, 0);   /* v7: 빠져 있던 동안 Sony 실제 ⇪ 상태(#150)는 갱신되지 않았으므로 모름으로 */
     SyHealCount(1);
     return true;
 }
