@@ -13,8 +13,13 @@
  *   하드웨어 버튼 등은 인터럽트 안에서 이 함수를 부를 수 있어 Feature(메모리 관리자)를 쓰지 않는다.
  *   앱이 동적 힙에 잡아 둔 버퍼(오프셋 24에 주소)에 바로 쓴다:
  *   [0] 호출 수, [1] 다음 칸 번호, [2 + 2k] 글자<<16 | modifiers, [3 + 2k] 부른 곳(복귀 주소) - 최근 8개(v31)
+ * v32: 3 EvtGetEvent(event, timeout) (0xA11D) — 앱에 건네는 keyDown을 원래 함수 다음에 기록
+ *   [18] 수, [19] 다음 칸, [20 + 2k] 글자<<16 | modifiers, [21 + 2k] keyCode<<16 | Graffiti 상태
+ *   Graffiti 상태(GrfGetState) = capsLock<<12 | numLock<<8 | tempShift<<4 | autoShifted
+ * v32: 4 EvtAddEventToQueue(event) (0xA11B) — keyDown을 큐에 넣는 곳
+ *   [36] keyDown 수, [37] 마지막 글자<<16 | modifiers, [38] 부른 곳
  *
- * 리소스 배치: 오프셋 0 = 진입점 3개의 오프셋 표, 12 = 원래 함수 주소 3개, 24 = 기록 버퍼 주소(앱이 DmWrite).
+ * 리소스 배치: 오프셋 0 = 진입점 5개의 오프셋 표, 20 = 원래 함수 주소 5개, 40 = 기록 버퍼 주소(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  */
 
@@ -25,14 +30,27 @@
 void HgKbdDialog(KeyboardType kbd);
 void HgKbdDialogV10(void);
 Err  HgEnqueueKey(WChar ascii, UInt16 keycode, UInt16 modifiers);
+void HgGetEvent(EventType *event, Int32 timeout);
+void HgAddEvent(const EventType *event);
 
 asm(".text\n.even\nKbdBase:\n"
     " .long HgKbdDialog-KbdBase, HgKbdDialogV10-KbdBase, HgEnqueueKey-KbdBase\n"
-    "KbdOrig:\n .long 0,0,0\nKbdBuf:\n .long 0\n");
+    " .long HgGetEvent-KbdBase, HgAddEvent-KbdBase\n"
+    "KbdOrig:\n .long 0,0,0,0,0\nKbdBuf:\n .long 0\n");
 
 typedef void (*KbdFn)(KeyboardType);
 typedef void (*KbdV10Fn)(void);
 typedef Err  (*EnqFn)(WChar, UInt16, UInt16);
+typedef void (*GetFn)(EventType *, Int32);
+typedef void (*AddFn)(const EventType *);
+
+static inline UInt32 *Buf(void)
+{
+    UInt32 * const *bp;
+
+    asm("lea KbdBuf(%%pc),%0" : "=a" (bp));
+    return *bp;
+}
 
 static inline UInt32 Orig(UInt16 i)
 {
@@ -103,4 +121,35 @@ Err HgEnqueueKey(WChar ascii, UInt16 keycode, UInt16 modifiers)
         b[1] = k + 1;
     }
     return ((EnqFn)Orig(2))(ascii, keycode, modifiers);
+}
+
+void HgGetEvent(EventType *event, Int32 timeout)
+{
+    UInt32 *b;
+
+    ((GetFn)Orig(3))(event, timeout);
+    b = Buf();
+    if (b != NULL && event != NULL && event->eType == keyDownEvent) {
+        UInt16  k = (UInt16)(b[19] & 7), temp = 0;
+        Boolean caps = false, num = false, autoS = false;
+
+        GrfGetState(&caps, &num, &temp, &autoS);
+        b[18]++;
+        b[20 + 2 * k] = ((UInt32)event->data.keyDown.chr << 16) | event->data.keyDown.modifiers;
+        b[21 + 2 * k] = ((UInt32)event->data.keyDown.keyCode << 16) | ((caps ? 1 : 0) << 12) |
+                        ((num ? 1 : 0) << 8) | ((temp & 0xF) << 4) | (autoS ? 1 : 0);
+        b[19] = k + 1;
+    }
+}
+
+void HgAddEvent(const EventType *event)
+{
+    UInt32 *b = Buf();
+
+    if (b != NULL && event != NULL && event->eType == keyDownEvent) {
+        b[36]++;
+        b[37] = ((UInt32)event->data.keyDown.chr << 16) | event->data.keyDown.modifiers;
+        b[38] = (UInt32)__builtin_return_address(0);
+    }
+    ((AddFn)Orig(4))(event);
 }
