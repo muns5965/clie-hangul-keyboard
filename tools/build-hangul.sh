@@ -94,7 +94,7 @@ fi
 m68k-palmos-objcopy -O binary -j .text width.coff HgWd0000.bin
 m68k-palmos-objdump -d width.coff > width.dis
 
-# 1e) v28 키보드 대화상자 진단 코드(src/hangul/kbd.c) → 리소스 HgKd 0. 오프셋 0 = 진입점 오프셋 표, 20 = 원래 주소 칸
+# 1e) v28 키보드 대화상자 진단 코드(src/hangul/kbd.c) → 리소스 HgKd 0. 오프셋 0 = 진입점 오프셋 표, 32 = 원래 주소 칸
 m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,HgKbdDialog \
@@ -104,7 +104,7 @@ data=$(m68k-palmos-size kbd.coff | awk 'NR==2 {print $2 + $3}')
 a=$(m68k-palmos-nm kbd.coff | awk '$3=="KbdBase" {print $1}')
 [ "$((16#$a))" -eq 0 ] || { echo "error: KbdBase at $a" >&2; exit 1; }
 a=$(m68k-palmos-nm kbd.coff | awk '$3=="KbdOrig" {print $1}')
-[ "$((16#$a))" -eq 20 ] || { echo "error: KbdOrig at $a" >&2; exit 1; }
+[ "$((16#$a))" -eq 32 ] || { echo "error: KbdOrig at $a" >&2; exit 1; }
 if m68k-palmos-objdump -d kbd.coff | grep -q '%a5'; then
   echo "error: kbd references %a5" >&2; exit 1
 fi

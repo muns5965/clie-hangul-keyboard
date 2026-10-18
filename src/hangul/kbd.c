@@ -18,8 +18,13 @@
  *   Graffiti 상태(GrfGetState) = capsLock<<12 | numLock<<8 | tempShift<<4 | autoShifted
  * v32: 4 EvtAddEventToQueue(event) (0xA11B) — keyDown을 큐에 넣는 곳(v32 실측: Sony 가상 키보드 글자는 SilkExtn이 여기로)
  *   v33: [36] keyDown 수, [37] 다음 칸, [38 + 2k] 글자<<16 | Graffiti 상태(넣는 순간), [39 + 2k] 부른 곳 — 최근 8개
+ * v37: 5 GrfSetState(caps, num, upper) (0xA281), 6 GsiSetShiftState(lock, temp) (0xA29F),
+ *      7 WinCopyRectangle(src, dst, rect, x, y, mode) (0xA209, 가상 실크 창 #109가 src나 dst일 때만)
+ *   Sony 키보드가 키 글자를 다시 그린 뒤 상태를 바꾸는지(순서), 화면 밖 창을 화면에 복사하는지 확인용.
+ *   [54] 수, [55] 다음 칸, [56 + 4k] 종류<<28 | 그 순간 다른 창 글자 그리기 수(#108),
+ *   [57 + 4k]·[58 + 4k] 인자, [59 + 4k] 부른 곳 — 최근 16개
  *
- * 리소스 배치: 오프셋 0 = 진입점 5개의 오프셋 표, 20 = 원래 함수 주소 5개, 40 = 기록 버퍼 주소(앱이 DmWrite).
+ * 리소스 배치: 오프셋 0 = 진입점 8개의 오프셋 표, 32 = 원래 함수 주소 8개, 64 = 기록 버퍼 주소(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  */
 
@@ -32,17 +37,24 @@ void HgKbdDialogV10(void);
 Err  HgEnqueueKey(WChar ascii, UInt16 keycode, UInt16 modifiers);
 void HgGetEvent(EventType *event, Int32 timeout);
 void HgAddEvent(const EventType *event);
+Err  HgGrfSet(Boolean caps, Boolean num, Boolean upper);
+void HgGsiSet(UInt16 lock, UInt16 temp);
+void HgWinCopy(WinHandle src, WinHandle dst, const RectangleType *r, Coord x, Coord y, WinDrawOperation mode);
 
 asm(".text\n.even\nKbdBase:\n"
     " .long HgKbdDialog-KbdBase, HgKbdDialogV10-KbdBase, HgEnqueueKey-KbdBase\n"
     " .long HgGetEvent-KbdBase, HgAddEvent-KbdBase\n"
-    "KbdOrig:\n .long 0,0,0,0,0\nKbdBuf:\n .long 0\n");
+    " .long HgGrfSet-KbdBase, HgGsiSet-KbdBase, HgWinCopy-KbdBase\n"
+    "KbdOrig:\n .long 0,0,0,0,0,0,0,0\nKbdBuf:\n .long 0\n");
 
 typedef void (*KbdFn)(KeyboardType);
 typedef void (*KbdV10Fn)(void);
 typedef Err  (*EnqFn)(WChar, UInt16, UInt16);
 typedef void (*GetFn)(EventType *, Int32);
 typedef void (*AddFn)(const EventType *);
+typedef Err  (*GrfSetFn)(Boolean, Boolean, Boolean);
+typedef void (*GsiSetFn)(UInt16, UInt16);
+typedef void (*WinCopyFn)(WinHandle, WinHandle, const RectangleType *, Coord, Coord, WinDrawOperation);
 
 static inline UInt32 *Buf(void)
 {
@@ -158,4 +170,48 @@ void HgAddEvent(const EventType *event)
         b[37] = k + 1;
     }
     ((AddFn)Orig(4))(event);
+}
+
+/* v37: 상태 변화·화면 복사 기록 한 칸 */
+static void SetLog(UInt32 *b, UInt16 kind, UInt32 a1, UInt32 a2, UInt32 ret)
+{
+    UInt16 k = (UInt16)(b[55] & 15);
+
+    b[54]++;
+    b[56 + 4 * k] = ((UInt32)kind << 28) | (Ftr(108) & 0x0FFFFFFFUL);
+    b[57 + 4 * k] = a1;
+    b[58 + 4 * k] = a2;
+    b[59 + 4 * k] = ret;
+    b[55] = k + 1;
+}
+
+Err HgGrfSet(Boolean caps, Boolean num, Boolean upper)
+{
+    UInt32 *b = Buf();
+
+    if (b != NULL)
+        SetLog(b, 1, ((UInt32)(caps ? 1 : 0) << 16) | ((num ? 1 : 0) << 8) | (upper ? 1 : 0), 0,
+               (UInt32)__builtin_return_address(0));
+    return ((GrfSetFn)Orig(5))(caps, num, upper);
+}
+
+void HgGsiSet(UInt16 lock, UInt16 temp)
+{
+    UInt32 *b = Buf();
+
+    if (b != NULL)
+        SetLog(b, 2, ((UInt32)lock << 16) | temp, 0, (UInt32)__builtin_return_address(0));
+    ((GsiSetFn)Orig(6))(lock, temp);
+}
+
+void HgWinCopy(WinHandle src, WinHandle dst, const RectangleType *r, Coord x, Coord y, WinDrawOperation mode)
+{
+    UInt32 *b = Buf();
+    UInt32  silk = Ftr(109);
+
+    if (b != NULL && silk != 0 && ((UInt32)src == silk || (UInt32)dst == silk) && r != NULL)
+        SetLog(b, (UInt32)src == silk ? 3 : 4, ((UInt32)(UInt16)r->topLeft.x << 16) | (UInt16)r->topLeft.y,
+               ((UInt32)(UInt16)r->extent.x << 16) | (UInt16)r->extent.y,
+               ((UInt32)(UInt16)x << 16) | (UInt16)y);
+    ((WinCopyFn)Orig(7))(src, dst, r, x, y, mode);
 }
