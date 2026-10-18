@@ -266,11 +266,43 @@ static inline UInt32 FontInfo(const void *f)
     return (w == NULL) ? 0xFFFFFFFFUL : (((UInt32)(UInt16)w[0] << 16) | (UInt16)w[7]);
 }
 
+/* v29 진단: 활성 창이 아닌 창(가상 실크 등)에 찍히는 글자. MnHangul 실행 중(#106)에는 기록하지 않는다.
+ *   #108 횟수, #109 창 주소, #110 위치(x<<16|y), #111 길이<<16 | windowFlags, #112 글꼴(FontInfo)
+ *   #113 글자 고리 위치, #114~#121 글자 고리(32바이트, 그린 글자열의 앞 4글자까지 이어 붙임) */
+static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, const void *p6)
+{
+    const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
+    UInt32       pos, v;
+    UInt16       i, n;
+
+    if (w == NULL || (void *)w == (void *)WinGetActiveWindow() || GetF(106) != 0)
+        return;
+    FtrSet(kHgCreator, 108, GetF(108) + 1);
+    FtrSet(kHgCreator, 109, (UInt32)w);
+    FtrSet(kHgCreator, 110, Pair((const Int16 *)p2));
+    FtrSet(kHgCreator, 111, ((UInt32)len << 16) | *(const UInt16 *)(w + 8));
+    FtrSet(kHgCreator, 112, FontInfo(p6));
+    pos = GetF(113);
+    n = len < 4 ? len : 4;
+    for (i = 0; chars != NULL && i < n; i++) {
+        UInt16 k = (UInt16)((pos % 32) / 4), sh = (UInt16)(24 - 8 * (pos % 4));
+
+        v = GetF(114 + k);
+        v = (v & ~(0xFFUL << sh)) | ((UInt32)chars[i] << sh);
+        FtrSet(kHgCreator, 114 + k, v);
+        pos++;
+    }
+    FtrSet(kHgCreator, 113, pos);
+}
+
 UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7)
 {
     UInt32 orig = OrigAddr();
     UInt16 i;
     Boolean hi = false;
+
+    if (p2 != NULL)
+        OtherLog(chars, len, p2, p6);   /* v29 진단 */
 
     FtrSet(kHgCreator, 0, GetF(0) + 1);
     FtrSet(kHgCreator, 1, len);

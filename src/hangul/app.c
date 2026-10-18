@@ -1,5 +1,5 @@
 /*
- * MnHangul v28 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v29 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v29: KDlg 진단에 가상 실크(활성 창 아닌 창)에 찍히는 글자 기록(patch.c, #108~#121)과
+ *      EvtEnqueueKey 호출 기록(HgKd 2, #122~#125) 추가. Sony 가상 키보드 한글 오버레이·변환 가능성 판단용.
  * v28: 진단 KDlg 페이지 — SysKeyboardDialog(·V10)를 기록만 하는 코드(HgKd 0)로 교체해 화면 키보드가 어디서 불리는지 확인.
  *      켜기/끄기는 이 페이지에서만(Patch ON·Auto와 무관), All OFF가 함께 끈다.
  * v27: 리셋 버튼을 누르는 동안 폭 고정("Hold... 3s"), boot 줄에서 bdc 주소를 빼 a(결과) 값이 다 보이게
@@ -91,7 +93,8 @@
 #define kFtrKbdH      100
 #define kFtrKbdC      101
 #define kKbdRes       'HgKd'
-#define kKbdN         2
+#define kKbdN         3   /* v29: + EvtEnqueueKey */
+#define kFtrKbdBuf    107 /* v29: EvtEnqueueKey 기록 버퍼(동적 힙, 소유자 0) */
 #define kWidthN       5
 /* v25: 리셋 알림(전역 없음)에서도 쓰므로 상수 표 대신 switch */
 static UInt16 WidthTrap(UInt16 i)
@@ -445,7 +448,7 @@ static void WidthOff(void)
 /* v28: SysKeyboardDialog 진단 (호출만 기록하고 원래 함수로) */
 static UInt16 KbdTrap(UInt16 i)
 {
-    return i == 0 ? sysTrapSysKeyboardDialog : sysTrapSysKeyboardDialogV10;
+    return i == 0 ? sysTrapSysKeyboardDialog : i == 1 ? sysTrapSysKeyboardDialogV10 : sysTrapEvtEnqueueKey;
 }
 
 static void KbdOn(void)
@@ -468,7 +471,17 @@ static void KbdOn(void)
     for (i = 0; i < kKbdN; i++) {
         void *o = SysGetTrapAddress(KbdTrap(i));
 
-        DmWrite(code, 8 + 4 * i, &o, 4);
+        DmWrite(code, 12 + 4 * i, &o, 4);
+    }
+    {
+        UInt32 *buf = MemPtrNew(16);
+
+        if (buf != NULL) {
+            MemSet(buf, 16, 0);
+            MemPtrSetOwner(buf, 0);
+        }
+        DmWrite(code, 24, &buf, 4);
+        FtrSet(kHgCreator, kFtrKbdBuf, (UInt32)buf);
     }
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, true);
@@ -476,7 +489,7 @@ static void KbdOn(void)
     FtrSet(kHgCreator, kFtrKbdC, (UInt32)code);
     for (i = 0; i < kKbdN; i++)
         SysSetTrapAddress(KbdTrap(i), code + ((UInt32 *)code)[i]);
-    StrCopy(gMsg, "kbd hook ON (log only)");
+    StrCopy(gMsg, "hooks ON (log only)");
 }
 
 static void KbdOff(void)
@@ -493,7 +506,7 @@ static void KbdOff(void)
         UInt8 *entry = code + ((UInt32 *)code)[i];
 
         if ((UInt8 *)SysGetTrapAddress(KbdTrap(i)) == entry)
-            SysSetTrapAddress(KbdTrap(i), (void *)((UInt32 *)code)[2 + i]);
+            SysSetTrapAddress(KbdTrap(i), (void *)((UInt32 *)code)[kKbdN + i]);
         else
             kept++;
     }
@@ -503,6 +516,14 @@ static void KbdOff(void)
     }
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
+    {
+        void *buf = (void *)GetF(kFtrKbdBuf), *z = NULL;
+
+        DmWrite(code, 24, &z, 4);
+        if (buf != NULL)
+            MemPtrFree(buf);
+        FtrSet(kHgCreator, kFtrKbdBuf, 0);
+    }
     MemHandleUnlock((MemHandle)GetF(kFtrKbdH));
     DmReleaseResource((MemHandle)GetF(kFtrKbdH));
     FtrSet(kHgCreator, kFtrKbdH, 0);
@@ -514,8 +535,13 @@ static void ClearKbdDlg(void)
 {
     UInt16 n;
 
-    for (n = 102; n <= 105; n++)
-        FtrSet(kHgCreator, n, 0);
+    UInt32 *buf = (UInt32 *)GetF(kFtrKbdBuf);
+
+    for (n = 102; n <= 121; n++)
+        if (n != 106 && n != kFtrKbdBuf)
+            FtrSet(kHgCreator, n, 0);
+    if (buf != NULL)
+        MemSet(buf, 16, 0);
 }
 
 /* 켜진 기능 수 = 걸려 있는 DB 삭제 보호 수 */
@@ -556,7 +582,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v29 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -792,7 +818,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v29 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -907,7 +933,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v29 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -944,7 +970,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v29 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -982,7 +1008,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v29 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -1034,7 +1060,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 Kbd [tap: KDlg]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v29 Kbd [tap: KDlg]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1060,41 +1086,74 @@ static void DrawKbdPage(void)
     Row(11, "tap row 0 = clear kbd log");
 }
 
-/* v28: 화면 키보드(SysKeyboardDialog) 진단 페이지 */
+/* v28: 화면 키보드(SysKeyboardDialog) 진단, v29: 가상 실크 글자 그리기·EvtEnqueueKey 진단 */
+static const Char *RomMod(UInt32 a)
+{
+    if (a >= 0x1032A546UL && a < 0x1032A546UL + 27778)
+        return "SilkExtn";
+    if (a >= 0x102CBC0CUL && a < 0x102CE4C8UL)
+        return "KeyBoardExtn";
+    if (a >= 0x10000000UL && a < 0x10800000UL)
+        return "ROM";
+    return a ? "RAM" : "-";
+}
+
 static void DrawKbdDlgPage(void)
 {
     static const Char *tn[3] = { "alpha", "number", "accent" };
     RectangleType r;
-    Char          s[48], c[5];
-    UInt32        v = GetF(104), cr = GetF(105);
-    UInt16        t = (UInt16)((v >> 16) & 0xFF);
+    Char          s[48], c[5], ring[33];
+    UInt32        v = GetF(104), cr = GetF(105), w;
+    UInt16        t = (UInt16)((v >> 16) & 0xFF), i;
+    WChar         ch;
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 KDlg [tap: Main]", 29, 0, 0);
-    Button(0, GetF(kFtrKbdC) ? "KbdDlg hook: ON" : "KbdDlg hook: off");
+    WinDrawInvertedChars("MnHangul v29 KDlg [tap: Main]", 29, 0, 0);
+    Button(0, GetF(kFtrKbdC) ? "Hooks: ON" : "Hooks: off");
     ButtonAt(100, 0, "Clear");
-    Row(1, "log only: keyboard still opens");
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 3 * kLineH);
-    StrPrintF(s, "SysKeyboardDialog    %lu", GetF(102));
-    Row(3, s);
-    StrPrintF(s, "SysKeyboardDialogV10 %lu", GetF(103));
+    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
+    c[0] = (Char)(cr >> 24); c[1] = (Char)(cr >> 16); c[2] = (Char)(cr >> 8); c[3] = (Char)cr; c[4] = 0;
+    StrPrintF(s, "dlg %lu v10 %lu %s f%u %s", GetF(102), GetF(103),
+              (GetF(102) + GetF(103) == 0) ? "-" : (v >> 24) ? "V10" : t == 0xFF ? "default" : (t < 3 ? tn[t] : "?"),
+              (UInt16)(v & 1), cr ? c : "----");
+    Row(2, s);
+    Row(3, "-- draw in other window --");
+    w = GetF(111);
+    StrPrintF(s, "n %lu len %u flags %x win %lx", GetF(108), (UInt16)(w >> 16), (UInt16)w, GetF(109));
     Row(4, s);
-    if (GetF(102) + GetF(103) == 0)
-        Row(6, "last: (none)");
-    else {
-        StrPrintF(s, "last: %s  type %s", (v >> 24) ? "V10" : "new",
-                  (v >> 24) ? "-" : t == 0xFF ? "default" : (t < 3 ? tn[t] : "?"));
-        Row(6, s);
-        StrPrintF(s, "form %u  focus %u  field %u", (UInt16)((v >> 8) & 1), (UInt16)((v >> 4) & 1),
-                  (UInt16)(v & 1));
-        Row(7, s);
-        c[0] = (Char)(cr >> 24); c[1] = (Char)(cr >> 16); c[2] = (Char)(cr >> 8); c[3] = (Char)cr; c[4] = 0;
-        StrPrintF(s, "app '%s'", cr ? c : "----");
-        Row(8, s);
+    StrPrintF(s, "at %d,%d  font h %u", (Int16)(GetF(110) >> 16), (Int16)GetF(110), (UInt16)GetF(112));
+    Row(5, s);
+    for (i = 0; i < 32; i++) {
+        UInt32 pos = GetF(113), k = (pos >= 32 ? pos : 32) - 32 + i;   /* 오래된 것부터 */
+        UInt8  b;
+
+        if (pos < 32)
+            k = i;
+        b = (UInt8)(GetF(114 + (UInt16)((k % 32) / 4)) >> (24 - 8 * (k % 4)));
+        ring[i] = (b >= 0x20 && b < 0x7F) ? (Char)b : '.';
+        if (k >= pos)
+            ring[i] = ' ';
     }
-    Row(10, "try: silk kbd icon, Menu>Keyboard,");
-    Row(11, "abc/123 in memo field");
+    ring[32] = 0;
+    Row(6, ring);
+    Row(7, "-- EvtEnqueueKey --");
+    {
+        const UInt32 *kb = (const UInt32 *)GetF(kFtrKbdBuf);
+        UInt32        z[4] = { 0, 0, 0, 0 };
+
+        if (kb == NULL)
+            kb = z;
+        w = kb[1];
+        ch = (WChar)(w >> 16);
+        StrPrintF(s, "n %lu chr %x '%c' mod %x key %lx", kb[0], ch, (ch >= 0x20 && ch < 0x7F) ? (Char)ch : '.',
+                  (UInt16)w, kb[3]);
+        Row(8, s);
+        StrPrintF(s, "from %lx %s", kb[2], RomMod(kb[2]));
+        Row(9, s);
+    }
+    Row(10, "memo: Sony kbd, shift, 'a'");
+    Row(11, "then back here (Patch ON)");
 }
 
 static void Draw(void)
@@ -1132,7 +1191,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v28 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v29 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1264,6 +1323,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
 
+    FtrSet(kHgCreator, 106, 1);   /* v29: MnHangul 실행 중 — 다른 창 글자 기록 제외 */
     StartHires();
     Draw();
     do {
@@ -1329,5 +1389,6 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         }
     } while (e.eType != appStopEvent);
     StopHires();
+    FtrSet(kHgCreator, 106, 0);
     return 0;
 }

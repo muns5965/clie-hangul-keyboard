@@ -9,8 +9,12 @@
  *   #102 SysKeyboardDialog 호출 수, #103 SysKeyboardDialogV10 호출 수
  *   #104 마지막 호출 = 함수<<24 | kbd 종류<<16 | 폼 있음<<8 | 포커스 있음<<4 | 포커스가 필드
  *   #105 마지막 호출 때 실행 중인 앱 크리에이터
+ * v29: 2 EvtEnqueueKey(ascii, keycode, modifiers) (0xA12D) — 가상 키보드 글자가 이 함수로 들어오는지
+ *   하드웨어 버튼 등은 인터럽트 안에서 이 함수를 부를 수 있어 Feature(메모리 관리자)를 쓰지 않는다.
+ *   앱이 동적 힙에 잡아 둔 버퍼(오프셋 24에 주소)에 바로 쓴다:
+ *   [0] 호출 수, [1] 마지막 = 글자<<16 | modifiers, [2] 부른 곳(복귀 주소), [3] keycode
  *
- * 리소스 배치: 오프셋 0 = 진입점 2개의 오프셋 표, 8 = 원래 함수 주소 2개(앱이 DmWrite).
+ * 리소스 배치: 오프셋 0 = 진입점 3개의 오프셋 표, 12 = 원래 함수 주소 3개, 24 = 기록 버퍼 주소(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  */
 
@@ -20,13 +24,15 @@
 
 void HgKbdDialog(KeyboardType kbd);
 void HgKbdDialogV10(void);
+Err  HgEnqueueKey(WChar ascii, UInt16 keycode, UInt16 modifiers);
 
 asm(".text\n.even\nKbdBase:\n"
-    " .long HgKbdDialog-KbdBase, HgKbdDialogV10-KbdBase\n"
-    "KbdOrig:\n .long 0,0\n");
+    " .long HgKbdDialog-KbdBase, HgKbdDialogV10-KbdBase, HgEnqueueKey-KbdBase\n"
+    "KbdOrig:\n .long 0,0,0\nKbdBuf:\n .long 0\n");
 
 typedef void (*KbdFn)(KeyboardType);
 typedef void (*KbdV10Fn)(void);
+typedef Err  (*EnqFn)(WChar, UInt16, UInt16);
 
 static inline UInt32 Orig(UInt16 i)
 {
@@ -79,4 +85,20 @@ void HgKbdDialogV10(void)
 {
     Log(1, 0xFF);
     ((KbdV10Fn)Orig(1))();
+}
+
+Err HgEnqueueKey(WChar ascii, UInt16 keycode, UInt16 modifiers)
+{
+    UInt32 * const *bp;
+    UInt32         *b;
+
+    asm("lea KbdBuf(%%pc),%0" : "=a" (bp));
+    b = *bp;
+    if (b != NULL) {
+        b[0]++;
+        b[1] = ((UInt32)ascii << 16) | modifiers;
+        b[2] = (UInt32)__builtin_return_address(0);
+        b[3] = keycode;
+    }
+    return ((EnqFn)Orig(2))(ascii, keycode, modifiers);
 }
