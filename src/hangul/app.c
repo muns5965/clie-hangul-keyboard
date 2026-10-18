@@ -1,5 +1,5 @@
 /*
- * MnHangul v24 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v25 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,9 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v25: 부팅 자동 시작 — [Auto] 설정(앱 설정 'MnHg' 0, 리셋 후에도 유지)이 on이면 리셋 알림 때 Patch ON과 같은 설치
+ *      (패치·글꼴 12/16 잠금, 24 폰트 파일 연결, Mode glyph, Intl 6, Width 5). 결과 #95. 리셋 알림 중에는 앱 전역변수·상수 표·
+ *      문자열 상수를 쓸 수 없으므로 설치 함수(Inst*)는 결과 코드만 돌려주고 표 대신 switch를 쓴다. 비상: 위 버튼 + 리셋(알림 없음).
  * v24(진단): 리셋 알림(sysAppLaunchCmdSystemReset) 수신 기록만 — #96 횟수, #97 tick, #98 그때 BltDrawChars 트랩 주소,
  *      #99 = hardReset<<24 | createDefaults<<16 | 자기 DB 열기 성공(1/0). 메인 12줄에 표시. 동작 변경 없음(자동 설치는 다음 판).
  * v23: 큰 글자 칸 26 → 24(글자 사이 약 5 → 3픽셀). Patch ON이 이미 켜져 있어도 추가 글꼴 연결을 다시 시도하고,
@@ -81,15 +84,31 @@
 #define kFtrWidthC    48
 #define kWidthRes     'HgWd'
 #define kWidthN       5
-static const UInt16 kWidthTrap[kWidthN] = {
-    sysTrapFntCharsWidth, sysTrapFntLineWidth, sysTrapFntCharsInWidth, sysTrapFntWordWrap, sysTrapFntWidthToOffset
-};
-static const UInt16 kGlyphPtrFtr[kGlyphN] = { 23, 24 };
-static const UInt16 kGlyphHFtr[kGlyphN]   = { 25, 26 };
-static const UInt16 kIntlSel[kIntlN] = {
-    intlTxtCharAttr, intlTxtGetPreviousChar, intlTxtGetNextChar,
-    intlTxtSetNextChar, intlTxtCharBounds, intlTxtCharWidth
-};
+/* v25: 리셋 알림(전역 없음)에서도 쓰므로 상수 표 대신 switch */
+static UInt16 WidthTrap(UInt16 i)
+{
+    switch (i) {
+    case 0:  return sysTrapFntCharsWidth;
+    case 1:  return sysTrapFntLineWidth;
+    case 2:  return sysTrapFntCharsInWidth;
+    case 3:  return sysTrapFntWordWrap;
+    default: return sysTrapFntWidthToOffset;
+    }
+}
+
+static UInt16 IntlSel(UInt16 i)
+{
+    switch (i) {
+    case 0:  return intlTxtCharAttr;
+    case 1:  return intlTxtGetPreviousChar;
+    case 2:  return intlTxtGetNextChar;
+    case 3:  return intlTxtSetNextChar;
+    case 4:  return intlTxtCharBounds;
+    default: return intlTxtCharWidth;
+    }
+}
+#define kGlyphPtrFtr(i) (23 + (i))
+#define kGlyphHFtr(i)   (25 + (i))
 #define kFtrGlyphCnt  27
 #define kFtrRatio     28
 #define kGlyphRes     'HgJb'
@@ -195,6 +214,8 @@ static Boolean Installed(void)
 
 /* 글자 데이터 HgFn 0·1 잠금(앱이 끝나도 DB 보호 중이라 주소 유지) */
 static UInt16 Lock24(void);
+static UInt32 InstallAll(void);
+static UInt16 AutoGet(void);
 
 static void LockGlyphs(void)
 {
@@ -203,8 +224,8 @@ static void LockGlyphs(void)
     for (i = 0; i < kGlyphN; i++) {
         MemHandle h = DmGetResource(kGlyphRes, i);
 
-        FtrSet(kHgCreator, kGlyphHFtr[i], (UInt32)h);
-        FtrSet(kHgCreator, kGlyphPtrFtr[i], (h != NULL) ? (UInt32)MemHandleLock(h) : 0);
+        FtrSet(kHgCreator, kGlyphHFtr(i), (UInt32)h);
+        FtrSet(kHgCreator, kGlyphPtrFtr(i), (h != NULL) ? (UInt32)MemHandleLock(h) : 0);
     }
     Lock24();
 }
@@ -265,10 +286,10 @@ static void UnlockGlyphs(void)
 
     Unlock24();
     for (i = 0; i < kGlyphN; i++) {
-        UInt32 h = GetF(kGlyphHFtr[i]);
+        UInt32 h = GetF(kGlyphHFtr(i));
 
-        FtrSet(kHgCreator, kGlyphPtrFtr[i], 0);
-        FtrSet(kHgCreator, kGlyphHFtr[i], 0);
+        FtrSet(kHgCreator, kGlyphPtrFtr(i), 0);
+        FtrSet(kHgCreator, kGlyphHFtr(i), 0);
         if (h != 0) {
             MemHandleUnlock((MemHandle)h);
             DmReleaseResource((MemHandle)h);
@@ -277,25 +298,22 @@ static void UnlockGlyphs(void)
 }
 
 /* 3a: Intl 루틴 6개 교체 */
-static void IntlOn(void)
+/* 결과: 0 켬, 1 이미 켜짐, 2 리소스 없음 (전역 없음) */
+static UInt16 InstIntl(void)
 {
     MemHandle h;
     UInt8    *code;
     UInt16    i, card;
     LocalID   id;
 
-    if (GetF(kFtrIntlC) != 0) {
-        StrCopy(gMsg, "intl already ON");
-        return;
-    }
+    if (GetF(kFtrIntlC) != 0)
+        return 1;
     h = DmGetResource(kIntlRes, 0);
-    if (h == NULL) {
-        StrCopy(gMsg, "intl resource missing");
-        return;
-    }
+    if (h == NULL)
+        return 2;
     code = MemHandleLock(h);
     for (i = 0; i < kIntlN; i++) {
-        void *o = IntlGetRoutineAddress(kIntlSel[i]);
+        void *o = IntlGetRoutineAddress(IntlSel(i));
 
         DmWrite(code, 24 + 4 * i, &o, 4);
     }
@@ -304,8 +322,15 @@ static void IntlOn(void)
     FtrSet(kHgCreator, kFtrIntlH, (UInt32)h);
     FtrSet(kHgCreator, kFtrIntlC, (UInt32)code);
     for (i = 0; i < kIntlN; i++)
-        IntlSetRoutineAddress(kIntlSel[i], code + ((UInt32 *)code)[i]);
-    StrCopy(gMsg, "intl ON (6)");
+        IntlSetRoutineAddress(IntlSel(i), code + ((UInt32 *)code)[i]);
+    return 0;
+}
+
+static void IntlOn(void)
+{
+    UInt16 r = InstIntl();
+
+    StrCopy(gMsg, r == 0 ? "intl ON (6)" : r == 1 ? "intl already ON" : "intl resource missing");
 }
 
 static void IntlOff(void)
@@ -321,8 +346,8 @@ static void IntlOff(void)
     for (i = 0; i < kIntlN; i++) {
         UInt8 *entry = code + ((UInt32 *)code)[i];
 
-        if ((UInt8 *)IntlGetRoutineAddress(kIntlSel[i]) == entry)
-            IntlSetRoutineAddress(kIntlSel[i], (void *)((UInt32 *)code)[6 + i]);
+        if ((UInt8 *)IntlGetRoutineAddress(IntlSel(i)) == entry)
+            IntlSetRoutineAddress(IntlSel(i), (void *)((UInt32 *)code)[6 + i]);
         else
             kept++;
     }
@@ -340,25 +365,22 @@ static void IntlOff(void)
 }
 
 /* 3b: 폭 함수 트랩 5개 교체 */
-static void WidthOn(void)
+/* 결과: 0 켬, 1 이미 켜짐, 2 리소스 없음 (전역 없음) */
+static UInt16 InstWidth(void)
 {
     MemHandle h;
     UInt8    *code;
     UInt16    i, card;
     LocalID   id;
 
-    if (GetF(kFtrWidthC) != 0) {
-        StrCopy(gMsg, "width already ON");
-        return;
-    }
+    if (GetF(kFtrWidthC) != 0)
+        return 1;
     h = DmGetResource(kWidthRes, 0);
-    if (h == NULL) {
-        StrCopy(gMsg, "width resource missing");
-        return;
-    }
+    if (h == NULL)
+        return 2;
     code = MemHandleLock(h);
     for (i = 0; i < kWidthN; i++) {
-        void *o = SysGetTrapAddress(kWidthTrap[i]);
+        void *o = SysGetTrapAddress(WidthTrap(i));
 
         DmWrite(code, 20 + 4 * i, &o, 4);
     }
@@ -367,8 +389,15 @@ static void WidthOn(void)
     FtrSet(kHgCreator, kFtrWidthH, (UInt32)h);
     FtrSet(kHgCreator, kFtrWidthC, (UInt32)code);
     for (i = 0; i < kWidthN; i++)
-        SysSetTrapAddress(kWidthTrap[i], code + ((UInt32 *)code)[i]);
-    StrCopy(gMsg, "width ON (5)");
+        SysSetTrapAddress(WidthTrap(i), code + ((UInt32 *)code)[i]);
+    return 0;
+}
+
+static void WidthOn(void)
+{
+    UInt16 r = InstWidth();
+
+    StrCopy(gMsg, r == 0 ? "width ON (5)" : r == 1 ? "width already ON" : "width resource missing");
 }
 
 static void WidthOff(void)
@@ -384,8 +413,8 @@ static void WidthOff(void)
     for (i = 0; i < kWidthN; i++) {
         UInt8 *entry = code + ((UInt32 *)code)[i];
 
-        if ((UInt8 *)SysGetTrapAddress(kWidthTrap[i]) == entry)
-            SysSetTrapAddress(kWidthTrap[i], (void *)((UInt32 *)code)[5 + i]);
+        if ((UInt8 *)SysGetTrapAddress(WidthTrap(i)) == entry)
+            SysSetTrapAddress(WidthTrap(i), (void *)((UInt32 *)code)[5 + i]);
         else
             kept++;
     }
@@ -438,7 +467,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v24 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v25 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -466,67 +495,69 @@ static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
     WinDrawRectangleFrame(roundFrame, &r);
 }
 
-static void PatchOn1(void);
 
 /* v19: Patch ON = 그리기 패치 + Mode glyph(off였으면) + Intl + Width 한 번에 */
 static void PatchOn(void)
 {
     Char m[48];
 
+    static const Char *pm[4] = { "ON", "already ON", "patch res missing", "DmWrite fail" };
     static const Char *f24[5] = { "f24 ok", "f24: none", "f24: open fail", "f24: no res", "f24: bad fmt" };
-    UInt16 r;
+    UInt32 r = InstallAll();     /* v23: 이미 켜져 있어도 추가 글꼴 연결을 다시 시도 */
+    UInt16 p = (UInt16)(r >> 12) & 15, f = (UInt16)(r >> 8) & 15;
 
-    PatchOn1();
-    StrCopy(m, gMsg);
-    if (GetF(kFtrEntry) != 0) {   /* v23: 이미 켜져 있어도 추가 글꼴 연결을 다시 시도 */
-        r = Lock24();
+    StrCopy(m, pm[p < 4 ? p : 3]);
+    if (f < 5) {
         StrCat(m, " ");
-        StrCat(m, f24[r < 5 ? r : 0]);
+        StrCat(m, f24[f]);
     }
-    if (GetF(kFtrBox) == 0)
-        FtrSet(kHgCreator, kFtrBox, 2);
-    if (GetF(kFtrIntlC) == 0)
-        IntlOn();
-    if (GetF(kFtrWidthC) == 0)
-        WidthOn();
     m[sizeof gMsg - 1] = 0;
     StrCopy(gMsg, m);
 }
 
-static void PatchOn1(void)
+/* 결과: 0 켬, 1 이미 켜짐, 2 리소스 없음, 3 쓰기 실패 (전역 없음) */
+static UInt16 InstPatch(void)
 {
     MemHandle h;
     UInt8    *p;
     UInt32    orig;
     UInt16    card;
     LocalID   id;
-    Err       err;
 
-    if (Installed()) {
-        StrCopy(gMsg, "already ON");
-        return;
-    }
+    if (Installed())
+        return 1;
     h = DmGetResource(kPatchRes, 0);
-    if (h == NULL) {
-        StrCopy(gMsg, "patch resource missing");
-        return;
-    }
+    if (h == NULL)
+        return 2;
     p = MemHandleLock(h);
     orig = (UInt32)SysGetTrapAddress(kTrapBlt);
-    err = DmWrite(p, 0, &orig, sizeof(orig));
-    if (err != errNone) {
+    if (DmWrite(p, 0, &orig, sizeof(orig)) != errNone) {
         MemHandleUnlock(h);
         DmReleaseResource(h);
-        StrPrintF(gMsg, "DmWrite e=%x", err);
-        return;
+        return 3;
     }
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, true);
     LockGlyphs();
     FtrSet(kHgCreator, kFtrHandle, (UInt32)h);
     FtrSet(kHgCreator, kFtrEntry, (UInt32)(p + 4));
-    err = SysSetTrapAddress(kTrapBlt, p + 4);
-    StrPrintF(gMsg, "ON e=%x orig=%lx", err, orig);
+    SysSetTrapAddress(kTrapBlt, p + 4);
+    return 0;
+}
+
+/* v25: Patch ON 전체(패치 + 24 글꼴 다시 연결 + Mode glyph + Intl + Width). 전역 없음.
+ * 결과 = 패치 << 12 | 24 글꼴 << 8 | Intl << 4 | Width (각 함수의 결과 코드) */
+static UInt32 InstallAll(void)
+{
+    UInt16 p = InstPatch(), f = 9, it, wd;
+
+    if (GetF(kFtrEntry) != 0)
+        f = Lock24();
+    if (GetF(kFtrBox) == 0)
+        FtrSet(kHgCreator, kFtrBox, 2);
+    it = InstIntl();
+    wd = InstWidth();
+    return ((UInt32)p << 12) | ((UInt32)f << 8) | ((UInt32)it << 4) | wd;
 }
 
 static void PatchOff(void)
@@ -672,7 +703,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v24 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v25 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -787,7 +818,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v24 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v25 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -824,7 +855,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v24 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v25 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -862,7 +893,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v24 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v25 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -914,7 +945,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v24 Kbd [tap: Main]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v25 Kbd [tap: Main]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -971,7 +1002,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v24 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v25 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -985,7 +1016,7 @@ static void Draw(void)
     Button(kRowClear, "Clear counters");
     ButtonAt(84, kRowClear, GetF(kFtrIntlC) ? "Intl: ON" : "Intl: off");
     /* 한글 견본: 한글 OK 가각 (EUC-KR) */
-    WinDrawChars("\xC7\xD1\xB1\xDB OK \xB0\xA1\xB0\xA2", 12, 80, (kRowOn + 1) * kLineH);
+    ButtonAt(84, kRowOn, AutoGet() ? "Auto: ON" : "Auto: off");   /* v25 */
     ButtonAt(84, kRowOff, "All OFF");
     ButtonAt(84, kRowBox, GetF(kFtrWidthC) ? "Width: ON" : "Width: off");
 
@@ -1013,11 +1044,26 @@ static void Draw(void)
     StrPrintF(s, "hi rect %s %s  p3 %s", a, b, c);
     Row(11, s);
     /* v24: 리셋 알림 진단(#96~#99) */
-    StrPrintF(s, "boot n%lu t%lu h%lu c%lu db%lu bdc %lx", GetF(96), GetF(97), GetF(99) >> 24,
-              (GetF(99) >> 16) & 0xFF, GetF(99) & 1, GetF(98));
+    StrPrintF(s, "boot n%lu t%lu h%lu db%lu bdc %lx a%lx", GetF(96), GetF(97), GetF(99) >> 24,
+              GetF(99) & 1, GetF(98), GetF(95));
     Row(12, s);
 
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);   /* 빈 줄 1 (맨 아래는 줄 12까지 참) */
+}
+
+/* v25: 자동 시작 설정(앱 설정 'MnHg' 0번, 저장형) */
+static UInt16 AutoGet(void)
+{
+    UInt16 v = 0, size = sizeof v;
+
+    if (PrefGetAppPreferences(kHgCreator, 0, &v, &size, true) == noPreferenceFound || size != sizeof v)
+        v = 0;
+    return v;
+}
+
+static void AutoSet(UInt16 v)
+{
+    PrefSetAppPreferences(kHgCreator, 0, 1, &v, sizeof v, true);
 }
 
 /* v24 진단: 리셋 알림 기록. 이 호출에서는 앱 전역변수·문자열 상수(데이터 구역)를 쓸 수 없으므로 상수와 지역변수만 쓴다 */
@@ -1047,6 +1093,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 
     if (cmd == sysAppLaunchCmdSystemReset) {
         ResetDiag(cmdPBP);
+        if (AutoGet())   /* v25: 자동 시작 */
+            FtrSet(kHgCreator, 95, 0x80000000UL | InstallAll());
         return 0;
     }
     if (cmd != sysAppLaunchCmdNormalLaunch)
@@ -1073,7 +1121,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 }
             } else if (gPage != 0)
                 ;
-            else if (row == kRowOn)
+            else if (row == kRowOn && e.screenX >= 84) {
+                AutoSet(AutoGet() ? 0 : 1);
+                StrCopy(gMsg, AutoGet() ? "auto ON: install at reset" : "auto off");
+            } else if (row == kRowOn)
                 PatchOn();
             else if (row == kRowOff && e.screenX >= 84)
                 AllOff();

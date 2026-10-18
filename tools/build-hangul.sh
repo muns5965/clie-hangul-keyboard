@@ -98,5 +98,13 @@ m68k-palmos-obj-res app
 # 3) 조합형 글꼴 묶음(tools/gen-johab.py로 생성해 커밋된 파일): HgJb 0 = 16×16, HgJb 1 = 12×12
 cp "$root/src/hangul/data/HgJ16.bin" HgJb0000.bin
 cp "$root/src/hangul/data/HgJ12.bin" HgJb0001.bin
+# v25: 리셋 알림(앱 전역변수 없음)에서 부르는 함수는 %a5(전역) 참조가 없어야 한다
+m68k-palmos-objdump -d app > app.dis
+for fn in ResetDiag AutoGet InstallAll InstPatch InstIntl InstWidth LockGlyphs Lock24 Installed AppDB GetF WidthTrap IntlSel; do
+  n=$(awk -v f="<$fn>:" '$2==f {on=1; next} /^[0-9a-f]+ </ {on=0} on && /%a5/' app.dis | wc -l)
+  grep -q "<$fn>:" app.dis || { echo "error: $fn not found" >&2; exit 1; }
+  [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
+done
+
 build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgJb0000.bin HgJb0001.bin
 ls -l "$root/bin/MnHangul.prc"
