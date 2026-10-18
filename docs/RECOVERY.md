@@ -50,7 +50,7 @@
 | `Hangul OFF`·`OFF`에서 `kept: use Update` | 다른 패치(CJKOS 등)가 위에 걸려 있어 안전을 위해 풀지 않음 | `Update` → 설치 |
 | MnHangul `Hangul ON`에서 `CJKOS? running` | CJKOS가 켜져 있음(같은 함수를 바꾸므로 충돌) | CJKOS를 끈 뒤 `Hangul ON`. CJKOS와 쓸 때는 MnSonyKbd만(설치 B) |
 | MnHangul을 켠 채 CJKOS를 켬 | 같은 함수를 이중으로 바꿈(MnHangul은 CJKOS가 먼저 켜져 있을 때만 막음) | CJKOS 끔 → 리셋(MnHangul `Start at reset`이 ON이면 MnHangul만 켜짐). 다음부터 CJKOS를 켜기 전에 `Hangul OFF`(`kept`이면 `Update`), CJKOS를 계속 쓸 때는 `Start at reset: off` |
-| CJKOS를 끈 뒤 `Hangul ON` 했는데 한글은 보이고 BS·커서가 반쪽 글자 단위 | Intl·Width 연결이 빠졌을 가능성(코드 검토로 추정, **미확인**). v58 `Hangul ON`은 그리기 연결만 다시 잇는다 | 리셋 → `Hangul ON`. 재현되면 CJKOS를 끈 직후 ClieDiag Trap 페이지 캡처 |
+| CJKOS를 끈 뒤 한글은 보이고 BS·커서가 반쪽 글자 단위 | MnHangul → CJKOS 켬·끔 순서에서는 **Intl·Width 연결이 빠지지 않음**(2026-10-18 실측: CJKOS를 끈 뒤 ClieDiag Trap 페이지에 MnHangul 폭 함수 5개·Intl 6개가 그대로). CJKOS는 꺼질 때 자기가 켜질 때 저장한 주소로 되돌리는 것으로 보인다(먼저 켜진 MnHangul 주소로 복귀). 빠지는 경우는 CJKOS보다 나중에 켠 모듈뿐이고, MnHangul은 그 경우를 감지해 막는다 | 그래도 생기면 리셋 → `Hangul ON`, ClieDiag Trap 페이지 캡처 |
 | MnHangul `Hangul ON`을 다시 누르면 먹통(v57 이하) | MnSonyKbd가 위에 있을 때 자기를 한 번 더 끼워 순환 | 소프트 리셋 → v58 이상으로 업데이트 |
 | CJKOS를 켜거나 끈 뒤 Sony 키 글자가 영문 그대로, `한A`만 동작 | CJKOS가 시스템 함수를 되돌려 MnSonyKbd 키 글자 연결이 빠짐 | 가상 실크를 누르면 스스로 다시 이음(v6~). 안 되면 MnSonyKbd `Now: broken` → `ON`. 그래도 안 되면 리셋 |
 | 한/영 표시가 한 번 틀림 | Sony 그리기 순서에 기댄 판정의 한계 | `한A`를 한 번 더 누르거나 키보드를 다시 연다. 반복되면 MnSonyKbd 제목을 눌러 판정 기록 캡처 |
