@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v3 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v4 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v4: 첫 화면 6줄 = 한글 표시 모듈(MnHangul / CJKOS? / none).
  * v3: CJKOS를 끄면 BltDrawChars가 ROM으로 되돌아가 키 글자 패치가 빠진다(v2 실측). 'Now:'는 실제 연결 상태(chain.h),
  *   빠졌으면 ON = 다시 잇기. ⇪ 그림을 그릴 때(ime.c)도 키 글자 패치가 빠졌으면 스스로 다시 잇는다.
  * 화면(v2, 쓰는 것만): [ON] [OFF], Start at reset(앱 설정 0번, 기본 ON), Update(다음 리셋 한 번 자동 시작
@@ -231,6 +232,24 @@ static UInt16 SonyOn(void)
     return (UInt16)(p << 4) | ImOn();
 }
 
+/* v56: CJKOS(또는 다른 한글 시스템) 동작 중인가. CJKOS를 켜면 ROM 밖을 가리키는 시스템 함수 가운데(실측 1)
+ *   MnHangul·MnSonyKbd가 바꾸지 않는 FntSetFont·FrmDrawForm·FldHandleEvent·StrCompare 중 하나라도 ROM 밖이면 true.
+ *   같은 함수를 바꾸는 다른 프로그램도 걸리므로 화면에는 'CJKOS?'로 표시. 앱 화면에서만 부름 */
+static Boolean CjkOn(void)
+{
+    UInt16 k;
+
+    for (k = 0; k < 4; k++) {
+        UInt16 t = k == 0 ? sysTrapFntSetFont : k == 1 ? sysTrapFrmDrawForm : k == 2 ? sysTrapFldHandleEvent :
+                   sysTrapStrCompare;
+        UInt32 a = (UInt32)SysGetTrapAddress(t);
+
+        if (a < 0x10000000UL || a >= 0x10800000UL)
+            return true;
+    }
+    return false;
+}
+
 /* ---------- 앱 화면에서만 부르는 함수 ---------- */
 
 /* 0 끔, 1 켜져 있지 않음, 2 다른 패치가 위에 있어 못 끔 */
@@ -381,7 +400,7 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v3", 12, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v4", 12, 0, 0);
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
     {
@@ -395,6 +414,13 @@ static void DrawMain(void)
     ButtonAt(40, kRowOn, "OFF");
     ButtonAt(3, kRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");
     ButtonAt(3, kRowUpd, "Update (hold 3s)");
+    {   /* v4: 한글 표시 모듈(없으면 입력한 한글이 깨져 보임) */
+        UInt32 e = 0;
+
+        FtrGet('MnHg', 21, &e);
+        Row(6, e != 0 ? "Hangul display: MnHangul" : CjkOn() ? "Hangul display: CJKOS?" :
+                        "Hangul display: none (broken)");
+    }
     if (ih != NULL) {   /* 사용법: '한A' 그림(켜짐) = 한/영 */
         WinDrawBitmap((BitmapPtr)MemHandleLock(ih), 3, 8 * kLineH);   /* 22×18(저해상도 좌표로 2배) */
         MemHandleUnlock(ih);
@@ -416,7 +442,7 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v3 Debug [tap: back]", 30, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v4 Debug [tap: back]", 30, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);

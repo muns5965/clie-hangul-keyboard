@@ -1,5 +1,5 @@
 /*
- * MnHangul v55 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v56 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,7 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v56: CJKOS 동작 감지(CjkOn: CJKOS가 바꾸고 MnHangul은 안 바꾸는 함수 4개가 ROM 밖인가). 동작 중이면 Hangul ON·리셋 자동 시작 안 함, 첫 화면 표시.
  * v55: 첫 화면 7~8줄 = 역할(Hangul display, CJKOS replacement)과 MnSonyKbd 상태(없음/켜짐/꺼짐).
  * v54: Sony 가상 키보드 한글(입력 HgIm·한A HgIc·키 글자 오버레이·KDlg 판정 기록·Sony 설정)을 MnSonyKbd(src/sony)로 분리.
  *      MnHangul은 한글 표시(CJKOS 대체)만. 앱 설정 1번(Sony)은 쓰지 않는다.
@@ -274,6 +275,24 @@ static UInt16 AutoGet(void);
 static UInt16 DebugGet(void);
 static void   DrawUserMain(void);
 static void   DrawCheck(UInt16 row, const Char *label, Boolean on);
+
+/* v56: CJKOS(또는 다른 한글 시스템) 동작 중인가. CJKOS를 켜면 ROM 밖을 가리키는 시스템 함수 가운데(실측 1)
+ *   MnHangul·MnSonyKbd가 바꾸지 않는 FntSetFont·FrmDrawForm·FldHandleEvent·StrCompare 중 하나라도 ROM 밖이면 true.
+ *   같은 함수를 바꾸는 다른 프로그램도 걸리므로 화면에는 'CJKOS?'로 표시. 리셋 알림에서도 부르므로 전역 없음 */
+static Boolean CjkOn(void)
+{
+    UInt16 k;
+
+    for (k = 0; k < 4; k++) {
+        UInt16 t = k == 0 ? sysTrapFntSetFont : k == 1 ? sysTrapFrmDrawForm : k == 2 ? sysTrapFldHandleEvent :
+                   sysTrapStrCompare;
+        UInt32 a = (UInt32)SysGetTrapAddress(t);
+
+        if (a < 0x10000000UL || a >= 0x10800000UL)
+            return true;
+    }
+    return false;
+}
 
 static void LockGlyphs(void)
 {
@@ -644,7 +663,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -680,8 +699,16 @@ static void PatchOn(void)
 
     static const Char *pm[4] = { "ON", "already ON", "patch res missing", "DmWrite fail" };
     static const Char *f24[5] = { "f24 ok", "f24: none", "f24: open fail", "f24: no res", "f24: bad fmt" };
-    UInt32 r = InstallAll();     /* v23: 이미 켜져 있어도 추가 글꼴 연결을 다시 시도 */
-    UInt16 p = (UInt16)(r >> 12) & 15, f = (UInt16)(r >> 8) & 15;
+    UInt32 r;
+    UInt16 p, f;
+
+    if (CjkOn()) {   /* v56: CJKOS와 같은 함수를 바꾸므로 켜지 않는다 */
+        StrCopy(gMsg, "CJKOS? running: turn it off first");
+        return;
+    }
+    r = InstallAll();     /* v23: 이미 켜져 있어도 추가 글꼴 연결을 다시 시도 */
+    p = (UInt16)(r >> 12) & 15;
+    f = (UInt16)(r >> 8) & 15;
 
     StrCopy(m, pm[p < 4 ? p : 3]);
     if (f < 5) {
@@ -880,7 +907,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -995,7 +1022,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -1032,7 +1059,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -1070,7 +1097,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -1122,7 +1149,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 Kbd [tap: KDlg]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 Kbd [tap: KDlg]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1175,7 +1202,7 @@ static void DrawKbdDlgPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 KDlg [tap: SetSt]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 KDlg [tap: SetSt]", 30, 0, 0);
     Button(0, GetF(kFtrKbdC) ? "Hooks: ON" : "Hooks: off");
     ButtonAt(100, 0, "Clear");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
@@ -1258,7 +1285,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1364,7 +1391,7 @@ static void DrawSetStPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55 SetSt [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v56 SetSt [tap: Main]", 30, 0, 0);
     if (kb == NULL) {
         Row(0, "Hooks off (KDlg page)");
         return;
@@ -1448,8 +1475,9 @@ static void DrawUserMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v55  CJKOS OFF", 23, 0, 0);
-    StrPrintF(s, "Hangul %s  At reset %s", Installed() ? "ON" : "off", AutoGet() ? "ON" : "off");
+    WinDrawInvertedChars("MnHangul v56", 12, 0, 0);
+    StrPrintF(s, "Hangul %s  Reset %s  CJKOS? %s", Installed() ? "ON" : "off", AutoGet() ? "ON" : "off",
+              CjkOn() ? "running" : "no");
     Row(0, s);
     Button(kURowOn, "Hangul ON");
     ButtonAt(84, kURowOn, "Hangul OFF");
@@ -1532,7 +1560,9 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (SkipGet()) {   /* v53: Update 버튼 리셋 — 이번 한 번 켜지 않음(잠금 없음 → 바로 설치 가능) */
             SkipSet(0);
             FtrSet(kHgCreator, 95, 0x40000000UL);
-        } else if (AutoGet())   /* v25: 자동 시작 */
+        } else if (AutoGet() && CjkOn())   /* v56: CJKOS가 먼저 걸려 있으면 건너뜀 */
+            FtrSet(kHgCreator, 95, 0x20000000UL);
+        else if (AutoGet())   /* v25: 자동 시작 */
             FtrSet(kHgCreator, 95, 0x80000000UL | InstallAll());
         return 0;
     }

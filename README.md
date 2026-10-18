@@ -131,6 +131,7 @@ ClieDiag는 모두 선택이다. Mn 키보드(A·C) 업데이트:
 | 처음 설치 | `MnHangul.prc`(24 글꼴은 `MnHgFont24.prc` 추가) 설치 → MnHangul `Hangul ON` | 없음 |
 | 업데이트 | MnHangul `Update (hold 3s)` → (리셋 뒤 MnHangul이 켜지지 않은 상태) 설치 → `Hangul ON` | 1번 (`Update`가 함) |
 | 리셋 뒤 자동 시작 | `Start at reset: ON`(기본)이면 리셋 알림 때 `Hangul ON`과 같은 설치를 한다 | — |
+| CJKOS가 켜져 있을 때 | v56부터 `Hangul ON`·자동 시작을 하지 않는다(첫 화면 `CJKOS? running`). CJKOS를 끈 뒤 켠다 | — |
 | 비상 탈출 | 위 버튼을 누른 채 리셋(CloudpilotEmu: Reset → No extensions). 리셋 알림이 오지 않아 설치하지 않는다. 설정은 남으므로 끄려면 MnHangul에서 `Start at reset: off`. 이 리셋은 Sony 가상 실크·상태 표시줄 확장도 불러오지 않으므로 끝나면 일반 리셋을 한 번 한다 | — |
 
 - 패치는 RAM의 트랩 표에 걸리므로 어떤 리셋이든 풀린다. 리셋 뒤 켜져 있는 것은 `Start at reset`이 다시 설치했기 때문이다.
