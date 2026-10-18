@@ -158,6 +158,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v26: Main 줄 6에 [Soft Reset (hold 3s)] (3초 누르면 리셋, 떼면 취소). 자동 시작 시험을 MnHangul 안에서 끝낼 수 있다. 줄 7은 calls 줄(이전 last len 줄 삭제).
 - v27: 리셋 버튼을 누르는 동안 폭 고정(`Hold... 3s`), `boot` 줄에서 bdc 주소를 빼 `a` 값이 다 보이게.
 - v28 (진단): KDlg 페이지 — `SysKeyboardDialog`·`SysKeyboardDialogV10`을 기록만 하는 코드(HgKd 0)로 교체. 호출 수, 마지막 키보드 종류, 포커스 필드 유무, 호출한 앱을 기록. CJKOS 화면 키보드처럼 리셋 없는 한글 키보드를 띄울 수 있는지 판단용.
+- v38 (진단): SetSt에 가상 실크 영역 펜 누름·뗌 기록. v37 실측: Sony는 키 글자 약 47개를 다 그린 뒤 SilkExtn(0xFB2)이 GrfSetState 호출, ⇪+쉬프트와 ⇪ 끄기 모두 GrfSetState(c0 u0)로 같음, 화면 복사 없음(가상 실크 창에 그리면 바로 보임).
 - v37 (진단): SetSt 페이지 — GrfSetState·GsiSetShiftState·가상 실크 창 WinCopyRectangle 기록(키 글자 다시 그리기와 상태 변화 순서). v36 실측: 그리는 순간 상태는 직전 상태(보통→⇪와 보통→쉬프트 모두 U g0000, ⇪→쉬프트와 ⇪ 끄기 모두 L g1000).
 - v36: 오버레이 판정을 키 글자 대·소문자 + Graffiti 상태로(⇪ 상태가 다시 그리기보다 늦게 바뀜). v35 실측: 입력 정상(R K → 가), ⇪ 직후 전체 다시 그리기는 영문으로 남고 누른 키만 자모.
 - v35: Sony 가상 키보드 한글 입력. KDlg `Sony Hangul`이 오버레이 + 입력 변환(HgIm 0, EvtGetEvent)을 함께 켬. 쉬프트 고정(⇪) = 한글 모드, 대문자 = 기본 자모, ⇪+쉬프트(소문자) = 쌍자음·ㅒㅖ. 조합은 MnSkCore와 같은 방식(BS + 완성형 2바이트, 우리 키는 keyCode 0x4D48 표시). v34 실측: ⇪+쉬프트 소문자는 받는 순간 g1000, 영문 소문자는 g0000.

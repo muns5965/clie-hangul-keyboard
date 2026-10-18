@@ -23,6 +23,8 @@
  *   Sony 키보드가 키 글자를 다시 그린 뒤 상태를 바꾸는지(순서), 화면 밖 창을 화면에 복사하는지 확인용.
  *   [54] 수, [55] 다음 칸, [56 + 4k] 종류<<28 | 그 순간 다른 창 글자 그리기 수(#108),
  *   [57 + 4k]·[58 + 4k] 인자, [59 + 4k] 부른 곳 — 최근 16개
+ * v38: 같은 고리에 앱이 받는 가상 실크 영역(y >= 160) 펜 누름(종류 5)·뗌(6)도 기록(x<<16 | y).
+ *   Sony가 키 글자를 다시 그리기 전에 펜 위치를 볼 수 있는지, ⇪·쉬프트 키 좌표 확인용.
  *
  * 리소스 배치: 오프셋 0 = 진입점 8개의 오프셋 표, 32 = 원래 함수 주소 8개, 64 = 기록 버퍼 주소(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
@@ -55,6 +57,8 @@ typedef void (*AddFn)(const EventType *);
 typedef Err  (*GrfSetFn)(Boolean, Boolean, Boolean);
 typedef void (*GsiSetFn)(UInt16, UInt16);
 typedef void (*WinCopyFn)(WinHandle, WinHandle, const RectangleType *, Coord, Coord, WinDrawOperation);
+
+static void SetLog(UInt32 *b, UInt16 kind, UInt32 a1, UInt32 a2, UInt32 ret);
 
 static inline UInt32 *Buf(void)
 {
@@ -141,6 +145,10 @@ void HgGetEvent(EventType *event, Int32 timeout)
 
     ((GetFn)Orig(3))(event, timeout);
     b = Buf();
+    if (b != NULL && event != NULL && (event->eType == penDownEvent || event->eType == penUpEvent) &&
+        event->screenY >= 160)   /* v38 */
+        SetLog(b, event->eType == penDownEvent ? 5 : 6,
+               ((UInt32)(UInt16)event->screenX << 16) | (UInt16)event->screenY, 0, 0);
     if (b != NULL && event != NULL && event->eType == keyDownEvent) {
         UInt16  k = (UInt16)(b[19] & 7), temp = 0;
         Boolean caps = false, num = false, autoS = false;
