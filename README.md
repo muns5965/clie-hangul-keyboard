@@ -72,13 +72,27 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | --- | --- | --- |
 | `bin/MnSkPlugin.prc` | 필수 | 로더. `SilkExtn`에 등록되는 `SkWr` 플러그인(약 1KB)으로, 부팅 때 호출되어 키보드 본체와 연결한다 |
 | `bin/MnSkCore.prc` | 필수 | 키보드 본체(자판 그리기·터치 판정·한글 조합). 로더가 불러 실행한다 |
+| `bin/MnHangul.prc` | B만 | 한글 지원 모듈(시험 단계). 한글 시스템(CJKOS 등)이 없을 때 한글 표시. 아래 설치 B 참고 |
+| `bin/MnHgFont24.prc` | B 선택 | MnHangul 24×24 추가 글꼴(큰 글꼴용) |
 | `bin/ClieDiag.prc` | 선택 | 키보드 상태 확인(로더·본체 빌드, 불러오기 결과)·소프트 리셋(3초 누르기)·복구 스위치(DisS)·진단(Debug 체크 시). 키보드 동작에는 필요 없다 |
 
 ## 설치·업데이트
 
+키보드는 한글을 완성형(KS X 1001, EUC-KR) 2바이트로 넣기만 한다. 화면 표시는 한글 시스템이 맡으므로, 무엇과 같이 쓰는지에 따라 처음 설치가 다르다.
+
+| | A. 한글 시스템(CJKOS 등)이 있을 때 | B. 한글 시스템이 없을 때 (MnHangul) |
+| --- | --- | --- |
+| 설치 | `MnSkPlugin`, `MnSkCore` | `MnSkPlugin`, `MnSkCore`, `MnHangul` (+ 24 글꼴 `MnHgFont24` 선택) |
+| 한글 표시 | 설치된 한글 시스템 (완성형 KS X 1001 2바이트를 표시하는 것) | MnHangul (시험 단계) |
+| 순서 | 설치 → 리셋 → □→로 켜기 | 설치 → MnHangul `Auto: ON` → 리셋 → □→로 켜기 |
+| 리셋 | 처음 1번 | 처음 1번 (로더 등록과 MnHangul 자동 시작이 같이 됨) |
+| 주의 | MnHangul은 설치하지 않거나 켜지 않음 (같은 함수를 바꾸므로 충돌) | CJKOS 등 다른 한글 시스템은 끈 상태로 |
+| 시험 환경 | CloudpilotEmu(NR70V ROM) + CJKOS. 다른 한글 시스템과 실기기는 미시험 | CloudpilotEmu(NR70V ROM). 실기기는 미시험 |
+
+ClieDiag는 A·B 모두 선택이다. 업데이트는 A·B 공통:
+
 | 작업 | 절차 | 리셋 |
 | --- | --- | --- |
-| 처음 설치 | `MnSkPlugin.prc`·`MnSkCore.prc` 설치(ClieDiag는 선택) → 리셋 → 상태바 □→로 키보드 켜기 | 1번 |
 | 본체(키보드) 업데이트 | □→로 끄기 → `MnSkCore.prc` 설치 → □→로 켜기 | 없음 |
 | 로더 업데이트 | □→로 끄기 → `MnSkPlugin.prc` 설치 → 바로 리셋 | 1번 |
 
@@ -101,7 +115,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 - 로더 리셋 1번 업데이트는 CloudpilotEmu에서 실측 성공했다. 단, **설치 후 리셋 전에 □→로 키보드를 켜지 않는다**(실크 확장이 옛 로더 코드 주소를 쓰므로 멈출 수 있음).
   이상이 생겨도 자동 복구는 보장하지 않으므로 시험 전에 에뮬레이터 세션을 백업한다. 자세한 내용: [docs/RECOVERY.md](docs/RECOVERY.md).
 
-**한글 지원 모듈(MnHangul, 시험 단계)** — 리셋이 필요 없다. CJKOS를 끈 백업 세션에서만 시험한다.
+**한글 지원 모듈(MnHangul, 시험 단계, B만)** — MnHangul 자체는 리셋이 필요 없다. CJKOS를 끈 백업 세션에서만 시험한다.
 
 | 작업 | 절차 | 리셋 |
 | --- | --- | --- |
