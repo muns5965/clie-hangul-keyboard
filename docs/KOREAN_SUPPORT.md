@@ -158,6 +158,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v26: Main 줄 6에 [Soft Reset (hold 3s)] (3초 누르면 리셋, 떼면 취소). 자동 시작 시험을 MnHangul 안에서 끝낼 수 있다. 줄 7은 calls 줄(이전 last len 줄 삭제).
 - v27: 리셋 버튼을 누르는 동안 폭 고정(`Hold... 3s`), `boot` 줄에서 bdc 주소를 빼 `a` 값이 다 보이게.
 - v28 (진단): KDlg 페이지 — `SysKeyboardDialog`·`SysKeyboardDialogV10`을 기록만 하는 코드(HgKd 0)로 교체. 호출 수, 마지막 키보드 종류, 포커스 필드 유무, 호출한 앱을 기록. CJKOS 화면 키보드처럼 리셋 없는 한글 키보드를 띄울 수 있는지 판단용.
+- v34 (진단): 글자 키 add·get 순간 Graffiti 상태 나란히. v33 실측: ⇪ 상태는 g1000(첫 글자도 자동 쉬프트 없음), ⇪+쉬프트는 소문자 0061 g0000, 영문 모드의 쉬프트는 자동 쉬프트와 같은 g0031.
 - v33 (진단): EvtAddEventToQueue keyDown 최근 8개 + 넣는 순간 Graffiti 상태. v32 실측: Sony 가상 키보드 글자는 SilkExtn이 EvtAddEventToQueue로 넣음(modifiers 0).
 - v32 (진단): EvtGetEvent keyDown(글자·modifiers·keyCode·Graffiti caps/num/temp/auto) 최근 기록, EvtAddEventToQueue keyDown 기록. v31 실측: Sony 가상 키보드 글자는 EvtEnqueueKey로 오지 않음(0x0207·홈 0x0108만), 오버레이는 동작(fh 22 rh 22).
 - v31: v30의 EvtEnqueueKey 8개 기록이 kbd.c에 반영되지 않아 표시가 깨졌던 것 수정. 오버레이 조건 완화(비트맵 폭 검사 뺌, 사각형 높이 22·11 아니면 배율 1), 걸러진 이유(#128) 표시.
