@@ -1,12 +1,14 @@
 # clie-hangul-keyboard
 
-Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) 자리에 한글 소프트 키보드를 띄우는 입력기.
+Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 한글 **표시**와 한글 **키보드**를 따로 골라 조합한다.
 
-- 목표 자판은 영문 QWERTY, 한글 단모음, 나랏글이다. 현재 영문 QWERTY와 **구글 단모음과 비슷한 한글 자판**의 입력·조합을 구현했고, **나랏글은 향후 구현 대상으로 개발을 보류**한다.
-- 한글 **표시와 글자 처리는 현재 CJKOS에 의존**한다. CJKOS를 대체할 한글 처리 모듈은 시험 단계다([docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md)).
-- 키보드 기능은 현재 동결(안정화) 상태다.
-- **Sony 가상 키보드로도 한글을 쓸 수 있다**(시험 단계). `MnSonyKbd.prc`를 설치하면 리셋 없이, Sony 가상 키보드의 ⇪ 자리 `한A` 키로 한/영을 바꾸고 키 글자가 두벌식 자모로 바뀐다. CJKOS 등 한글 시스템이나 MnHangul과 같이 쓴다([아래](#sony-가상-키보드로-한글mnsonykbd)).
-- 구성은 세 모듈이다: **한글 표시**(CJKOS 등, 또는 CJKOS 대체 `MnHangul`) × **키보드**(Mn 가상 키보드 `MnSkPlugin`+`MnSkCore`, 또는 Sony 가상 키보드 한글 `MnSonyKbd`).
+| 모듈 | 파일 | 하는 일 | 상태 |
+| --- | --- | --- | --- |
+| Mn 가상 키보드 | `MnSkPlugin.prc` + `MnSkCore.prc` | 가상 실크스크린(Graffiti 영역) 자리에 단모음 한글·영문 QWERTY 자판 | 구현 완료, 동결(안정화). 나랏글은 보류 |
+| Sony 가상 키보드 한글 | `MnSonyKbd.prc` | Sony 내장 가상 키보드에 두벌식 한글. ⇪ 자리 `한A` = 한/영, 키 글자를 자모로 표시 | 시험 단계, 리셋 없음 |
+| 한글 표시(CJKOS 대체) | `MnHangul.prc` | 조합형 글꼴로 2바이트 한글 그리기, 글자 경계, 폭·줄바꿈 | 시험 단계, 리셋 없음 |
+
+한글 표시는 CJKOS 등 기존 한글 시스템을 써도 되고 MnHangul을 써도 된다. 둘을 같이 켜지는 않는다(MnHangul이 CJKOS를 감지하면 켜지지 않음).
 
 ## 목차
 
@@ -14,8 +16,10 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 - [용어](#용어)
 - [현재 상태](#현재-상태)
 - [배포 파일](#배포-파일)
-- [설치·업데이트](#설치업데이트) — 리셋이 필요한 이유 포함
+- [설치·업데이트](#설치업데이트) — 설치 경우 A~D, 리셋이 필요한 이유
 - [Sony 가상 키보드로 한글(MnSonyKbd)](#sony-가상-키보드로-한글mnsonykbd) — `한A` 키, 리셋 없음
+- [한글 표시(MnHangul)](#한글-표시mnhangul)
+- [MnHangul·MnSonyKbd 공통: 켜기·업데이트·CJKOS 전환](#mnhangulmnsonykbd-공통-켜기업데이트cjkos-전환)
 - [제한사항](#제한사항)
 - [문서](#문서)
 - [시험 환경](#시험-환경)
@@ -39,8 +43,8 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 </tr>
 </table>
 
-첫 그림(Sony 가상 키보드)은 CloudpilotEmu(NR70V) 실제 캡처(MnHangul v50 — 같은 코드가 v54부터 MnSonyKbd, 시험 단계)다. 다시 만들기: `python3 tools/gen-readme-sony.py docs/images/capture-sony-base.png docs/images/capture-sony-shift.png`
-나머지(Mn 키보드·MnHangul 글꼴)는 실제 캡처가 아니라 같은 자판 배치·자모 선 그림·조합형 글꼴 데이터로 다시 그린 것이라 실제 화면과 조금 다를 수 있다
+첫 그림(Sony 가상 키보드)은 CloudpilotEmu(NR70V) 실제 캡처(MnHangul v50 시절, 같은 코드가 지금의 MnSonyKbd)다. 다시 만들기: `python3 tools/gen-readme-sony.py docs/images/capture-sony-base.png docs/images/capture-sony-shift.png`
+나머지(Mn 가상 키보드·MnHangul 글꼴)는 실제 캡처가 아니라 같은 자판 배치·자모 선 그림·조합형 글꼴 데이터로 다시 그린 것이라 실제 화면과 조금 다를 수 있다
 (영문 글자는 Sony 글꼴 대신 픽셀 글꼴). 다시 만들기: `python3 tools/gen-readme-images.py <neodgm.ttf>`.
 
 ## 용어
@@ -56,22 +60,23 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | PRC | Palm OS의 앱·코드·리소스를 담아 배포하는 데이터베이스 파일 형식 |
 | CJKOS | 영문 Palm OS에서 한중일 문자 표시·입력을 지원하는 외부 소프트웨어 |
 | Sony 가상 키보드 | NR70V 상태바 키보드 아이콘으로 여는 ROM에 들어 있는 Sony의 영문 키보드(`SilkExtn`). MnSonyKbd가 키 글자와 ⇪ 키를 바꿔 그린다 |
-| Mn 키보드 | 이 저장소의 단모음 한글 키보드(`MnSkPlugin` + `MnSkCore`) |
+| Mn 가상 키보드 | 이 저장소의 단모음 한글 키보드(`MnSkPlugin` + `MnSkCore`). 글에서 줄여 Mn 키보드 |
+| 연결(패치) | 시스템 함수(트랩) 주소를 자기 코드로 바꿔 끼우는 것. 여러 모듈이 같은 함수에 차례로 끼면 위에서 아래로 이어 부른다 |
 
 ## 현재 상태
 
 | 기능 | 상태 |
 | --- | --- |
-| 가상 실크스크린 자리에 키보드 표시(고해상도 320×130) | 구현 완료 (런처·메모장·ClieDiag에서 실측) |
-| 영문 QWERTY | 구현 완료 |
-| 한글 단모음 (Shift 쌍자음, 모음 연타 ㅑㅕㅛㅠㅒㅖ) | 구현 완료, 안정화 단계 |
+| Mn 가상 키보드: 가상 실크스크린 자리에 자판 표시(고해상도 320×130) | 구현 완료 (런처·메모장·ClieDiag에서 실측) |
+| Mn 가상 키보드: 영문 QWERTY, 숫자·특수문자 | 구현 완료 |
+| Mn 가상 키보드: 한글 단모음 (Shift 쌍자음, 모음 연타 ㅑㅕㅛㅠㅒㅖ) | 구현 완료, 안정화 단계 |
 | 한글 조합: 초성·중성·종성, 복합모음, 겹받침, 받침 넘김, 조합 중 자모 단위 BS | 구현 완료 (메모장 실측, PC 조합 시험 41개 통과) |
-| 숫자·특수문자 | 구현 완료 |
-| Mn 키보드: 리셋 없는 본체(`MnSkCore`) 업데이트 / 리셋 1번 로더(`MnSkPlugin`) 업데이트 | 구현 완료 (CloudpilotEmu 실측) |
-| Sony 가상 키보드 한글 (`한A` = 한/영, Shift 쌍자음, 키 글자 두벌식 자모 표시) | 시험 단계, 리셋 없음. MnHangul v50(CJKOS 없이)·v53 `Sony only`(CJKOS와 같이)로 메모장 실측. v54에 별도 모듈 `MnSonyKbd`로 분리(분리 판은 미시험) |
-| 나랏글 | 개발 보류 |
-| 키 반복 | 미구현 |
-| CJKOS 대체 한글 지원 모듈 | 시험 단계: 시험 앱(MnHangul)으로 CJKOS 없이 메모장 실측 — 조합형 글꼴 그리기(12·16·24, 24는 추가 설치 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈. 설치 후 리셋 없이 `Patch ON`으로 바로 동작, `Auto: ON`이면 리셋 뒤 자동 시작(v25~v27, CloudpilotEmu 실측) |
+| Mn 가상 키보드: 리셋 없는 본체(`MnSkCore`) 업데이트 / 리셋 1번 로더(`MnSkPlugin`) 업데이트 | 구현 완료 (CloudpilotEmu 실측) |
+| Mn 가상 키보드: 나랏글 / 키 반복 | 개발 보류 / 미구현 |
+| Sony 가상 키보드 한글(MnSonyKbd v7): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
+| MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계 (v3~v7, 실측 중) |
+| 한글 표시(MnHangul v58): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `Hangul ON`, 리셋 뒤 자동 시작 |
+| MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56) |
 
 ## 배포 파일
 
@@ -95,10 +100,12 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | 한글 표시 | 설치된 한글 시스템 (완성형 KS X 1001 2바이트를 표시하는 것) | 설치된 한글 시스템 | MnHangul (시험 단계) | MnHangul (시험 단계) |
 | 순서 | 설치 → 리셋 → □→로 켜기 | 설치 → MnSonyKbd `ON` | 설치 → MnHangul `Hangul ON` → 리셋 → □→로 켜기 | 설치 → MnHangul `Hangul ON` → MnSonyKbd `ON` |
 | 리셋 | 처음 1번 — 가상 실크스크린에 Mn 키보드(로더) 등록 (`SilkExtn`이 부팅 때만 찾음) | **없음** — Sony 가상 키보드는 이미 등록되어 있고, MnSonyKbd는 켜는 즉시 동작 | 처음 1번 — Mn 키보드 등록. MnHangul은 리셋 필요 없음 (`Start at reset`으로 리셋 뒤 자동 시작) | **없음** |
-| 주의 | MnHangul은 켜지 않음 (같은 함수를 바꾸므로 충돌) | MnHangul은 켜지 않음 | CJKOS 등 다른 한글 시스템은 끈 상태로 | CJKOS 등 다른 한글 시스템은 끈 상태로 |
-| 시험 환경 | CloudpilotEmu(NR70V ROM) + CJKOS. 다른 한글 시스템과 실기기는 미시험 | CloudpilotEmu + CJKOS 메모장(MnHangul v53 `Sony only`, 같은 코드). 분리 판·실기기 미시험 | CloudpilotEmu(NR70V ROM). 실기기는 미시험 | CloudpilotEmu 메모장(MnHangul v50, 같은 코드). 분리 판·실기기 미시험 |
+| 주의 | MnHangul은 켜지 않음 (같은 함수를 바꾸므로 충돌. MnHangul이 감지해 막는다) | MnHangul은 켜지 않음 | CJKOS 등 다른 한글 시스템은 끈 상태로 | CJKOS 등 다른 한글 시스템은 끈 상태로 |
+| 시험 환경 | CloudpilotEmu(NR70V ROM) + CJKOS. 다른 한글 시스템과 실기기는 미시험 | CloudpilotEmu + CJKOS 메모장(MnSonyKbd v2~). 실기기 미시험 | CloudpilotEmu(NR70V ROM). 실기기는 미시험 | CloudpilotEmu 메모장(MnHangul v57~ + MnSonyKbd v5~). 실기기 미시험 |
 
-ClieDiag는 모두 선택이다. Mn 키보드(A·C) 업데이트:
+ClieDiag는 모두 선택이다. MnHangul·MnSonyKbd의 켜기·업데이트는 [공통](#mnhangulmnsonykbd-공통-켜기업데이트cjkos-전환) 절에 있다.
+
+**Mn 가상 키보드(A·C) 업데이트**
 
 | 작업 | 절차 | 리셋 |
 | --- | --- | --- |
@@ -112,7 +119,7 @@ ClieDiag는 모두 선택이다. Mn 키보드(A·C) 업데이트:
 
 - □→는 상태바 5번째 아이콘(외부 플러그인이 있을 때만 보임). 누를 때마다 기본 실크와 한글 키보드가 바뀐다.
 
-**리셋이 필요한 이유와 필요 없는 이유** (Mn 키보드. MnHangul·MnSonyKbd는 시스템 함수를 켜는 즉시 바꿔 끼우므로 리셋이 필요 없다 — 아래 표)
+**리셋이 필요한 이유와 필요 없는 이유** (Mn 가상 키보드. MnHangul·MnSonyKbd는 시스템 함수를 켜는 즉시 바꿔 끼우므로 리셋이 필요 없다)
 
 | 작업 | 이유 |
 | --- | --- |
@@ -124,24 +131,10 @@ ClieDiag는 모두 선택이다. Mn 키보드(A·C) 업데이트:
 - 로더 리셋 1번 업데이트는 CloudpilotEmu에서 실측 성공했다. 단, **설치 후 리셋 전에 □→로 키보드를 켜지 않는다**(실크 확장이 옛 로더 코드 주소를 쓰므로 멈출 수 있음).
   이상이 생겨도 자동 복구는 보장하지 않으므로 시험 전에 에뮬레이터 세션을 백업한다. 자세한 내용: [docs/RECOVERY.md](docs/RECOVERY.md).
 
-**한글 표시 모듈(MnHangul, 시험 단계, C·D)** — MnHangul 자체는 리셋이 필요 없다. CJKOS를 끈 백업 세션에서만 시험한다.
-
-| 작업 | 절차 | 리셋 |
-| --- | --- | --- |
-| 처음 설치 | `MnHangul.prc`(24 글꼴은 `MnHgFont24.prc` 추가) 설치 → MnHangul `Hangul ON` | 없음 |
-| 업데이트 | MnHangul `Update (hold 3s)` → (리셋 뒤 MnHangul이 켜지지 않은 상태) 설치 → `Hangul ON` | 1번 (`Update`가 함) |
-| 리셋 뒤 자동 시작 | `Start at reset: ON`(기본)이면 리셋 알림 때 `Hangul ON`과 같은 설치를 한다 | — |
-| CJKOS가 켜져 있을 때 | v56부터 `Hangul ON`·자동 시작을 하지 않는다(첫 화면 `CJKOS? running`). CJKOS를 끈 뒤 켠다 | — |
-| 비상 탈출 | 위 버튼을 누른 채 리셋(CloudpilotEmu: Reset → No extensions). 리셋 알림이 오지 않아 설치하지 않는다. 설정은 남으므로 끄려면 MnHangul에서 `Start at reset: off`. 이 리셋은 Sony 가상 실크·상태 표시줄 확장도 불러오지 않으므로 끝나면 일반 리셋을 한 번 한다 | — |
-
-- 패치는 RAM의 트랩 표에 걸리므로 어떤 리셋이든 풀린다. 리셋 뒤 켜져 있는 것은 `Start at reset`이 다시 설치했기 때문이다.
-- MnHangul은 켜져 있는 동안 자기 코드를 잠가 두어(시스템 함수가 가리킴) 덮어쓸 수 없다. `Hangul OFF`로 풀 수도 있지만, 다른 프로그램(CJKOS 등)이 그 위에 훅을 걸었으면 안전을 위해 풀지 않는다(`kept: use Update`). 그래서 업데이트는 `Update` 버튼으로 한다.
-- MnHangul 첫 화면에도 `Soft Reset (hold 3s)`가 있다. 진단 화면은 `[ ] Debug`를 체크하면 나온다.
-
 ## Sony 가상 키보드로 한글(MnSonyKbd)
 
 Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 한글을 넣는다(설치 B·D). `MnSonyKbd.prc` 하나, 리셋 없음.
-한글 표시는 하지 않으므로 CJKOS 등 한글 시스템(B)이나 MnHangul(D)과 같이 쓴다. v54에 MnHangul에서 분리했다.
+한글 표시는 하지 않으므로 CJKOS 등 한글 시스템(B)이나 MnHangul(D)과 같이 쓴다(첫 화면에 `Hangul display: CJKOS? / MnHangul / none` 표시). v54에 MnHangul에서 분리했다.
 
 <img src="docs/images/06-sony-keyboard.png" width="480" alt="Sony 가상 키보드: 한A 켜짐 두벌식 자모, Shift 쌍자음">
 
@@ -164,14 +157,9 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 | `Update (hold 3s)` | 업데이트용 리셋. 리셋 뒤 한 번만 자동 시작을 건너뛰어 잠금 없이 바로 설치할 수 있다 |
 | 제목 누르기 | 판정 기록 화면(한/영 표시가 틀릴 때 원인 확인용). 다시 누르면 돌아옴 |
 
-| 작업 | 절차 | 리셋 |
-| --- | --- | --- |
-| 처음 설치 | `MnSonyKbd.prc` 설치 → `ON` | 없음 |
-| 업데이트 | `Update (hold 3s)` → 설치 → `ON` | 1번 (`Update`가 함) |
-| 리셋 뒤 자동 시작 | `Start at reset: ON`(기본) | — |
+`Now:` 줄은 실제 연결 상태다: `ON`(연결됨) / `ON (other patch above)`(위에 다른 패치가 있어 끝까지 확인 못 함) / `broken: tap ON`(빠짐, `ON`을 누르면 다시 이음) / `off`.
+`ON`을 눌렀을 때 `already ON`은 이미 켜져 있고 연결도 정상이라 할 일이 없다는 뜻이다.
 
-- MnHangul과 MnSonyKbd를 둘 다 쓰는 경우(D), 어느 앱의 `Update`든 둘 다 다음 리셋 한 번 자동 시작을 건너뛴다. `Update` 한 번 → 필요한 것 설치 → MnHangul `Hangul ON`, MnSonyKbd `ON`. 하나만 설치한 경우(B·C)는 그 앱만 해당한다.
-- CJKOS를 켜거나 끄면 CJKOS가 시스템 함수를 되돌리면서 MnSonyKbd 연결이 빠질 수 있다. v3부터 키 글자 연결은 `한A`를 누를 때(키보드를 다시 그릴 때) 스스로 다시 잇고, 그래도 안 되면 MnSonyKbd 첫 화면 `Now: broken`에서 `ON`을 누른다. 안 되면 리셋.
 
 **제한**
 
@@ -179,16 +167,45 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 - 한글 범위는 완성형 2,350자(Mn 키보드와 같음).
 - 메모장에서만 시험했다. 다른 앱과 실기기는 검증 대상이다.
 
+## 한글 표시(MnHangul)
+
+CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에서만 시험한다.
+
+| 버튼·표시 | 뜻 |
+| --- | --- |
+| 첫 줄 `Hangul ON/off  Reset ON/off  CJKOS? running/no` | 한글 표시 연결 상태, 리셋 뒤 자동 시작, CJKOS 감지 |
+| `Hangul ON` / `Hangul OFF` | 한글 표시를 켬 / 끔. 이미 켜져 있으면 다시 끼우지 않는다(v58). CJKOS가 감지되면 켜지 않는다 |
+| `Start at reset: ON/off` | 리셋 뒤 자동으로 켬(기본 ON) |
+| `Soft Reset (hold 3s)` | 3초 누르면 소프트 리셋 |
+| `Update (hold 3s)` | 업데이트용 리셋([공통](#mnhangulmnsonykbd-공통-켜기업데이트cjkos-전환)) |
+| `Sony kbd Hangul: MnSonyKbd ON/off/(none)` | MnSonyKbd 상태 |
+| `[ ] Debug` | 개발용 진단 화면 |
+
+## MnHangul·MnSonyKbd 공통: 켜기·업데이트·CJKOS 전환
+
+| 작업 | 절차 | 리셋 |
+| --- | --- | --- |
+| 처음 설치 | 설치 → MnHangul `Hangul ON` / MnSonyKbd `ON` | 없음 |
+| 업데이트 | 아무 앱에서나 `Update (hold 3s)` → 필요한 PRC 설치 → 각 앱 `Hangul ON` / `ON` | 1번 (`Update`가 함) |
+| 리셋 뒤 자동 시작 | 각 앱 `Start at reset: ON`(기본) | — |
+| 비상 탈출 | 위 버튼을 누른 채 리셋(CloudpilotEmu: Reset → No extensions). 리셋 알림이 오지 않아 아무것도 켜지 않는다. 이 리셋은 Sony 가상 실크·상태 표시줄도 불러오지 않으므로 끝나면 일반 리셋을 한 번 한다 | — |
+
+- **업데이트에 `Update`를 쓰는 이유**: 켜져 있는 동안은 시스템 함수가 앱 코드를 가리키므로 코드를 잠가 두고, 잠긴 PRC는 덮어쓸 수 없다. `Update`는 다음 리셋 한 번만 자동 시작을 건너뛰게 하고 리셋하므로, 리셋 뒤에는 잠금 없이 설치된다. 두 앱이 모두 설치되어 있으면 어느 쪽 `Update`든 둘 다 건너뛴다(v57·v5). `Hangul OFF`·`OFF`로 풀 수도 있지만, 다른 패치가 위에 있으면 안전을 위해 풀지 않는다(`kept: use Update`).
+- **패치는 RAM의 트랩 표에 걸리므로 어떤 리셋이든 풀린다.** 리셋 뒤 켜져 있는 것은 `Start at reset`이 다시 켰기 때문이다.
+- **CJKOS ↔ MnHangul 전환**: CJKOS가 켜져 있으면 MnHangul은 켜지지 않는다. CJKOS를 끈 뒤 `Hangul ON`. MnSonyKbd는 CJKOS·MnHangul 어느 쪽과도 같이 쓴다.
+- **CJKOS를 켜거나 끄면** CJKOS가 시스템 함수를 자기가 저장한 값으로 되돌리면서 MnSonyKbd·MnHangul 연결이 빠질 수 있다. MnSonyKbd는 가상 실크를 누를 때 스스로 다시 잇고(v6~), 안 되면 `Now: broken`에서 `ON`. MnHangul은 `Hangul ON`이 빠진 연결을 다시 잇는다(v58). 그래도 이상하면 리셋.
+
 ## 제한사항
 
 - **조합 중 커서 이동**: 한글 조합 중 메모장 등의 본문을 탭하여 커서를 옮기면 키보드는 그 이동을 감지하지 못한다.
   이 상태에서 자모를 더 입력하면 이전 조합 글자를 고치기 위한 BS가 옮겨진 커서 위치에 적용되어 다른 글자가 지워질 수 있다.
   조합 중 커서 이동의 안전성은 보장하지 않는다. 스페이스 등으로 조합을 끝낸 뒤 옮긴다. (원인: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
-- **CJKOS 의존**(설치 A): 한글 글꼴 표시와 2바이트 글자 경계 처리(완성된 글자 단위 BS, 커서 위치, 줄바꿈)는 CJKOS에 의존한다.
-  한글 조합과 조합 중 자모 단위 BS는 키보드 본체(`MnSkCore`)가 처리한다. CJKOS를 끄면 이 시험 환경(NR70V 영문 ROM)에서는
-  한글이 라틴 문자 두 개로 깨져 보이고, BS가 2바이트 글자의 반쪽만 지울 수 있다.
+- **CJKOS 의존**(설치 A·B): 한글 글꼴 표시와 2바이트 글자 경계 처리(완성된 글자 단위 BS, 커서 위치, 줄바꿈)는 CJKOS에 의존한다.
+  한글 조합과 조합 중 자모 단위 BS는 키보드(`MnSkCore`·`MnSonyKbd`)가 처리한다. 한글 표시 모듈 없이 쓰면 이 시험 환경(NR70V 영문 ROM)에서는
+  한글이 라틴 문자 두 개로 깨져 보이고, BS가 2바이트 글자의 반쪽만 지울 수 있다. CJKOS 대신 MnHangul(시험 단계)을 쓸 수 있다(C·D).
 - **한글 범위**: KS X 1001 완성형(EUC-KR) 2,350자. 그 밖의 음절이 되면 앞 글자를 확정하고 마지막 자모부터 새로 조합한다(예: 똠 → `또ㅁ`).
 - **시험 범위**: CloudpilotEmu(NR70V ROM)의 런처·메모장·ClieDiag에서 시험했다. 다른 앱(주소록, 일정 등)과 실기는 검증 대상이다.
+- **NR70V 전용 부분**: MnSonyKbd는 NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 그리기 순서와 ROM 주소에 기댄다. MnHangul의 CJKOS 감지는 CJKOS가 바꾸는 함수 4개로 추정한다(`CJKOS?`).
 
 ## 문서
 
@@ -196,7 +213,7 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 가상 실크스크린 키보드 구현 방법: SkWr 플러그인 호출 방식, 그리기, 글자 보내기, 로더·본체 구조 |
 | [docs/RECOVERY.md](docs/RECOVERY.md) | 설치·업데이트·복구 절차, 위험 조건, 옛 DisS 절차 |
-| [docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md) | CJKOS 의존성, 대체 모듈 검토안과 시험 기록 |
+| [docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md) | CJKOS 의존성, 대체 모듈(MnHangul)·Sony 가상 키보드 한글(MnSonyKbd) 검토와 판별 시험 기록 |
 | [docs/DEVELOPMENT_HISTORY.md](docs/DEVELOPMENT_HISTORY.md) | 1~12단계 개발 기록, ROM 역분석, ClieDiag 변경 기록, 실패한 가설 |
 
 ## 시험 환경
