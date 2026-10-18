@@ -16,8 +16,8 @@
  * v32: 3 EvtGetEvent(event, timeout) (0xA11D) — 앱에 건네는 keyDown을 원래 함수 다음에 기록
  *   [18] 수, [19] 다음 칸, [20 + 2k] 글자<<16 | modifiers, [21 + 2k] keyCode<<16 | Graffiti 상태
  *   Graffiti 상태(GrfGetState) = capsLock<<12 | numLock<<8 | tempShift<<4 | autoShifted
- * v32: 4 EvtAddEventToQueue(event) (0xA11B) — keyDown을 큐에 넣는 곳
- *   [36] keyDown 수, [37] 마지막 글자<<16 | modifiers, [38] 부른 곳
+ * v32: 4 EvtAddEventToQueue(event) (0xA11B) — keyDown을 큐에 넣는 곳(v32 실측: Sony 가상 키보드 글자는 SilkExtn이 여기로)
+ *   v33: [36] keyDown 수, [37] 다음 칸, [38 + 2k] 글자<<16 | Graffiti 상태(넣는 순간), [39 + 2k] 부른 곳 — 최근 8개
  *
  * 리소스 배치: 오프셋 0 = 진입점 5개의 오프셋 표, 20 = 원래 함수 주소 5개, 40 = 기록 버퍼 주소(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
@@ -147,9 +147,15 @@ void HgAddEvent(const EventType *event)
     UInt32 *b = Buf();
 
     if (b != NULL && event != NULL && event->eType == keyDownEvent) {
+        UInt16  k = (UInt16)(b[37] & 7), temp = 0;
+        Boolean caps = false, num = false, autoS = false;
+
+        GrfGetState(&caps, &num, &temp, &autoS);
         b[36]++;
-        b[37] = ((UInt32)event->data.keyDown.chr << 16) | event->data.keyDown.modifiers;
-        b[38] = (UInt32)__builtin_return_address(0);
+        b[38 + 2 * k] = ((UInt32)event->data.keyDown.chr << 16) | ((caps ? 1 : 0) << 12) | ((num ? 1 : 0) << 8) |
+                        ((temp & 0xF) << 4) | (autoS ? 1 : 0);
+        b[39 + 2 * k] = (UInt32)__builtin_return_address(0);
+        b[37] = k + 1;
     }
     ((AddFn)Orig(4))(event);
 }
