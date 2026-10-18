@@ -114,7 +114,7 @@ fi
 m68k-palmos-objcopy -O binary -j .text kbd.coff HgKd0000.bin
 m68k-palmos-objdump -d kbd.coff > kbd.dis
 
-# 1f) v35 Sony 가상 키보드 한글 입력(src/hangul/ime.c) → 리소스 HgIm 0. 오프셋 0 = 진입점 오프셋, 4 = 원래 주소, 8 = 상태 버퍼
+# 1f) v35 Sony 가상 키보드 한글 입력(src/hangul/ime.c) → 리소스 HgIm 0. 오프셋 0·4 = 진입점 오프셋, 8·12 = 원래 주소, 16 = 상태 버퍼(v43)
 m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,HgImGet \
@@ -124,7 +124,7 @@ data=$(m68k-palmos-size ime.coff | awk 'NR==2 {print $2 + $3}')
 a=$(m68k-palmos-nm ime.coff | awk '$3=="ImBase" {print $1}')
 [ "$((16#$a))" -eq 0 ] || { echo "error: ImBase at $a" >&2; exit 1; }
 a=$(m68k-palmos-nm ime.coff | awk '$3=="ImOrig" {print $1}')
-[ "$((16#$a))" -eq 4 ] || { echo "error: ImOrig at $a" >&2; exit 1; }
+[ "$((16#$a))" -eq 8 ] || { echo "error: ImOrig at $a" >&2; exit 1; }
 if m68k-palmos-objdump -d ime.coff | grep -q '%a5'; then
   echo "error: ime references %a5" >&2; exit 1
 fi
@@ -140,6 +140,8 @@ m68k-palmos-obj-res app
 # 3) 조합형 글꼴 묶음(tools/gen-johab.py로 생성해 커밋된 파일): HgJb 0 = 16×16, HgJb 1 = 12×12
 cp "$root/src/hangul/data/HgJ16.bin" HgJb0000.bin
 cp "$root/src/hangul/data/HgJ12.bin" HgJb0001.bin
+# v43: Sony ⇪ 키 대신 그릴 '한A' 그림(tools/gen-caps-icon.py, Galmuri11 OFL) HgIc 0 보통 · 1 켜짐
+cp "$root/src/hangul/data/HgIc0000.bin" "$root/src/hangul/data/HgIc0001.bin" .
 # v25: 리셋 알림(앱 전역변수 없음)에서 부르는 함수는 %a5(전역) 참조가 없어야 한다
 m68k-palmos-objdump -d app > app.dis
 for fn in ResetDiag AutoGet SonyGet ImOn InstallAll InstPatch InstIntl InstWidth LockGlyphs Lock24 Installed AppDB GetF WidthTrap IntlSel; do
@@ -148,5 +150,5 @@ for fn in ResetDiag AutoGet SonyGet ImOn InstallAll InstPatch InstIntl InstWidth
   [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
 done
 
-build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgIm0000.bin HgJb0000.bin HgJb0001.bin
+build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgIm0000.bin HgIc0000.bin HgIc0001.bin HgJb0000.bin HgJb0001.bin
 ls -l "$root/bin/MnHangul.prc"

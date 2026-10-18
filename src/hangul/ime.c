@@ -11,7 +11,13 @@
  * 조합 함수(KscJamo ~ SylKsc, Compose, ComposeBack)는 src/skwr/skwr.c(MnSkCore)에서 복사했다.
  *   고칠 때는 두 곳을 같이 고친다.
  *
- * 리소스 배치: 오프셋 0 = 진입점 오프셋, 4 = 원래 EvtGetEvent 주소, 8 = 상태 버퍼 주소(앱이 DmWrite).
+ * v43: WinDrawBitmap도 바꾼다. SilkExtn이 ⇪ 키 그림(ROM Tbmp 2400 보통 / 2500 반전 = 쉬프트 고정 켜짐)을 그리면
+ *   (1) 그 그림으로 한글 모드(#143)를 정하고(Sony 키보드의 실제 ⇪ 상태 — 새 메모 등 시스템이 바꿔도 맞음),
+ *   (2) 대신 '한A' 그림(MnHangul HgIc 0·1, 22×18, 2픽셀 왼쪽)을 그린다.
+ *   기록: #146 = ⇪ 그림 그린 순간의 다른 창 글자 그리기 수(#108, 키 글자보다 먼저인지 확인용), #147 = 횟수
+ *
+ * 리소스 배치: 오프셋 0·4 = 진입점 오프셋(EvtGetEvent, WinDrawBitmap), 8·12 = 원래 주소, 16 = 상태 버퍼 주소,
+ *   20·24 = ROM ⇪ 그림 주소(보통·반전), 28·32 = 대신 그릴 그림 주소(보통·켜짐) — 모두 앱이 DmWrite.
  * 상태 버퍼(동적 힙, 소유자 0): [0] 조합(초성<<24 | 중성<<16 | 종성<<8 | 화면에 나간 글자 수),
  *   [1] 조합 중인 앱 LocalID, [2] 바꾼 키 수, [3] 마지막 바꾼 키(원래 글자<<16 | 자모 바이트)
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
@@ -22,12 +28,30 @@
 #define kImMark 0x4D48   /* 우리가 넣은 키의 keyCode ('MH') */
 
 void HgImGet(EventType *event, Int32 timeout);
+void HgImBmp(BitmapPtr bmp, Coord x, Coord y);
 
 asm(".text\n.even\nImBase:\n"
-    " .long HgImGet-ImBase\n"
-    "ImOrig:\n .long 0\nImBuf:\n .long 0\n");
+    " .long HgImGet-ImBase, HgImBmp-ImBase\n"
+    "ImOrig:\n .long 0,0\nImBuf:\n .long 0\nImIcon:\n .long 0,0,0,0\n");
 
 typedef void (*GetFn)(EventType *, Int32);
+typedef void (*BmpFn)(BitmapPtr, Coord, Coord);
+
+static inline const UInt32 *Icons(void)
+{
+    const UInt32 *p;
+
+    asm("lea ImIcon(%%pc),%0" : "=a" (p));
+    return p;
+}
+
+static inline BmpFn OrigBmp(void)
+{
+    const BmpFn *p;
+
+    asm("lea ImOrig+4(%%pc),%0" : "=a" (p));
+    return *p;
+}
 
 static inline UInt32 *St(void)
 {
@@ -438,6 +462,29 @@ void HgImGet(EventType *event, Int32 timeout)
     st[3] = ((UInt32)ch << 16) | j;
     Compose(st, (UInt8)(j - 0xA0));
     event->eType = nilEvent;
+}
+
+/* v43: ⇪ 키 그림 → 한글 모드 판정 + '한A' 그림 */
+void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
+{
+    const UInt32 *ic = Icons();
+
+    if (bmp != NULL && ic[0] != 0 && ((UInt32)bmp == ic[0] || (UInt32)bmp == ic[1])) {
+        UInt16 on = (UInt32)bmp == ic[1] ? 1 : 0;
+        UInt32 v = 0;
+
+        FtrSet('MnHg', kFtrHan, on);
+        FtrGet('MnHg', 108, &v);
+        FtrSet('MnHg', 146, v);
+        v = 0;
+        FtrGet('MnHg', 147, &v);
+        FtrSet('MnHg', 147, v + 1);
+        if (ic[2 + on] != 0) {
+            OrigBmp()((BitmapPtr)ic[2 + on], x - 2, y);
+            return;
+        }
+    }
+    OrigBmp()(bmp, x, y);
 }
 
 #include "../skwr/ksc_table.h"
