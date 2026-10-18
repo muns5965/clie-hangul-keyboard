@@ -158,6 +158,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v26: Main 줄 6에 [Soft Reset (hold 3s)] (3초 누르면 리셋, 떼면 취소). 자동 시작 시험을 MnHangul 안에서 끝낼 수 있다. 줄 7은 calls 줄(이전 last len 줄 삭제).
 - v27: 리셋 버튼을 누르는 동안 폭 고정(`Hold... 3s`), `boot` 줄에서 bdc 주소를 빼 `a` 값이 다 보이게.
 - v28 (진단): KDlg 페이지 — `SysKeyboardDialog`·`SysKeyboardDialogV10`을 기록만 하는 코드(HgKd 0)로 교체. 호출 수, 마지막 키보드 종류, 포커스 필드 유무, 호출한 앱을 기록. CJKOS 화면 키보드처럼 리셋 없는 한글 키보드를 띄울 수 있는지 판단용.
+- v41: 기본 Main은 사용자용(Patch ON·All OFF, Auto·Sony, Soft Reset, 사용법, [ ] Debug), 진단 Main·페이지는 Debug 체크 때만.
 - v40: Main 줄 6 오른쪽 `Sony: ON/off` — Sony 한글을 첫 화면에서 설정(저장형), Patch ON·Auto가 함께 켬. v39 실측: ⇪·쉬프트·⇪ 끄기 표시 정상, 새 메모에서도 유지, 긴밤·달가·값읽·와의왜·가 나 가 입력 정상.
 - v39: 오버레이 한글 모드를 ⇪ 키 펜 누름으로 판정(#143). v38 실측: 펜 누름(⇪ 6,186 · 쉬프트 7,195)이 키 글자 다시 그리기보다 먼저 앱 EvtGetEvent를 지남.
 - v38 (진단): SetSt에 가상 실크 영역 펜 누름·뗌 기록. v37 실측: Sony는 키 글자 약 47개를 다 그린 뒤 SilkExtn(0xFB2)이 GrfSetState 호출, ⇪+쉬프트와 ⇪ 끄기 모두 GrfSetState(c0 u0)로 같음, 화면 복사 없음(가상 실크 창에 그리면 바로 보임).
