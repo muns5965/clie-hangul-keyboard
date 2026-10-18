@@ -177,6 +177,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - MnSonyKbd v7: v6 실측 — 복구 뒤 첫 ⇪에서 qwerty 줄만 영문(`한A` 파랑, 아래 줄 자모). 펜 누름 때 복구는 됐지만 ⇪ 판정이 옛 실제 상태(#150)의 반대라 H=0으로 시작. 수정: 복구 때 #150을 모름으로, 모를 때는 그 순간 Graffiti ⇪ 상태의 반대(Sony는 그린 뒤 상태를 바꾸므로 펜 누름 순간 = Sony 현재 상태).
 - v58: 실측 — MnSonyKbd가 위에 있을 때 MnHangul `Hangul ON`을 다시 누르면 먹통. 원인: 켜짐 판정이 "트랩 = MnHangul 진입점"이라 아니라고 보고 다시 설치 → 아래 주소에 맨 위(MnSonyKbd)를 적어 MnHangul → MnSonyKbd → MnHangul 순환. 수정: 연결을 따라 내려가 찾기(BltFind, MnSonyKbd chain.h와 같은 방법). 연결 안에 있으면 그대로, ROM까지 없으면 맨 위에 다시 잇기.
 - 실측(2026-10-18, v58 + MnSonyKbd v7): MnHangul 켬 → CJKOS 켬 → 끔 뒤 ClieDiag Trap 페이지 — ROM 밖 트랩 8개(폭 5개 0x3C0F60~0x3C15A0, BltDrawChars, EvtGetEvent·WinDrawBitmap = MnSonyKbd)와 Intl 6개(0x39DCxx~)만 남고 CJKOS 것(트랩 33·Intl 18)은 사라짐. → CJKOS는 꺼질 때 **자기가 켜질 때 저장한 주소**로 되돌린다. 먼저 켜진 모듈(MnHangul)은 연결이 유지되고, CJKOS보다 나중에 켠 모듈(MnSonyKbd v2 실측)만 빠진다. 외부 검토가 지적한 Intl·Width 유실은 이 순서에서 재현되지 않아 복구 코드는 넣지 않는다.
+- 실측(2026-10-18): CJKOS를 끈 뒤 MnHangul로 "가나다" BS·커서 이동 글자 단위 정상. MnSonyKbd v7: CJKOS 켬(MnSonyKbd ON) → CJKOS 끔 → ⇪ 켬·끔·켬 세 번 모두 자판 전체가 맞게 그려짐(v5·v6 문제 해소).
 - v45: ⇪ 펜 누름은 Sony 실제 상태(자판 전체 그리기의 ⇪ 그림, #150)의 반대로 정함. v44 실측: 값을 뒤집는 방식은 한 번 어긋나면 ⇪ 켜기·끄기 모두 1·2줄이 틀림.
 - v44: ⇪ 판정 보완(눌림 표시 그림 무시, ⇪ 꺼짐 + 일시 쉬프트 → 영문). v43 실측: Sony는 줄 순서로 그려 ⇪ 그림이 3줄 맨 앞 — 1·2줄은 그 전에 그려짐. ⇪ 누를 때 눌림 표시로 보통 그림을 먼저 한 번 그림.
 - v43: Sony ⇪ 키 그림(ROM SilkExtn Tbmp 2400 보통·2500 반전, 8비트 글자 0·바탕 0xD8/0x39)을 `한A`(22×18, Galmuri11 OFL)로 바꿔 그리고, 그 그림으로 한글 모드 판정(WinDrawBitmap). v42 실측: 새 메모에서 Sony가 쉬프트 고정을 풀었는데 표시는 한글로 남고 입력은 A.
