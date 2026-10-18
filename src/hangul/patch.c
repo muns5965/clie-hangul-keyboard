@@ -318,9 +318,11 @@ static inline Boolean HanLabel(UInt8 c)
         FtrSet(kHgCreator, 134 + (UInt16)(k & 7), e | 0x80000000UL);
         FtrSet(kHgCreator, 142, k + 1);
     }
-    if (caps)
-        return true;
-    return (c >= 'A' && c <= 'Z') && temp == 0;
+    /* v39: 한글 모드는 ⇪ 펜 누름으로 바뀐 #143. 상태가 ⇪ 켜짐이고 마지막 펜이 ⇪가 아니면 한글로 다시 맞춤
+     *      (⇪를 막 눌렀을 때는 상태가 한 박자 늦어 맞추지 않는다) */
+    if (caps && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) == 0)
+        FtrSet(kHgCreator, kFtrHan, 1);
+    return GetF(kFtrHan) != 0;
 }
 
 /* v31: 지금 그리는 곳이 화면 밖 창(0x4000, v29 실측 가상 실크 flags C000)인가. 비트맵 폭은 #129에 기록만 */

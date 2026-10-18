@@ -33,6 +33,16 @@ static inline UInt8 Dubeol(UInt8 c)
     return 0;
 }
 
+/* v39: Sony 가상 키보드 한글 모드를 누른 키로 미리 안다(v38 실측: 펜 누름이 앱 EvtGetEvent를 먼저 지나고,
+ *   Sony는 그다음 키 글자를 다시 그린 뒤 GrfSetState를 부른다. ⇪+쉬프트와 ⇪ 끄기는 상태로 구별 불가).
+ *   ⇪ 키: x 0~12, y 182~191 / 쉬프트 키: x 0~12, y 192~201 (저해상도 화면 좌표, v38 실측 6,186 · 7,195)
+ *   'MnHg' #143 = 한글 모드(1), #144 = 마지막 펜 누름이 ⇪ 키(1), #145 = ⇪ 누를 때의 다른 창 글자 그리기 수(#108)
+ *   ⇪를 눌렀는데 키 글자 다시 그리기가 없으면(가상 키보드가 아님) 펜 뗄 때 되돌린다. */
+#define kFtrHan      143
+#define kFtrPenCaps  144
+#define kFtrPenDraw  145
+#define kCapsKey(x, y)  ((x) >= 0 && (x) < 13 && (y) >= 182 && (y) < 192)
+
 /* 지금 쉬프트 고정(⇪)인가 = 한글 모드 */
 static inline Boolean HanMode(void)
 {

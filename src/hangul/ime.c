@@ -387,8 +387,34 @@ void HgImGet(EventType *event, Int32 timeout)
     if (st == NULL || event == NULL)
         return;
     if (event->eType == penDownEvent) {          /* 앱 영역을 누르면 커서가 옮겨질 수 있어 조합 끝 */
+        UInt32 v = 0;
+
         if (event->screenY < 160)
             st[0] = 0;
+        else if (kCapsKey(event->screenX, event->screenY)) {   /* v39: ⇪ → 한글 모드 전환 */
+            FtrGet('MnHg', kFtrHan, &v);
+            FtrSet('MnHg', kFtrHan, v ? 0 : 1);
+            FtrSet('MnHg', kFtrPenCaps, 1);
+            v = 0;
+            FtrGet('MnHg', 108, &v);
+            FtrSet('MnHg', kFtrPenDraw, v);
+        } else
+            FtrSet('MnHg', kFtrPenCaps, 0);
+        return;
+    }
+    if (event->eType == penUpEvent) {            /* v39: ⇪ 자리를 눌렀는데 키 글자 다시 그리기가 없었으면 되돌림 */
+        UInt32 pc = 0, d0 = 0, d1 = 0, v = 0;
+
+        FtrGet('MnHg', kFtrPenCaps, &pc);
+        if (pc == 1) {
+            FtrGet('MnHg', kFtrPenDraw, &d0);
+            FtrGet('MnHg', 108, &d1);
+            if (d1 - d0 < 20) {
+                FtrGet('MnHg', kFtrHan, &v);
+                FtrSet('MnHg', kFtrHan, v ? 0 : 1);
+            }
+            FtrSet('MnHg', kFtrPenCaps, 2);   /* 처리함(다시 맞추기 막음은 다음 펜 누름까지 유지) */
+        }
         return;
     }
     if (event->eType != keyDownEvent || event->data.keyDown.keyCode == kImMark)
