@@ -44,6 +44,18 @@ static inline UInt8 Dubeol(UInt8 c)
 #define kFtrSonyCaps 150   /* v45: 자판 전체를 그릴 때 본 ⇪ 그림 = Sony 실제 상태(0x100 | 켜짐) */
 #define kCapsKey(x, y)  ((x) >= 0 && (x) < 13 && (y) >= 182 && (y) < 192)
 
+/* v46 진단: 판정 순간 기록 고리 'MnHg' #160~#175(16칸), #176 다음 칸, #177 마지막 키 글자 기록 상태.
+ *   칸 = 종류<<30 (1 키 글자, 2 ⇪ 그림) | d(#108 하위 12비트)<<18 | 글자<<10 | H<<9 | p<<7 | caps<<6 | temp<<2 |
+ *        (그림: 판정에 씀<<1 | 반전) */
+static inline void DecLog(UInt32 e)
+{
+    UInt32 k = 0;
+
+    FtrGet('MnHg', 176, &k);
+    FtrSet('MnHg', 160 + (UInt16)(k & 15), e);
+    FtrSet('MnHg', 176, k + 1);
+}
+
 /* 지금 쉬프트 고정(⇪)인가 = 한글 모드 */
 static inline Boolean HanMode(void)
 {

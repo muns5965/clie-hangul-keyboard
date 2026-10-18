@@ -489,6 +489,9 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
             FtrSet('MnHg', kFtrHan, on);
             FtrSet('MnHg', kFtrSonyCaps, 0x100 | on);   /* v45 */
         }
+        DecLog((2UL << 30) | ((v & 0xFFF) << 18) | ((pc & 3) << 7) |   /* v46 진단 */
+               ((pc == 0 || v - d0 >= 5) ? 2 : 0) | on);
+        FtrSet('MnHg', 177, 0);   /* 그림 다음 키 글자는 다시 기록 */
         FtrSet('MnHg', 146, v);
         v = 0;
         FtrGet('MnHg', 147, &v);

@@ -326,6 +326,15 @@ static inline Boolean HanLabel(UInt8 c)
      *      ⇪를 막 누른 경우(빈 메모 자동 쉬프트에서 켜기: 그리는 순간 U g0031)는 펜 판정을 따른다 */
     if (!caps && temp != 0 && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) != 0)
         FtrSet(kHgCreator, kFtrHan, 0);
+    {   /* v46 진단: (H, p, caps, temp)가 바뀔 때만 기록 */
+        UInt32 st = ((GetF(kFtrHan) ? 1UL : 0) << 9) | ((GetF(kFtrPenCaps) & 3) << 7) | ((caps ? 1UL : 0) << 6) |
+                    ((UInt32)(temp & 0xF) << 2);
+
+        if ((GetF(177) & 0xFFFF) != (st | 0x8000)) {
+            FtrSet(kHgCreator, 177, st | 0x8000);
+            DecLog((1UL << 30) | ((GetF(108) & 0xFFF) << 18) | ((UInt32)c << 10) | st);
+        }
+    }
     return GetF(kFtrHan) != 0;
 }
 
