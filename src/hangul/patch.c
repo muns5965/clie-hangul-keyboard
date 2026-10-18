@@ -269,7 +269,7 @@ static inline UInt32 FontInfo(const void *f)
 /* v29 진단: 활성 창이 아닌 창(가상 실크 등)에 찍히는 글자. MnHangul 실행 중(#106)에는 기록하지 않는다.
  *   #108 횟수, #109 창 주소, #110 위치(x<<16|y), #111 길이<<16 | windowFlags, #112 글꼴(FontInfo)
  *   #113 글자 고리 위치, #114~#121 글자 고리(32바이트, 그린 글자열의 앞 4글자까지 이어 붙임)
- * v30: #126 오버레이 켜짐(1), #127 오버레이로 바꿔 그린 횟수. v31: #128 걸러진 이유, #129 창 flags·비트맵 폭 */
+ * v30~v53의 Sony 가상 키보드 자모 오버레이는 v54에 MnSonyKbd(src/sony/spatch.c)로 옮겼다. */
 static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, const void *p6)
 {
     const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
@@ -297,77 +297,6 @@ static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, cons
     FtrSet(kHgCreator, 113, pos);
 }
 
-/* v35: Sony 가상 키보드 두벌식 배치·한글 모드(⇪) 판정은 dubeol.h (입력 ime.c와 같은 표) */
-#include "dubeol.h"
-
-/* v36: 키 글자를 그리는 순간의 한글 판정. Graffiti 상태는 다시 그리기보다 한 박자 늦게 바뀌므로
- *   (v35 실측: ⇪를 켜면 대문자 키 글자를 먼저 그리고 그다음 ⇪ 상태가 켜짐) 키 글자 대·소문자와 함께 본다.
- *     대문자: ⇪ 켜짐 → 한글, ⇪ 꺼짐·일시 쉬프트 없음 → ⇪를 막 켬 → 한글, 일시 쉬프트 있음 → 영문(쉬프트·자동 쉬프트)
- *     소문자: ⇪ 켜짐 → 한글(⇪+쉬프트), ⇪ 꺼짐 → 영문
- *   진단: 판정 입력(대·소문자, g = caps num temp auto)이 바뀔 때마다 #134~#141 고리(#142 다음 칸)에 기록 */
-static inline Boolean HanLabel(UInt8 c)
-{
-    Boolean caps = false, num = false, autoS = false;
-    UInt16  temp = 0;
-    UInt32  e, k;
-
-    GrfGetState(&caps, &num, &temp, &autoS);
-    e = ((UInt32)(c >= 'A' && c <= 'Z' ? 1 : 0) << 16) | ((caps ? 1 : 0) << 12) | ((num ? 1 : 0) << 8) |
-        ((temp & 0xF) << 4) | (autoS ? 1 : 0);
-    k = GetF(142);
-    if (GetF(134 + (UInt16)((k + 7) & 7)) != (e | 0x80000000UL)) {
-        FtrSet(kHgCreator, 134 + (UInt16)(k & 7), e | 0x80000000UL);
-        FtrSet(kHgCreator, 142, k + 1);
-    }
-    /* v39: 한글 모드는 ⇪ 펜 누름으로 바뀐 #143. 상태가 ⇪ 켜짐이고 마지막 펜이 ⇪가 아니면 한글로 다시 맞춤
-     *      (⇪를 막 눌렀을 때는 상태가 한 박자 늦어 맞추지 않는다) */
-    if (caps && (GetF(kFtrPenCaps) == 0 || GetF(kFtrPenCaps) == 3) && GetF(kFtrHan) == 0)
-        FtrSet(kHgCreator, kFtrHan, 1);
-    /* v44: ⇪ 꺼짐 + 일시 쉬프트(자동 쉬프트 등)이고 마지막 펜이 ⇪가 아니면 영문(새 메모에서 시스템이 ⇪를 푼 경우).
-     *      ⇪를 막 누른 경우(빈 메모 자동 쉬프트에서 켜기: 그리는 순간 U g0031)는 펜 판정을 따른다
-     * v48: 가상 키보드 일반 키를 누른 동안(펜 표시 3)은 적용 안 함 — 한글 모드에서 키를 누르면 Sony가 잠깐
-     *      c0 t3로 바꿔 그 키만 영문으로 남던 문제(v47 실측 LR667·LW674 H0 c0 t3 → 바로 c1) */
-    if (!caps && temp != 0 && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) != 0)
-        FtrSet(kHgCreator, kFtrHan, 0);
-    /* v49: 소문자 키 글자 + ⇪ 꺼짐 = 영문(키보드를 처음 띄울 때 이전 H=1이 남아 1~2줄이 쌍자음으로 나오던 문제).
-     *      ⇪+쉬프트는 그리는 순간 ⇪ 켜짐(이전 상태)이라 해당 없음
-     * v50: 키 영역 펜(3) 동안은 적용 안 함 — ⇪+쉬프트에서 키를 누르면 잠깐 c0 소문자로 그려 H가 내려가
-     *      쉬프트가 풀린 다시 그리기(c0 t0 대문자)의 qwerty 줄이 영문으로 나오던 문제 */
-    if (!caps && c >= 'a' && c <= 'z' && GetF(kFtrPenCaps) != 3 && GetF(kFtrHan) != 0)
-        FtrSet(kHgCreator, kFtrHan, 0);
-    {   /* v46 진단: (H, p, caps, temp)가 바뀔 때만 기록 */
-        UInt32 st = ((GetF(kFtrHan) ? 1UL : 0) << 9) | ((GetF(kFtrPenCaps) & 3) << 7) | ((caps ? 1UL : 0) << 6) |
-                    ((UInt32)(temp & 0xF) << 2);
-
-        if ((GetF(177) & 0xFFFF) != (st | 0x8000)) {
-            FtrSet(kHgCreator, 177, st | 0x8000);
-            DecLog((1UL << 30) | ((GetF(108) & 0xFFF) << 18) | ((UInt32)c << 10) | st);
-        }
-    }
-    return GetF(kFtrHan) != 0;
-}
-
-/* v31: 지금 그리는 곳이 화면 밖 창(0x4000, v29 실측 가상 실크 flags C000)인가. 비트맵 폭은 #129에 기록만 */
-static inline Boolean SilkWin(void)
-{
-    const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
-    const UInt8 *bm;
-
-    if (w == NULL)
-        return false;
-    bm = *(const UInt8 * const *)(w + 26);
-    FtrSet(kHgCreator, 129, ((UInt32)*(const UInt16 *)(w + 8) << 16) | (bm != NULL ? *(const UInt16 *)bm : 0xFFFF));
-    return (*(const UInt16 *)(w + 8) & 0x4000) != 0;
-}
-
-/* v31: 오버레이 후보(영문 한 글자, 활성 창 아닌 곳)가 걸러진 이유. #128 = 이유<<24 | 글꼴 높이<<8 | 사각형 높이
- *   1 오버레이 꺼짐, 2 16 글꼴 없음(Patch ON 전), 3 글꼴 높이 22 아님, 4 화면 밖 창 아님(#129 = flags<<16 | 비트맵 폭),
- *   5 임시 메모리 없음, 6 쉬프트 고정(⇪) 꺼짐 = 영문 모드(v35) */
-static inline void OvlReject(UInt16 why, const Int16 *f, const Int16 *rc)
-{
-    FtrSet(kHgCreator, 128, ((UInt32)why << 24) | ((UInt32)(f[7] & 0xFF) << 8) | (UInt8)rc[3]);
-}
-
 UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7)
 {
     UInt32 orig = OrigAddr();
@@ -376,49 +305,6 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
     if (p2 != NULL)
         OtherLog(chars, len, p2, p6);   /* v29 진단 */
-    /* v30: 오버레이(#126 = 1) — 가상 실크 창에 높이 22 글꼴로 찍는 영문 한 글자를 두벌식 자모로.
-     * v31: 비트맵 폭 검사 뺌, 사각형 높이가 22·11이 아니면 배율 1, 걸러진 이유 #128 */
-    if (orig != 0 && len == 1 && chars != NULL && p2 != NULL && p6 != NULL && Dubeol(chars[0]) != 0 &&
-        (void *)WinGetDrawWindow() != (void *)WinGetActiveWindow() && GetF(106) == 0) {
-        const Int16 *f = (const Int16 *)p6;
-        Int16        rh = ((const Int16 *)p2)[3];
-        UInt16      *tmp = NULL;
-
-        if (GetF(126) != 1)
-            OvlReject(1, f, (const Int16 *)p2);
-        else if (GetF(23) == 0)
-            OvlReject(2, f, (const Int16 *)p2);
-        else if (f[7] != 22)
-            OvlReject(3, f, (const Int16 *)p2);
-        else if (!SilkWin())
-            OvlReject(4, f, (const Int16 *)p2);
-        else if (!HanLabel(chars[0]))
-            OvlReject(6, f, (const Int16 *)p2);
-        else if ((tmp = MemPtrNew(TmpWords(f[7]) * 2)) == NULL)
-            OvlReject(5, f, (const Int16 *)p2);
-        else {
-            {
-                UInt8         j[2];
-                RectangleType r = *(const RectangleType *)p2;
-                UInt16        ratio = (rh > 0 && f[7] == rh * 2) ? 2 : 1;
-                Int16         wl = (Int16)CharW(f, chars[0]), wg = kCell16;
-                UInt32        res;
-
-                j[0] = 0xA4;
-                j[1] = Dubeol(chars[0]);
-                r.topLeft.x += (wl - wg) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤 */
-                FtrSet(kHgCreator, 127, GetF(127) + 1);
-                FtrSet(kHgCreator, 128, ((UInt32)(f[7] & 0xFF) << 8) | (UInt8)rh);   /* 이유 0 = 바꿔 그림 */
-                /* v52: 자모는 ROM BltDrawChars로 직접(#152, 앱이 확인한 주소). 아래에 CJKOS 패치가 있으면
-                 *      임시 글꼴을 자기 방식으로 다시 그려 획이 빠졌다(v51 실측). 0이면 원래대로 아래 함수 */
-                res = DrawGlyphs(GetF(152) != 0 ? (BltFn)GetF(152) : (BltFn)orig, p1, &r, p3, j, 2, f, p7, ratio, tmp,
-                                 (const UInt8 *)GetF(23));
-                MemPtrFree(tmp);
-                return res;
-            }
-        }
-    }
-
     FtrSet(kHgCreator, 0, GetF(0) + 1);
     FtrSet(kHgCreator, 1, len);
     FtrSet(kHgCreator, 2, First4(chars, len));

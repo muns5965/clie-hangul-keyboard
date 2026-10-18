@@ -1,5 +1,5 @@
 /*
- * MnHangul Sony 가상 키보드 한글 입력 (리소스 HgIm 0) — v35
+ * MnSonyKbd Sony 가상 키보드 한글 입력 (리소스 SyIm 0) — MnHangul v35에서 시작, v54에 MnSonyKbd로 분리
  *
  * EvtGetEvent를 바꿔, 앱이 받는 영문 글자 키를 두벌식 자모로 바꾸고 조합한다.
  *   - 한글 모드 = 받는 순간 쉬프트 고정(⇪) 켜짐 (v34 실측: ⇪ = g1000, ⇪+쉬프트 소문자도 받는 순간 g1000,
@@ -13,7 +13,7 @@
  *
  * v43: WinDrawBitmap도 바꾼다. SilkExtn이 ⇪ 키 그림(ROM Tbmp 2400 보통 / 2500 반전 = 쉬프트 고정 켜짐)을 그리면
  *   (1) 그 그림으로 한글 모드(#143)를 정하고(Sony 키보드의 실제 ⇪ 상태 — 새 메모 등 시스템이 바꿔도 맞음),
- *   (2) 대신 '한A' 그림(MnHangul HgIc 0·1, 22×18, 2픽셀 왼쪽)을 그린다.
+ *   (2) 대신 '한A' 그림(SyIc 0·1, 22×18, 2픽셀 왼쪽)을 그린다.
  *   기록: #146 = ⇪ 그림 그린 순간의 다른 창 글자 그리기 수(#108, 키 글자보다 먼저인지 확인용), #147 = 횟수
  *
  * 리소스 배치: 오프셋 0·4 = 진입점 오프셋(EvtGetEvent, WinDrawBitmap), 8·12 = 원래 주소, 16 = 상태 버퍼 주소,
@@ -415,38 +415,38 @@ void HgImGet(EventType *event, Int32 timeout)
 
         if (event->screenY < 160) {
             st[0] = 0;
-            FtrSet('MnHg', kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
+            FtrSet(kSyCr, kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
         } else if (kCapsKey(event->screenX, event->screenY)) {   /* v39: ⇪ → 한글 모드 전환 */
             UInt32 sc = 0;
 
             /* v45: Sony 실제 상태(마지막 자판 전체 그리기의 ⇪ 그림)의 반대로. 모르면 지금 값을 뒤집음 */
-            FtrGet('MnHg', kFtrSonyCaps, &sc);
-            FtrGet('MnHg', kFtrHan, &v);
-            FtrSet('MnHg', kFtrHan, (sc & 0x100) ? !(sc & 1) : (v ? 0 : 1));
-            FtrSet('MnHg', kFtrPenCaps, 1);
+            FtrGet(kSyCr, kFtrSonyCaps, &sc);
+            FtrGet(kSyCr, kFtrHan, &v);
+            FtrSet(kSyCr, kFtrHan, (sc & 0x100) ? !(sc & 1) : (v ? 0 : 1));
+            FtrSet(kSyCr, kFtrPenCaps, 1);
             v = 0;
-            FtrGet('MnHg', 108, &v);
-            FtrSet('MnHg', kFtrPenDraw, v);
+            FtrGet(kSyCr, 108, &v);
+            FtrSet(kSyCr, kFtrPenDraw, v);
         } else   /* v48: 가상 키보드 일반 키 = 3(키 누름 중 순간 상태로 영문 내림 안 함)
                   * v50: 키 영역(y < 213)만 3. 아래 탭·상태 표시줄(키보드 띄우는 버튼 등)은 0 */
-            FtrSet('MnHg', kFtrPenCaps, event->screenY < kKeyAreaEnd ? 3 : 0);
+            FtrSet(kSyCr, kFtrPenCaps, event->screenY < kKeyAreaEnd ? 3 : 0);
         return;
     }
     if (event->eType == penUpEvent) {            /* v39: ⇪ 자리를 눌렀는데 키 글자 다시 그리기가 없었으면 되돌림 */
         UInt32 pc = 0, d0 = 0, d1 = 0, v = 0;
 
-        FtrGet('MnHg', kFtrPenCaps, &pc);
+        FtrGet(kSyCr, kFtrPenCaps, &pc);
         if (pc == 1) {
-            FtrGet('MnHg', kFtrPenDraw, &d0);
-            FtrGet('MnHg', 108, &d1);
+            FtrGet(kSyCr, kFtrPenDraw, &d0);
+            FtrGet(kSyCr, 108, &d1);
             if (d1 - d0 < 20) {   /* v45: Sony 실제 상태로 되돌림(모르면 다시 뒤집음) */
                 UInt32 sc = 0;
 
-                FtrGet('MnHg', kFtrSonyCaps, &sc);
-                FtrGet('MnHg', kFtrHan, &v);
-                FtrSet('MnHg', kFtrHan, (sc & 0x100) ? (sc & 1) : (v ? 0 : 1));
+                FtrGet(kSyCr, kFtrSonyCaps, &sc);
+                FtrGet(kSyCr, kFtrHan, &v);
+                FtrSet(kSyCr, kFtrHan, (sc & 0x100) ? (sc & 1) : (v ? 0 : 1));
             }
-            FtrSet('MnHg', kFtrPenCaps, 2);   /* 처리함(다시 맞추기 막음은 다음 펜 누름까지 유지) */
+            FtrSet(kSyCr, kFtrPenCaps, 2);   /* 처리함(다시 맞추기 막음은 다음 펜 누름까지 유지) */
         }
         return;
     }
@@ -485,22 +485,22 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
 
         /* v47: 자판 전체 그리기에서 ⇪ 그림은 2줄 끝 키(\ 또는 |) 바로 다음(v46 실측). 그때만 Sony 실제 상태로 쓴다.
          *      ⇪ 누를 때의 눌림 표시(반전 그림, 앱이 펜을 받기 전에 그려짐)는 판정에 쓰지 않는다 */
-        FtrGet('MnHg', kFtrPenCaps, &pc);
-        FtrGet('MnHg', kFtrPenDraw, &d0);
-        FtrGet('MnHg', 108, &v);
-        FtrGet('MnHg', 151, &last);
+        FtrGet(kSyCr, kFtrPenCaps, &pc);
+        FtrGet(kSyCr, kFtrPenDraw, &d0);
+        FtrGet(kSyCr, 108, &v);
+        FtrGet(kSyCr, 151, &last);
         use = (last == '\\' || last == '|');
         if (use) {
-            FtrSet('MnHg', kFtrHan, on);
-            FtrSet('MnHg', kFtrSonyCaps, 0x100 | on);   /* v45 */
+            FtrSet(kSyCr, kFtrHan, on);
+            FtrSet(kSyCr, kFtrSonyCaps, 0x100 | on);   /* v45 */
         }
         DecLog((2UL << 30) | ((v & 0xFFF) << 18) | ((pc & 3) << 7) |   /* v46 진단 */
                (use ? 2 : 0) | on);
-        FtrSet('MnHg', 177, 0);   /* 그림 다음 키 글자는 다시 기록 */
-        FtrSet('MnHg', 146, v);
+        FtrSet(kSyCr, 177, 0);   /* 그림 다음 키 글자는 다시 기록 */
+        FtrSet(kSyCr, 146, v);
         v = 0;
-        FtrGet('MnHg', 147, &v);
-        FtrSet('MnHg', 147, v + 1);
+        FtrGet(kSyCr, 147, &v);
+        FtrSet(kSyCr, 147, v + 1);
         if (ic[2 + on] != 0) {
             OrigBmp()((BitmapPtr)ic[2 + on], x - 2, y);
             return;

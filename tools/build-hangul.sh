@@ -9,7 +9,7 @@
 #   2c) 글자 경계 코드(src/hangul/intl.c) → 리소스 HgIt 0(Intl 루틴 6개 교체, 3a 단계).
 #   2d) 폭 계산 코드(src/hangul/width.c) → 리소스 HgWd 0(폭 함수 트랩 5개 교체, 3b 단계).
 #   2e) 키보드 대화상자 진단 코드(src/hangul/kbd.c) → 리소스 HgKd 0(SysKeyboardDialog 호출 기록, v28).
-#   2f) Sony 가상 키보드 한글 입력(src/hangul/ime.c) → 리소스 HgIm 0(EvtGetEvent, v35).
+#   (v54: Sony 가상 키보드 한글은 tools/build-sony.sh → MnSonyKbd.prc)
 #   3) 조합형 글꼴 묶음 HgJb 0(Neo둥근모 16×16)·1(물마루 기반 12×12)(src/hangul/data, OFL, tools/gen-johab.py).
 # 패치 코드 검사(하나라도 어긋나면 실패): .data/.bss 0, PatchOrig 오프셋 0, PatchBlt 오프셋 4,
 #   %a5 참조 없음, 재배치 없음.
@@ -114,45 +114,19 @@ fi
 m68k-palmos-objcopy -O binary -j .text kbd.coff HgKd0000.bin
 m68k-palmos-objdump -d kbd.coff > kbd.dis
 
-# 1f) v35 Sony 가상 키보드 한글 입력(src/hangul/ime.c) → 리소스 HgIm 0. 오프셋 0·4 = 진입점 오프셋, 8·12 = 원래 주소, 16 = 상태 버퍼(v43)
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
-  -fno-builtin -nostartfiles -nostdlib \
-  -Wl,-e,HgImGet \
-  "$root/src/hangul/ime.c" -o ime.coff
-data=$(m68k-palmos-size ime.coff | awk 'NR==2 {print $2 + $3}')
-[ "$data" = "0" ] || { echo "error: ime data+bss = $data" >&2; exit 1; }
-a=$(m68k-palmos-nm ime.coff | awk '$3=="ImBase" {print $1}')
-[ "$((16#$a))" -eq 0 ] || { echo "error: ImBase at $a" >&2; exit 1; }
-a=$(m68k-palmos-nm ime.coff | awk '$3=="ImOrig" {print $1}')
-[ "$((16#$a))" -eq 8 ] || { echo "error: ImOrig at $a" >&2; exit 1; }
-# v48: 코드 뒤 KSC 표(KscBits~) 데이터를 명령어로 풀면 %a5처럼 보여 검사가 타이밍 따라 실패했다 → 코드 구역만 검사
-stop=$(m68k-palmos-nm ime.coff | awk '$3=="KscBits" {print $1}')
-[ -n "$stop" ] || { echo "error: KscBits not found" >&2; exit 1; }
-m68k-palmos-objdump -d --stop-address=0x$stop ime.coff > ime.code.dis
-if grep -q '%a5' ime.code.dis; then
-  echo "error: ime references %a5" >&2; exit 1
-fi
-if m68k-palmos-objdump -r ime.coff | grep -qE '^[0-9a-f]{8} '; then
-  echo "error: ime has relocations" >&2; exit 1
-fi
-m68k-palmos-objcopy -O binary -j .text ime.coff HgIm0000.bin
-m68k-palmos-objdump -d ime.coff > ime.dis
-
 # 2) 앱
 m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar "$root/src/hangul/app.c" -o app 2>&1 | tee build.log
 m68k-palmos-obj-res app
 # 3) 조합형 글꼴 묶음(tools/gen-johab.py로 생성해 커밋된 파일): HgJb 0 = 16×16, HgJb 1 = 12×12
 cp "$root/src/hangul/data/HgJ16.bin" HgJb0000.bin
 cp "$root/src/hangul/data/HgJ12.bin" HgJb0001.bin
-# v43: Sony ⇪ 키 대신 그릴 '한A' 그림(tools/gen-caps-icon.py, Galmuri11 OFL) HgIc 0 보통 · 1 켜짐
-cp "$root/src/hangul/data/HgIc0000.bin" "$root/src/hangul/data/HgIc0001.bin" .
 # v25: 리셋 알림(앱 전역변수 없음)에서 부르는 함수는 %a5(전역) 참조가 없어야 한다
 m68k-palmos-objdump -d app > app.dis
-for fn in ResetDiag AutoGet SkipGet SkipSet SonyGet ImOn InstallAll InstPatch RomBlt InstIntl InstWidth LockGlyphs Lock24 Installed AppDB GetF WidthTrap IntlSel; do
+for fn in ResetDiag AutoGet SkipGet SkipSet InstallAll InstPatch InstIntl InstWidth LockGlyphs Lock24 Installed AppDB GetF WidthTrap IntlSel; do
   n=$(awk -v f="<$fn>:" '$2==f {on=1; next} /^[0-9a-f]+ </ {on=0} on && /%a5/' app.dis | wc -l)
   grep -q "<$fn>:" app.dis || { echo "error: $fn not found" >&2; exit 1; }
   [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
 done
 
-build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgIm0000.bin HgIc0000.bin HgIc0001.bin HgJb0000.bin HgJb0001.bin
+build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgJb0000.bin HgJb0001.bin
 ls -l "$root/bin/MnHangul.prc"

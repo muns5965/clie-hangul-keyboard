@@ -165,6 +165,10 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v51 (시험): CJKOS 세션 실측(v50) — Sony 한글 입력(HgIm)만 켜도 두벌식 조합 입력·한A 전환 정상(겹침 없음). 키 글자 자모 표시까지 CJKOS와 같이 쓰도록 KDlg [Sony only]: 그리기 패치는 걸되 글자 모드 off(2바이트 한글은 원래 함수 = CJKOS), Intl·Width 없음.
 - v52: v51 실측(CJKOS + Sony only) — 입력 정상, 키 글자 자모는 세로획이 빠진 모양. 자모 임시 글꼴을 "패치 아래 함수"(CJKOS)로 그리면 CJKOS가 다시 처리하는 것으로 보고, 오버레이만 ROM BltDrawChars(0x1008359A, 시작 바이트 4E56FFF0 48E71E30 확인 후)로 직접 그림. KDlg 2줄에 아래 함수·자모 주소.
 - v53: 업데이트 단순화 — 첫 화면 `Update (hold 3s)`: 앱 설정 3번(다음 리셋 한 번 자동 시작 건너뛰기)을 켜고 리셋. 리셋 알림에서 건너뛰고(#95 = 0x40000000) 설정을 지운다. CJKOS 훅이 위에 있어 `Hangul OFF`로 못 풀 때도 같은 순서(Update → 설치 → Hangul ON).
+- v54: 세 모듈로 분리 — 한글 표시(MnHangul), Mn 가상 키보드(MnSkPlugin+MnSkCore), Sony 가상 키보드 한글(새 모듈 MnSonyKbd, 크리에이터 MnSy, src/sony).
+  MnSonyKbd = SyPt 0(spatch.c: BltDrawChars, 가상 실크 창 영문 키 글자만 자모로, 나머지는 아래 함수로) + SyIm 0(ime.c, MnHangul HgIm 그대로·기록 feature만 'MnSy')
+  + SyIc 0·1('한A') + SyJm 0(자모 그림만, tools/gen-sony-jamo.py로 HgJ16 자모표에서 뽑음). 한/영 판정(HanLabel)은 v50과 같다.
+  CJKOS 세션 실측(v53 `Sony only`): 자모·입력·쌍자음 정상(본문은 CJKOS 글꼴) → 설치 B(CJKOS + MnSonyKbd)의 근거. MnHangul에서는 Sony 관련 코드·설정·KDlg 판정 기록을 뺐다.
 - v45: ⇪ 펜 누름은 Sony 실제 상태(자판 전체 그리기의 ⇪ 그림, #150)의 반대로 정함. v44 실측: 값을 뒤집는 방식은 한 번 어긋나면 ⇪ 켜기·끄기 모두 1·2줄이 틀림.
 - v44: ⇪ 판정 보완(눌림 표시 그림 무시, ⇪ 꺼짐 + 일시 쉬프트 → 영문). v43 실측: Sony는 줄 순서로 그려 ⇪ 그림이 3줄 맨 앞 — 1·2줄은 그 전에 그려짐. ⇪ 누를 때 눌림 표시로 보통 그림을 먼저 한 번 그림.
 - v43: Sony ⇪ 키 그림(ROM SilkExtn Tbmp 2400 보통·2500 반전, 8비트 글자 0·바탕 0xD8/0x39)을 `한A`(22×18, Galmuri11 OFL)로 바꿔 그리고, 그 그림으로 한글 모드 판정(WinDrawBitmap). v42 실측: 새 메모에서 Sony가 쉬프트 고정을 풀었는데 표시는 한글로 남고 입력은 A.

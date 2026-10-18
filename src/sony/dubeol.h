@@ -12,6 +12,9 @@
 #ifndef HG_DUBEOL_H
 #define HG_DUBEOL_H
 
+/* v54: Sony 가상 키보드 한글은 별도 모듈 MnSonyKbd(크리에이터 'MnSy', src/sony)로 분리. 기록 feature도 'MnSy' */
+#define kSyCr 'MnSy'
+
 static inline UInt8 Dubeol(UInt8 c)
 {
     switch (c) {   /* ⇪ + 쉬프트(소문자) 때만 쌍자음 */
@@ -36,7 +39,7 @@ static inline UInt8 Dubeol(UInt8 c)
 /* v39: Sony 가상 키보드 한글 모드를 누른 키로 미리 안다(v38 실측: 펜 누름이 앱 EvtGetEvent를 먼저 지나고,
  *   Sony는 그다음 키 글자를 다시 그린 뒤 GrfSetState를 부른다. ⇪+쉬프트와 ⇪ 끄기는 상태로 구별 불가).
  *   ⇪ 키: x 0~12, y 182~191 / 쉬프트 키: x 0~12, y 192~201 (저해상도 화면 좌표, v38 실측 6,186 · 7,195)
- *   'MnHg' #143 = 한글 모드(1), #144 = 마지막 펜 누름이 ⇪ 키(1), #145 = ⇪ 누를 때의 다른 창 글자 그리기 수(#108)
+ *   kSyCr #143 = 한글 모드(1), #144 = 마지막 펜 누름이 ⇪ 키(1), #145 = ⇪ 누를 때의 다른 창 글자 그리기 수(#108)
  *   ⇪를 눌렀는데 키 글자 다시 그리기가 없으면(가상 키보드가 아님) 펜 뗄 때 되돌린다. */
 #define kFtrHan      143
 #define kFtrPenCaps  144
@@ -45,16 +48,16 @@ static inline UInt8 Dubeol(UInt8 c)
 #define kCapsKey(x, y)  ((x) >= 0 && (x) < 13 && (y) >= 182 && (y) < 192)
 #define kKeyAreaEnd  213   /* v50: 가상 키보드 키 5줄 = y 160~212 (그 아래 abc/int'l/sym 탭, 상태 표시줄) */
 
-/* v46 진단: 판정 순간 기록 고리 'MnHg' #160~#175(16칸), #176 다음 칸, #177 마지막 키 글자 기록 상태.
+/* v46 진단: 판정 순간 기록 고리 kSyCr #160~#175(16칸), #176 다음 칸, #177 마지막 키 글자 기록 상태.
  *   칸 = 종류<<30 (1 키 글자, 2 ⇪ 그림) | d(#108 하위 12비트)<<18 | 글자<<10 | H<<9 | p<<7 | caps<<6 | temp<<2 |
  *        (그림: 판정에 씀<<1 | 반전) */
 static inline void DecLog(UInt32 e)
 {
     UInt32 k = 0;
 
-    FtrGet('MnHg', 176, &k);
-    FtrSet('MnHg', 160 + (UInt16)(k & 15), e);
-    FtrSet('MnHg', 176, k + 1);
+    FtrGet(kSyCr, 176, &k);
+    FtrSet(kSyCr, 160 + (UInt16)(k & 15), e);
+    FtrSet(kSyCr, 176, k + 1);
 }
 
 /* 지금 쉬프트 고정(⇪)인가 = 한글 모드 */
