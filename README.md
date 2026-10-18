@@ -127,11 +127,12 @@ ClieDiag는 모두 선택이다. Mn 키보드(A·B1) 업데이트:
 | 작업 | 절차 | 리셋 |
 | --- | --- | --- |
 | 처음 설치 | `MnHangul.prc`(24 글꼴은 `MnHgFont24.prc` 추가) 설치 → MnHangul `Hangul ON` | 없음 |
-| 업데이트 | MnHangul `Hangul OFF` → 설치 → `Hangul ON` | 없음 |
+| 업데이트 | MnHangul `Update (hold 3s)` → (리셋 뒤 MnHangul이 켜지지 않은 상태) 설치 → `Hangul ON` | 1번 (`Update`가 함) |
 | 리셋 뒤 자동 시작 | `Start at reset: ON`(기본)이면 리셋 알림 때 `Hangul ON`과 같은 설치를 한다 | — |
 | 비상 탈출 | 위 버튼을 누른 채 리셋(CloudpilotEmu: Reset → No extensions). 리셋 알림이 오지 않아 설치하지 않는다. 설정은 남으므로 끄려면 MnHangul에서 `Start at reset: off` | — |
 
 - 패치는 RAM의 트랩 표에 걸리므로 어떤 리셋이든 풀린다. 리셋 뒤 켜져 있는 것은 `Start at reset`이 다시 설치했기 때문이다.
+- MnHangul은 켜져 있는 동안 자기 코드를 잠가 두어(시스템 함수가 가리킴) 덮어쓸 수 없다. `Hangul OFF`로 풀 수도 있지만, 다른 프로그램(CJKOS 등)이 그 위에 훅을 걸었으면 안전을 위해 풀지 않는다(`kept: use Update`). 그래서 업데이트는 `Update` 버튼으로 한다.
 - MnHangul 첫 화면에도 `Soft Reset (hold 3s)`가 있다. 진단 화면은 `[ ] Debug`를 체크하면 나온다.
 
 ## Sony 가상 키보드로 한글(MnHangul)
@@ -158,6 +159,7 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 | `Start at reset: ON/off` | 리셋 뒤 자동으로 켬(기본 ON) |
 | `Sony keyboard: ON/off` | Sony 가상 키보드 한글 입력·자모 표시(기본 ON). off면 한글 표시만 |
 | `Soft Reset (hold 3s)` | 3초 누르면 소프트 리셋 |
+| `Update (hold 3s)` | 업데이트용 리셋. 리셋 뒤 한 번만 자동 시작을 건너뛰어 잠금 없이 바로 설치할 수 있다 |
 | `[ ] Debug` | 개발용 진단 화면 |
 
 **제한**

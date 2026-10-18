@@ -1,5 +1,5 @@
 /*
- * MnHangul v52 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v53 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,7 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v53: 첫 화면 [Update (hold 3s)] = 다음 리셋 한 번 자동 시작 건너뛰기(설정 3번) + 리셋 → 잠금 없이 바로 설치. 업데이트 = Update → 설치 → Hangul ON.
  * v52: 자모 오버레이는 ROM BltDrawChars(#152)로 직접 그림(CJKOS 아래에서 획 빠짐). KDlg 2줄 = blt below / jamo 주소.
  * v51 (시험): KDlg 10줄 [Sony only] = 그리기 패치(글자 모드 off) + 자모 오버레이 + Sony 입력, Intl·Width 없음 — CJKOS와 같이 쓰기 시험.
  * v50: 펜 표시 3은 키 영역(y<213)만, v49 영문 규칙은 키 누름(3) 동안 적용 안 함(⇪+쉬프트 입력 뒤 qwerty 줄 영문 문제).
@@ -749,6 +750,8 @@ static void AllOff(void)
         PatchOff();
     if (ProtectCount() == 0)
         StrCopy(gMsg, "all off: ready to install");
+    else   /* v53: 다른 패치가 위에 있어 못 푼 것 — Update 리셋 */
+        StrCopy(gMsg, "kept: use Update, then install");
 }
 
 /* v11 폭 진단 */
@@ -762,7 +765,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -1026,7 +1029,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -1141,7 +1144,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -1178,7 +1181,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -1216,7 +1219,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -1268,7 +1271,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 Kbd [tap: KDlg]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 Kbd [tap: KDlg]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1321,7 +1324,7 @@ static void DrawKbdDlgPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 KDlg [tap: SetSt]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 KDlg [tap: SetSt]", 30, 0, 0);
     Button(0, GetF(kFtrKbdC) ? "Hooks: ON" : "Hooks: off");
     ButtonAt(100, 0, "Clear");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
@@ -1438,7 +1441,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1488,7 +1491,16 @@ static void Draw(void)
 }
 
 /* v26: 3초 동안 누르고 있으면 SysReset(), 중간에 떼면 취소 (ClieDiag와 같은 방식) */
+static void SkipSet(UInt16 v);
+static void HoldResetAs(UInt16 row, const Char *label, Boolean upd);
+
 static void HoldReset(UInt16 row)
+{
+    HoldResetAs(row, "Soft Reset (hold 3s)", false);
+}
+
+/* v53: upd = 다음 리셋 한 번 자동 시작 건너뛰기(업데이트 설치용)를 저장하고 리셋 */
+static void HoldResetAs(UInt16 row, const Char *label, Boolean upd)
 {
     UInt32        t0 = TimGetTicks(), tps = SysTicksPerSecond();
     Int16         x, y, shown = -1, left;
@@ -1496,7 +1508,7 @@ static void HoldReset(UInt16 row)
     RectangleType r, b;
     Char          s[24];
     /* v27: 버튼 폭은 처음 글자 기준으로 고정 */
-    UInt16        w = FntCharsWidth("Soft Reset (hold 3s)", 20) + 6;
+    UInt16        w = FntCharsWidth(label, StrLen(label)) + 6;
 
     RctSetRectangle(&r, 0, (row + 1) * kLineH, w + 6, kLineH);
     RctSetRectangle(&b, 3, (row + 1) * kLineH + 1, w, kLineH - 2);
@@ -1514,6 +1526,8 @@ static void HoldReset(UInt16 row)
             shown = left;
         }
         if (left <= 0) {
+            if (upd)
+                SkipSet(1);
             SysReset();
             return;
         }
@@ -1534,7 +1548,7 @@ static void DrawSetStPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52 SetSt [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v53 SetSt [tap: Main]", 30, 0, 0);
     if (kb == NULL) {
         Row(0, "Hooks off (KDlg page)");
         return;
@@ -1659,6 +1673,7 @@ static void DrawCheck(UInt16 row, const Char *label, Boolean on)
 #define kURowAuto  3
 #define kURowSony  4
 #define kURowReset 5
+#define kURowUpd   6   /* v53 */
 static void DrawUserMain(void)
 {
     RectangleType r;
@@ -1666,7 +1681,7 @@ static void DrawUserMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v52  CJKOS OFF", 23, 0, 0);
+    WinDrawInvertedChars("MnHangul v53  CJKOS OFF", 23, 0, 0);
     StrPrintF(s, "Hangul %s  Sony kbd %s  At reset %s", Installed() ? "ON" : "off", GetF(kFtrImC) ? "ON" : "off",
               AutoGet() ? "ON" : "off");
     Row(0, s);
@@ -1675,10 +1690,11 @@ static void DrawUserMain(void)
     Button(kURowAuto, AutoGet() ? "Start at reset: ON" : "Start at reset: off");
     Button(kURowSony, SonyGet() ? "Sony keyboard: ON" : "Sony keyboard: off");
     Button(kURowReset, "Soft Reset (hold 3s)");
+    Button(kURowUpd, "Update (hold 3s)");   /* v53 */
     Row(7, "Sony keyboard (silk kbd icon):");
     Row(8, "  caps lock = Hangul / English");
     Row(9, "  caps+shift = double consonant");
-    Row(10, "Update: Hangul OFF, then install");
+    Row(10, "Update: [Update], install, ON");
     DrawCheck(12, "Debug", false);
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
 }
@@ -1695,6 +1711,21 @@ static UInt16 AutoGet(void)
 static void AutoSet(UInt16 v)
 {
     PrefSetAppPreferences(kHgCreator, 0, 1, &v, sizeof v, true);
+}
+
+/* v53: 앱 설정 3번 = 다음 리셋 한 번 자동 시작 건너뛰기(Update 버튼). 리셋 알림에서 읽으므로 전역 없음 */
+static UInt16 SkipGet(void)
+{
+    UInt16 v = 0, size = sizeof v;
+
+    if (PrefGetAppPreferences(kHgCreator, 3, &v, &size, true) == noPreferenceFound || size != sizeof v)
+        v = 0;
+    return v;
+}
+
+static void SkipSet(UInt16 v)
+{
+    PrefSetAppPreferences(kHgCreator, 3, 1, &v, sizeof v, true);
 }
 
 /* v24 진단: 리셋 알림 기록. 이 호출에서는 앱 전역변수·문자열 상수(데이터 구역)를 쓸 수 없으므로 상수와 지역변수만 쓴다 */
@@ -1724,7 +1755,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 
     if (cmd == sysAppLaunchCmdSystemReset) {
         ResetDiag(cmdPBP);
-        if (AutoGet())   /* v25: 자동 시작 */
+        if (SkipGet()) {   /* v53: Update 버튼 리셋 — 이번 한 번 켜지 않음(잠금 없음 → 바로 설치 가능) */
+            SkipSet(0);
+            FtrSet(kHgCreator, 95, 0x40000000UL);
+        } else if (AutoGet())   /* v25: 자동 시작 */
             FtrSet(kHgCreator, 95, 0x80000000UL | InstallAll());
         return 0;
     }
@@ -1752,6 +1786,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                     StrCopy(gMsg, AutoGet() ? "start at reset: ON" : "start at reset: off");
                 } else if (row == kURowReset && e.screenX < 108)
                     HoldReset(kURowReset);
+                else if (row == kURowUpd && e.screenX < 90)   /* v53 */
+                    HoldResetAs(kURowUpd, "Update (hold 3s)", true);
                 else if (row == 12 && e.screenX < 60) {
                     DebugSet(1);
                     StrCopy(gMsg, "debug pages: tap title");
