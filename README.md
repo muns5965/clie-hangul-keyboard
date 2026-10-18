@@ -93,7 +93,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | 설치 | `MnSkPlugin`, `MnSkCore` | `MnSonyKbd` | `MnSkPlugin`, `MnSkCore`, `MnHangul` (+ 24 글꼴 `MnHgFont24` 선택) | `MnHangul`, `MnSonyKbd` (+ 24 글꼴 선택) |
 | 자판 | 단모음 | 두벌식 (`한A` = 한/영) | 단모음 | 두벌식 (`한A` = 한/영) |
 | 한글 표시 | 설치된 한글 시스템 (완성형 KS X 1001 2바이트를 표시하는 것) | 설치된 한글 시스템 | MnHangul (시험 단계) | MnHangul (시험 단계) |
-| 순서 | 설치 → 리셋 → □→로 켜기 | 설치 → MnSonyKbd `Sony kbd ON` | 설치 → MnHangul `Hangul ON` → 리셋 → □→로 켜기 | 설치 → MnHangul `Hangul ON` → MnSonyKbd `Sony kbd ON` |
+| 순서 | 설치 → 리셋 → □→로 켜기 | 설치 → MnSonyKbd `ON` | 설치 → MnHangul `Hangul ON` → 리셋 → □→로 켜기 | 설치 → MnHangul `Hangul ON` → MnSonyKbd `ON` |
 | 리셋 | 처음 1번 — 가상 실크스크린에 Mn 키보드(로더) 등록 (`SilkExtn`이 부팅 때만 찾음) | **없음** — Sony 가상 키보드는 이미 등록되어 있고, MnSonyKbd는 켜는 즉시 동작 | 처음 1번 — Mn 키보드 등록. MnHangul은 리셋 필요 없음 (`Start at reset`으로 리셋 뒤 자동 시작) | **없음** |
 | 주의 | MnHangul은 켜지 않음 (같은 함수를 바꾸므로 충돌) | MnHangul은 켜지 않음 | CJKOS 등 다른 한글 시스템은 끈 상태로 | CJKOS 등 다른 한글 시스템은 끈 상태로 |
 | 시험 환경 | CloudpilotEmu(NR70V ROM) + CJKOS. 다른 한글 시스템과 실기기는 미시험 | CloudpilotEmu + CJKOS 메모장(MnHangul v53 `Sony only`, 같은 코드). 분리 판·실기기 미시험 | CloudpilotEmu(NR70V ROM). 실기기는 미시험 | CloudpilotEmu 메모장(MnHangul v50, 같은 코드). 분리 판·실기기 미시험 |
@@ -105,7 +105,7 @@ ClieDiag는 모두 선택이다. Mn 키보드(A·C) 업데이트:
 | Mn 키보드 본체(`MnSkCore.prc`) 업데이트 | □→로 끄기 → `MnSkCore.prc` 설치 → □→로 켜기 | 없음 |
 | Mn 키보드 로더(`MnSkPlugin.prc`) 업데이트 | □→로 끄기 → `MnSkPlugin.prc` 설치 → 바로 리셋 | 1번 |
 
-- 리셋 방법(아무것이나): ClieDiag·MnHangul·MnSonyKbd의 `Soft Reset (hold 3s)`, CloudpilotEmu의 Reset 메뉴(Soft reset), 실기기는 뒷면 리셋 구멍.
+- 리셋 방법(아무것이나): ClieDiag·MnHangul의 `Soft Reset (hold 3s)`, CloudpilotEmu의 Reset 메뉴(Soft reset), 실기기는 뒷면 리셋 구멍.
 - **로더는 고정한다.** 로더와 본체 사이 약속(ABI 1: 본체 찾는 방법, 이벤트 넘기는 방식, 기록 번호)은 바꾸지 않고 새 기능은 본체에만 넣는다.
   그래서 업데이트는 보통 본체만이고 리셋이 필요 없다. 로더는 로더 자체 버그나 약속으로 넘길 수 없는 정보가 필요할 때만 바꾸며,
   그때는 릴리스 안내에 "로더 변경 — 리셋 1번"을 적는다. 사용자가 겪는 리셋은 처음 설치 1번이 된다.
@@ -158,16 +158,15 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 
 | 버튼 | 뜻 |
 | --- | --- |
-| `Sony kbd ON` / `Sony kbd OFF` | Sony 가상 키보드 한글(입력·`한A`·키 글자 자모)을 켬 / 끔 |
+| `ON` / `OFF` | Sony 가상 키보드 한글(입력·`한A`·키 글자 자모)을 켬 / 끔 |
 | `Start at reset: ON/off` | 리셋 뒤 자동으로 켬(기본 ON) |
-| `Soft Reset (hold 3s)` | 3초 누르면 소프트 리셋 |
 | `Update (hold 3s)` | 업데이트용 리셋. 리셋 뒤 한 번만 자동 시작을 건너뛰어 잠금 없이 바로 설치할 수 있다 |
-| `[ ] Debug` | 판정 기록 화면(한/영 표시가 틀릴 때 원인 확인용) |
+| 제목 누르기 | 판정 기록 화면(한/영 표시가 틀릴 때 원인 확인용). 다시 누르면 돌아옴 |
 
 | 작업 | 절차 | 리셋 |
 | --- | --- | --- |
-| 처음 설치 | `MnSonyKbd.prc` 설치 → `Sony kbd ON` | 없음 |
-| 업데이트 | `Update (hold 3s)` → 설치 → `Sony kbd ON` | 1번 (`Update`가 함) |
+| 처음 설치 | `MnSonyKbd.prc` 설치 → `ON` | 없음 |
+| 업데이트 | `Update (hold 3s)` → 설치 → `ON` | 1번 (`Update`가 함) |
 | 리셋 뒤 자동 시작 | `Start at reset: ON`(기본) | — |
 
 **제한**

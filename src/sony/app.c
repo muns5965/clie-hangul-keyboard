@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v1 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v2 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,8 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
- * 화면: [Sony kbd ON] [OFF], Start at reset(앱 설정 0번, 기본 ON), Soft Reset, Update(다음 리셋 한 번 자동 시작
- *   건너뛰기, 앱 설정 3번), 사용법, [ ] Debug(판정 기록 페이지).
+ * 화면(v2, 쓰는 것만): [ON] [OFF], Start at reset(앱 설정 0번, 기본 ON), Update(다음 리셋 한 번 자동 시작
+ *   건너뛰기, 앱 설정 3번), 사용법('한A' 그림). 제목을 누르면 판정 기록 화면.
  * 기록(feature 'MnSy'): #1 패치 진입점, #2 패치 핸들, #3 자모 그림, #4 자모 핸들, #5 ime 코드, #6 ime 핸들,
  *   #7 ime 상태 버퍼, #8·#9 '한A' 그림 핸들, #10 리셋 자동 시작 결과, #106 이 앱 실행 중,
  *   그 밖(#108·#127·#128·#143~#152·#160~#177)은 spatch.c·ime.c·dubeol.h 참고.
@@ -37,10 +37,9 @@
 #define kRomBlt      0x1008359AUL   /* NR70V ROM BltDrawChars(MnHangul v24 실측) */
 
 #define kLineH        11
-#define kRowOn        2
-#define kRowAuto      3
-#define kRowReset     5
-#define kRowUpd       6
+#define kRowOn        3
+#define kRowAuto      4
+#define kRowUpd       5
 #define kResetHoldSec 3
 
 static Char    gMsg[40] = "-";
@@ -316,19 +315,6 @@ static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
     WinDrawRectangleFrame(roundFrame, &r);
 }
 
-static void DrawCheck(UInt16 row, const Char *label, Boolean on)
-{
-    RectangleType r;
-
-    RctSetRectangle(&r, 4, (row + 1) * kLineH + 2, 7, 7);
-    WinDrawRectangleFrame(rectangleFrame, &r);
-    if (on) {
-        WinDrawLine(5, (row + 1) * kLineH + 5, 7, (row + 1) * kLineH + 8);
-        WinDrawLine(7, (row + 1) * kLineH + 8, 10, (row + 1) * kLineH + 2);
-    }
-    WinDrawChars(label, StrLen(label), 15, (row + 1) * kLineH);
-}
-
 /* 3초 누르면 리셋(중간에 떼면 취소). upd = 다음 리셋 한 번 자동 시작 건너뛰기 */
 static void HoldReset(UInt16 row, const Char *label, Boolean upd)
 {
@@ -366,29 +352,32 @@ static void HoldReset(UInt16 row, const Char *label, Boolean upd)
     StrCopy(gMsg, "reset cancelled");
 }
 
+/* v2: 쓰는 것만 — 켜기/끄기, 리셋 뒤 자동 시작, Update, 사용법('한A' 그림). 판정 기록은 제목을 누르면 */
 static void DrawMain(void)
 {
     RectangleType r;
     Char          s[48];
-    UInt32        below = GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0;
+    MemHandle     ih = DmGetResource(kIconRes, 1);
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v1  Sony kbd Hangul", 29, 0, 0);
-    StrPrintF(s, "Sony kbd %s  At reset %s  %s", IsOn() ? "ON" : "off", PrefGet(0, 1) ? "ON" : "off",
-              below == 0 ? "" : (below >= 0x10000000UL ? "(ROM)" : "(+other)"));
-    Row(0, s);
+    WinDrawInvertedChars("MnSonyKbd v2", 12, 0, 0);
+    Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
-    ButtonAt(3, kRowOn, "Sony kbd ON");
-    ButtonAt(84, kRowOn, "Sony kbd OFF");
+    StrPrintF(s, "Now: %s", IsOn() ? "ON" : "off");
+    Row(2, s);
+    ButtonAt(3, kRowOn, "ON");
+    ButtonAt(40, kRowOn, "OFF");
     ButtonAt(3, kRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");
-    ButtonAt(3, kRowReset, "Soft Reset (hold 3s)");
     ButtonAt(3, kRowUpd, "Update (hold 3s)");
-    Row(7, "Sony keyboard (silk kbd icon, abc):");
-    Row(8, "  Han/A key = Hangul / English");
-    Row(9, "  Han/A + shift = double consonant");
+    if (ih != NULL) {   /* 사용법: '한A' 그림(켜짐) = 한/영 */
+        WinDrawBitmap((BitmapPtr)MemHandleLock(ih), 3, 8 * kLineH);   /* 22×18(저해상도 좌표로 2배) */
+        MemHandleUnlock(ih);
+        DmReleaseResource(ih);
+    }
+    WinDrawChars("key = Hangul / English", 22, 28, 8 * kLineH + 4);
+    Row(9, "Shift in Hangul = double cons.");
     Row(10, "Update: [Update], install, ON");
-    DrawCheck(12, "Debug", false);
 }
 
 /* 판정 기록(MnHangul KDlg 7~11줄과 같음) */
@@ -402,7 +391,7 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v1 Debug", 18, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v2 Debug [tap: back]", 30, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);
@@ -429,7 +418,6 @@ static void DrawDebug(void)
     StrPrintF(s, "why%u H%lu S%lx p%lu ic%lu@%lu", (UInt16)(w >> 24), GetF(143), GetF(150), GetF(144),
               GetF(147), GetF(146));
     Row(11, s);
-    DrawCheck(12, "Debug", true);
 }
 
 static void Draw(void)
@@ -457,19 +445,17 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 
     FtrSet(kSyCr, kFtrRun, 1);
     StartHires();
-    gDebug = PrefGet(2, 0) != 0;
     Draw();
     do {
         EvtGetEvent(&e, evtWaitForever);
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < 160) {
             Int16 row = e.screenY / kLineH - 1;
 
-            if (row == 12 && e.screenX < 60) {
+            if (e.screenY < kLineH)   /* 제목 = 판정 기록 화면 ↔ 첫 화면 */
                 gDebug = !gDebug;
-                PrefPut(2, gDebug ? 1 : 0);
-            } else if (gDebug)
+            else if (gDebug)
                 ;
-            else if (row == kRowOn && e.screenX >= 84)
+            else if (row == kRowOn && e.screenX >= 40)
                 SonyOff();
             else if (row == kRowOn) {
                 UInt16 rr = SonyOn();
@@ -478,9 +464,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             } else if (row == kRowAuto) {
                 PrefPut(0, PrefGet(0, 1) ? 0 : 1);
                 StrCopy(gMsg, PrefGet(0, 1) ? "start at reset: ON" : "start at reset: off");
-            } else if (row == kRowReset && e.screenX < 100)
-                HoldReset(kRowReset, "Soft Reset (hold 3s)", false);
-            else if (row == kRowUpd && e.screenX < 90)
+            } else if (row == kRowUpd && e.screenX < 90)
                 HoldReset(kRowUpd, "Update (hold 3s)", true);
             Draw();
             continue;
