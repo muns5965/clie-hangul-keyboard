@@ -5,7 +5,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 - 목표 자판은 영문 QWERTY, 한글 단모음, 나랏글이다. 현재 영문 QWERTY와 **구글 단모음과 비슷한 한글 자판**의 입력·조합을 구현했고, **나랏글은 향후 구현 대상으로 개발을 보류**한다.
 - 한글 **표시와 글자 처리는 현재 CJKOS에 의존**한다. CJKOS를 대체할 한글 처리 모듈은 시험 단계다([docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md)).
 - 키보드 기능은 현재 동결(안정화) 상태다.
-- **Sony 내장 가상 키보드로도 한글을 쓸 수 있다**(시험 단계). `MnHangul.prc` 하나만 설치하면 리셋 없이, Sony 키보드의 ⇪ 자리 `한A` 키로 한/영을 바꾸고 키 글자가 두벌식 자모로 바뀐다([아래](#sony-가상-키보드로-한글mnhangul)).
+- **Sony 가상 키보드로도 한글을 쓸 수 있다**(시험 단계). `MnHangul.prc` 하나만 설치하면 리셋 없이, Sony 가상 키보드의 ⇪ 자리 `한A` 키로 한/영을 바꾸고 키 글자가 두벌식 자모로 바뀐다([아래](#sony-가상-키보드로-한글mnhangul)).
 
 ## 목차
 
@@ -54,7 +54,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | 본체(Core) | 자판 그리기, 터치 판정, 한글 조합을 실제로 처리하는 프로그램(`MnSkCore.prc`) |
 | PRC | Palm OS의 앱·코드·리소스를 담아 배포하는 데이터베이스 파일 형식 |
 | CJKOS | 영문 Palm OS에서 한중일 문자 표시·입력을 지원하는 외부 소프트웨어 |
-| Sony 가상 키보드 | NR70V 상태바 키보드 아이콘으로 여는 Sony 내장 영문 키보드(`SilkExtn`). MnHangul이 키 글자와 ⇪ 키를 바꿔 그린다 |
+| Sony 가상 키보드 | NR70V 상태바 키보드 아이콘으로 여는 ROM에 들어 있는 Sony의 영문 키보드(`SilkExtn`). MnHangul이 키 글자와 ⇪ 키를 바꿔 그린다 |
 | Mn 키보드 | 이 저장소의 단모음 한글 키보드(`MnSkPlugin` + `MnSkCore`) |
 
 ## 현재 상태
@@ -89,10 +89,10 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | | A. 한글 시스템(CJKOS 등) + Mn 키보드 | B1. MnHangul + Mn 키보드 | B2. MnHangul + Sony 가상 키보드 |
 | --- | --- | --- | --- |
 | 설치 | `MnSkPlugin`, `MnSkCore` | `MnSkPlugin`, `MnSkCore`, `MnHangul` (+ 24 글꼴 `MnHgFont24` 선택) | `MnHangul` 하나 (+ 24 글꼴 선택) |
-| 자판 | 단모음 (Mn 키보드) | 단모음 (Mn 키보드) | 두벌식 (Sony 내장 키보드, `한A` = 한/영) |
+| 자판 | 단모음 (Mn 키보드) | 단모음 (Mn 키보드) | 두벌식 (Sony 가상 키보드, `한A` = 한/영) |
 | 한글 표시 | 설치된 한글 시스템 (완성형 KS X 1001 2바이트를 표시하는 것) | MnHangul (시험 단계) | MnHangul (시험 단계) |
 | 순서 | 설치 → 리셋 → □→로 켜기 | 설치 → MnHangul `Hangul ON` → 리셋 → □→로 켜기 | 설치 → MnHangul `Hangul ON` |
-| 리셋 | 처음 1번 — 가상 실크스크린에 Mn 키보드(로더) 등록 (`SilkExtn`이 부팅 때만 찾음) | 처음 1번 — Mn 키보드 등록. MnHangul은 리셋 필요 없음 (`Start at reset`으로 리셋 뒤 자동 시작) | **없음** — Sony 키보드는 이미 등록되어 있고, MnHangul은 켜는 즉시 동작 |
+| 리셋 | 처음 1번 — 가상 실크스크린에 Mn 키보드(로더) 등록 (`SilkExtn`이 부팅 때만 찾음) | 처음 1번 — Mn 키보드 등록. MnHangul은 리셋 필요 없음 (`Start at reset`으로 리셋 뒤 자동 시작) | **없음** — Sony 가상 키보드는 이미 등록되어 있고, MnHangul은 켜는 즉시 동작 |
 | 주의 | MnHangul은 설치하지 않거나 켜지 않음 (같은 함수를 바꾸므로 충돌) | CJKOS 등 다른 한글 시스템은 끈 상태로 | CJKOS 등 다른 한글 시스템은 끈 상태로 |
 | 시험 환경 | CloudpilotEmu(NR70V ROM) + CJKOS. 다른 한글 시스템과 실기기는 미시험 | CloudpilotEmu(NR70V ROM). 실기기는 미시험 | CloudpilotEmu(NR70V ROM) 메모장. 실기기·다른 앱은 미시험 |
 
@@ -154,7 +154,7 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 
 | 버튼 | 뜻 |
 | --- | --- |
-| `Hangul ON` / `Hangul OFF` | 한글 표시·Sony 키보드 한글을 켬 / 모두 끔(업데이트 설치 전) |
+| `Hangul ON` / `Hangul OFF` | 한글 표시·Sony 가상 키보드 한글을 켬 / 모두 끔(업데이트 설치 전) |
 | `Start at reset: ON/off` | 리셋 뒤 자동으로 켬(기본 ON) |
 | `Sony keyboard: ON/off` | Sony 가상 키보드 한글 입력·자모 표시(기본 ON). off면 한글 표시만 |
 | `Soft Reset (hold 3s)` | 3초 누르면 소프트 리셋 |
@@ -162,7 +162,7 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 
 **제한**
 
-- NR70V ROM의 Sony 키보드(`SilkExtn`) 전용이다. 키 글자를 그리는 순서(숫자 줄 → qwerty 줄 → ⇪ 키 → …)에 기대어 한/영 표시를 정하므로, 드물게 한 번 표시가 틀릴 수 있다. 입력은 글자를 받는 순간의 ⇪ 상태로 판정해 항상 맞다.
+- NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 전용이다. 키 글자를 그리는 순서(숫자 줄 → qwerty 줄 → ⇪ 키 → …)에 기대어 한/영 표시를 정하므로, 드물게 한 번 표시가 틀릴 수 있다. 입력은 글자를 받는 순간의 ⇪ 상태로 판정해 항상 맞다.
 - 한글 범위는 완성형 2,350자(Mn 키보드와 같음).
 - 메모장에서만 시험했다. 다른 앱과 실기기는 검증 대상이다.
 

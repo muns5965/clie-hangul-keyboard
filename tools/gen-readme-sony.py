@@ -45,7 +45,7 @@ for i, s in enumerate(shots):
     tw = d.textlength(caps[i], font=CAP)
     d.text((x + (sw - tw) / 2, y + sh + 12), caps[i], font=CAP, fill=INK)
 
-d.text((40, y + sh + 56), 'CloudpilotEmu(NR70V) 실제 캡처. Sony 내장 키보드의 영문 키 글자를', font=CAP, fill=SUB)
+d.text((40, y + sh + 56), 'CloudpilotEmu(NR70V) 실제 캡처. Sony 가상 키보드의 영문 키 글자를', font=CAP, fill=SUB)
 d.text((40, y + sh + 86), '자모로 바꿔 그리고, 누른 글자를 두벌식으로 조합해 넣습니다.', font=CAP, fill=SUB)
 out = os.path.join(root, 'docs', 'images', '06-sony-keyboard.png')
 img.save(out, optimize=True)
