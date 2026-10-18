@@ -1,5 +1,5 @@
 /*
- * MnHangul v56 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v57 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,7 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v57: Update는 설치되어 있는 MnSonyKbd도 다음 리셋 한 번 자동 시작을 건너뛰게 한다(둘 다 한 번에 설치).
  * v56: CJKOS 동작 감지(CjkOn: CJKOS가 바꾸고 MnHangul은 안 바꾸는 함수 4개가 ROM 밖인가). 동작 중이면 Hangul ON·리셋 자동 시작 안 함, 첫 화면 표시.
  * v55: 첫 화면 7~8줄 = 역할(Hangul display, CJKOS replacement)과 MnSonyKbd 상태(없음/켜짐/꺼짐).
  * v54: Sony 가상 키보드 한글(입력 HgIm·한A HgIc·키 글자 오버레이·KDlg 판정 기록·Sony 설정)을 MnSonyKbd(src/sony)로 분리.
@@ -663,7 +664,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -907,7 +908,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -1022,7 +1023,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -1059,7 +1060,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -1097,7 +1098,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -1149,7 +1150,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 Kbd [tap: KDlg]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 Kbd [tap: KDlg]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1202,7 +1203,7 @@ static void DrawKbdDlgPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 KDlg [tap: SetSt]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 KDlg [tap: SetSt]", 30, 0, 0);
     Button(0, GetF(kFtrKbdC) ? "Hooks: ON" : "Hooks: off");
     ButtonAt(100, 0, "Clear");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
@@ -1285,7 +1286,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1335,6 +1336,18 @@ static void Draw(void)
 
 /* v26: 3초 동안 누르고 있으면 SysReset(), 중간에 떼면 취소 (ClieDiag와 같은 방식) */
 static void SkipSet(UInt16 v);
+/* v57: Update = 설치되어 있는 다른 모듈(MnSonyKbd)도 다음 리셋 한 번 자동 시작 건너뛰기(앱 설정 3번).
+ *   설치되어 있지 않으면 아무것도 저장하지 않는다(하나만 쓰는 경우는 그대로) */
+static void SkipOther(UInt32 cr)
+{
+    DmSearchStateType st;
+    UInt16            card, v = 1;
+    LocalID           id;
+
+    if (DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, cr, true, &card, &id) == errNone)
+        PrefSetAppPreferences(cr, 3, 1, &v, sizeof v, true);
+}
+
 static void HoldResetAs(UInt16 row, const Char *label, Boolean upd);
 
 static void HoldReset(UInt16 row)
@@ -1369,8 +1382,10 @@ static void HoldResetAs(UInt16 row, const Char *label, Boolean upd)
             shown = left;
         }
         if (left <= 0) {
-            if (upd)
+            if (upd) {
                 SkipSet(1);
+                SkipOther('MnSy');
+            }
             SysReset();
             return;
         }
@@ -1391,7 +1406,7 @@ static void DrawSetStPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56 SetSt [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v57 SetSt [tap: Main]", 30, 0, 0);
     if (kb == NULL) {
         Row(0, "Hooks off (KDlg page)");
         return;
@@ -1475,7 +1490,7 @@ static void DrawUserMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v56", 12, 0, 0);
+    WinDrawInvertedChars("MnHangul v57", 12, 0, 0);
     StrPrintF(s, "Hangul %s  Reset %s  CJKOS? %s", Installed() ? "ON" : "off", AutoGet() ? "ON" : "off",
               CjkOn() ? "running" : "no");
     Row(0, s);

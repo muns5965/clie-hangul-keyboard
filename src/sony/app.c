@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v4 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v5 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v5: Update는 설치되어 있는 MnHangul도 다음 리셋 한 번 자동 시작을 건너뛰게 한다.
  * v4: 첫 화면 6줄 = 한글 표시 모듈(MnHangul / CJKOS? / none).
  * v3: CJKOS를 끄면 BltDrawChars가 ROM으로 되돌아가 키 글자 패치가 빠진다(v2 실측). 'Now:'는 실제 연결 상태(chain.h),
  *   빠졌으면 ON = 다시 잇기. ⇪ 그림을 그릴 때(ime.c)도 키 글자 패치가 빠졌으면 스스로 다시 잇는다.
@@ -354,6 +355,18 @@ static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
     WinDrawRectangleFrame(roundFrame, &r);
 }
 
+/* v57: Update = 설치되어 있는 다른 모듈(MnHangul)도 다음 리셋 한 번 자동 시작 건너뛰기(앱 설정 3번).
+ *   설치되어 있지 않으면 아무것도 저장하지 않는다(하나만 쓰는 경우는 그대로) */
+static void SkipOther(UInt32 cr)
+{
+    DmSearchStateType st;
+    UInt16            card, v = 1;
+    LocalID           id;
+
+    if (DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, cr, true, &card, &id) == errNone)
+        PrefSetAppPreferences(cr, 3, 1, &v, sizeof v, true);
+}
+
 /* 3초 누르면 리셋(중간에 떼면 취소). upd = 다음 리셋 한 번 자동 시작 건너뛰기 */
 static void HoldReset(UInt16 row, const Char *label, Boolean upd)
 {
@@ -380,8 +393,10 @@ static void HoldReset(UInt16 row, const Char *label, Boolean upd)
             shown = left;
         }
         if (left <= 0) {
-            if (upd)
+            if (upd) {
                 PrefPut(3, 1);
+                SkipOther('MnHg');
+            }
             SysReset();
             return;
         }
@@ -400,7 +415,7 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v4", 12, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v5", 12, 0, 0);
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
     {
@@ -442,7 +457,7 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v4 Debug [tap: back]", 30, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v5 Debug [tap: back]", 30, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);

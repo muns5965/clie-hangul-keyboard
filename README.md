@@ -170,6 +170,7 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 | 업데이트 | `Update (hold 3s)` → 설치 → `ON` | 1번 (`Update`가 함) |
 | 리셋 뒤 자동 시작 | `Start at reset: ON`(기본) | — |
 
+- MnHangul과 MnSonyKbd를 둘 다 쓰는 경우(D), 어느 앱의 `Update`든 둘 다 다음 리셋 한 번 자동 시작을 건너뛴다. `Update` 한 번 → 필요한 것 설치 → MnHangul `Hangul ON`, MnSonyKbd `ON`. 하나만 설치한 경우(B·C)는 그 앱만 해당한다.
 - CJKOS를 켜거나 끄면 CJKOS가 시스템 함수를 되돌리면서 MnSonyKbd 연결이 빠질 수 있다. v3부터 키 글자 연결은 `한A`를 누를 때(키보드를 다시 그릴 때) 스스로 다시 잇고, 그래도 안 되면 MnSonyKbd 첫 화면 `Now: broken`에서 `ON`을 누른다. 안 되면 리셋.
 
 **제한**
