@@ -41,6 +41,7 @@ static inline UInt8 Dubeol(UInt8 c)
 #define kFtrHan      143
 #define kFtrPenCaps  144
 #define kFtrPenDraw  145
+#define kFtrSonyCaps 150   /* v45: 자판 전체를 그릴 때 본 ⇪ 그림 = Sony 실제 상태(0x100 | 켜짐) */
 #define kCapsKey(x, y)  ((x) >= 0 && (x) < 13 && (y) >= 182 && (y) < 192)
 
 /* 지금 쉬프트 고정(⇪)인가 = 한글 모드 */

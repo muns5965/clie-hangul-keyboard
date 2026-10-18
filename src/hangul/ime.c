@@ -417,8 +417,12 @@ void HgImGet(EventType *event, Int32 timeout)
             st[0] = 0;
             FtrSet('MnHg', kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
         } else if (kCapsKey(event->screenX, event->screenY)) {   /* v39: ⇪ → 한글 모드 전환 */
+            UInt32 sc = 0;
+
+            /* v45: Sony 실제 상태(마지막 자판 전체 그리기의 ⇪ 그림)의 반대로. 모르면 지금 값을 뒤집음 */
+            FtrGet('MnHg', kFtrSonyCaps, &sc);
             FtrGet('MnHg', kFtrHan, &v);
-            FtrSet('MnHg', kFtrHan, v ? 0 : 1);
+            FtrSet('MnHg', kFtrHan, (sc & 0x100) ? !(sc & 1) : (v ? 0 : 1));
             FtrSet('MnHg', kFtrPenCaps, 1);
             v = 0;
             FtrGet('MnHg', 108, &v);
@@ -434,9 +438,12 @@ void HgImGet(EventType *event, Int32 timeout)
         if (pc == 1) {
             FtrGet('MnHg', kFtrPenDraw, &d0);
             FtrGet('MnHg', 108, &d1);
-            if (d1 - d0 < 20) {
+            if (d1 - d0 < 20) {   /* v45: Sony 실제 상태로 되돌림(모르면 다시 뒤집음) */
+                UInt32 sc = 0;
+
+                FtrGet('MnHg', kFtrSonyCaps, &sc);
                 FtrGet('MnHg', kFtrHan, &v);
-                FtrSet('MnHg', kFtrHan, v ? 0 : 1);
+                FtrSet('MnHg', kFtrHan, (sc & 0x100) ? (sc & 1) : (v ? 0 : 1));
             }
             FtrSet('MnHg', kFtrPenCaps, 2);   /* 처리함(다시 맞추기 막음은 다음 펜 누름까지 유지) */
         }
@@ -478,8 +485,10 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
         FtrGet('MnHg', kFtrPenCaps, &pc);
         FtrGet('MnHg', kFtrPenDraw, &d0);
         FtrGet('MnHg', 108, &v);
-        if (pc == 0 || v - d0 >= 5)
+        if (pc == 0 || v - d0 >= 5) {
             FtrSet('MnHg', kFtrHan, on);
+            FtrSet('MnHg', kFtrSonyCaps, 0x100 | on);   /* v45 */
+        }
         FtrSet('MnHg', 146, v);
         v = 0;
         FtrGet('MnHg', 147, &v);
