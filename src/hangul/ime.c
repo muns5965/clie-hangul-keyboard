@@ -479,18 +479,22 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
 
     if (bmp != NULL && ic[0] != 0 && ((UInt32)bmp == ic[0] || (UInt32)bmp == ic[1])) {
         UInt16 on = (UInt32)bmp == ic[1] ? 1 : 0;
-        UInt32 v = 0, pc = 0, d0 = 0;
+        UInt32 v = 0, pc = 0, d0 = 0, last = 0;
+        Boolean use;
 
-        /* v44: ⇪를 누른 직후 키 글자를 그리기 전의 그림은 눌린 키 표시(옛 상태) → 판정에 쓰지 않음 */
+        /* v47: 자판 전체 그리기에서 ⇪ 그림은 2줄 끝 키(\ 또는 |) 바로 다음(v46 실측). 그때만 Sony 실제 상태로 쓴다.
+         *      ⇪ 누를 때의 눌림 표시(반전 그림, 앱이 펜을 받기 전에 그려짐)는 판정에 쓰지 않는다 */
         FtrGet('MnHg', kFtrPenCaps, &pc);
         FtrGet('MnHg', kFtrPenDraw, &d0);
         FtrGet('MnHg', 108, &v);
-        if (pc == 0 || v - d0 >= 5) {
+        FtrGet('MnHg', 151, &last);
+        use = (last == '\\' || last == '|');
+        if (use) {
             FtrSet('MnHg', kFtrHan, on);
             FtrSet('MnHg', kFtrSonyCaps, 0x100 | on);   /* v45 */
         }
         DecLog((2UL << 30) | ((v & 0xFFF) << 18) | ((pc & 3) << 7) |   /* v46 진단 */
-               ((pc == 0 || v - d0 >= 5) ? 2 : 0) | on);
+               (use ? 2 : 0) | on);
         FtrSet('MnHg', 177, 0);   /* 그림 다음 키 글자는 다시 기록 */
         FtrSet('MnHg', 146, v);
         v = 0;

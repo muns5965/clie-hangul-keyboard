@@ -283,6 +283,7 @@ static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, cons
     FtrSet(kHgCreator, 110, Pair((const Int16 *)p2));
     FtrSet(kHgCreator, 111, ((UInt32)len << 16) | *(const UInt16 *)(w + 8));
     FtrSet(kHgCreator, 112, FontInfo(p6));
+    FtrSet(kHgCreator, 151, (len == 1 && chars != NULL) ? chars[0] : 0);   /* v47: 마지막 한 글자 키 글자 */
     pos = GetF(113);
     n = len < 4 ? len : 4;
     for (i = 0; chars != NULL && i < n; i++) {
