@@ -6,6 +6,26 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 - 한글 **표시와 글자 처리는 현재 CJKOS에 의존**한다. CJKOS를 대체할 한글 처리 모듈은 시험 단계다([docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md)).
 - 키보드 기능은 현재 동결(안정화) 상태다.
 
+## 소개
+
+<table>
+<tr>
+<td><img src="docs/images/01-overview.png" width="380" alt="메모장에서 한글 키보드를 쓰는 화면"></td>
+<td><img src="docs/images/02-hangul-layout.png" width="380" alt="단모음 한글 자판과 Shift 쌍자음"></td>
+</tr>
+<tr>
+<td><img src="docs/images/03-english-number.png" width="380" alt="영문 QWERTY와 숫자·기호 자판"></td>
+<td><img src="docs/images/04-compose.png" width="380" alt="받침 넘김과 자모 단위 지우기"></td>
+</tr>
+<tr>
+<td><img src="docs/images/05-mnhangul.png" width="380" alt="CJKOS 없이 조합형 글꼴로 한글 표시(시험 중)"></td>
+<td></td>
+</tr>
+</table>
+
+그림은 실제 캡처가 아니라 같은 자판 배치·자모 선 그림·조합형 글꼴 데이터로 다시 그린 것이라 실제 화면과 조금 다를 수 있다
+(영문 글자는 Sony 글꼴 대신 픽셀 글꼴). 다시 만들기: `python3 tools/gen-readme-images.py <neodgm.ttf>`
+
 ## 용어
 
 | 용어 | 뜻 |
