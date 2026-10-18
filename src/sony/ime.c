@@ -70,6 +70,7 @@ static inline GetFn OrigGet(void)
 }
 
 #include "dubeol.h"
+#include "chain.h"
 
 /* ---------------- 한글 조합 ---------------- */
 /* 자모는 호환 자모 번호 o = 유니코드 - 0x3130 (1~51) 로 다룬다 */
@@ -482,6 +483,8 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
         UInt16 on = (UInt32)bmp == ic[1] ? 1 : 0;
         UInt32 v = 0, pc = 0, d0 = 0, last = 0;
         Boolean use;
+
+        SyBltHeal();   /* MnSonyKbd v3: 키 글자 패치가 연결에서 빠졌으면(CJKOS 끄기 등) 다시 잇는다 */
 
         /* v47: 자판 전체 그리기에서 ⇪ 그림은 2줄 끝 키(\ 또는 |) 바로 다음(v46 실측). 그때만 Sony 실제 상태로 쓴다.
          *      ⇪ 누를 때의 눌림 표시(반전 그림, 앱이 펜을 받기 전에 그려짐)는 판정에 쓰지 않는다 */

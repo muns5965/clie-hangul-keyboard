@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v2 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v3 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v3: CJKOS를 끄면 BltDrawChars가 ROM으로 되돌아가 키 글자 패치가 빠진다(v2 실측). 'Now:'는 실제 연결 상태(chain.h),
+ *   빠졌으면 ON = 다시 잇기. ⇪ 그림을 그릴 때(ime.c)도 키 글자 패치가 빠졌으면 스스로 다시 잇는다.
  * 화면(v2, 쓰는 것만): [ON] [OFF], Start at reset(앱 설정 0번, 기본 ON), Update(다음 리셋 한 번 자동 시작
  *   건너뛰기, 앱 설정 3번), 사용법('한A' 그림). 제목을 누르면 판정 기록 화면.
  * 기록(feature 'MnSy'): #1 패치 진입점, #2 패치 핸들, #3 자모 그림, #4 자모 핸들, #5 ime 코드, #6 ime 핸들,
@@ -15,6 +17,7 @@
  */
 
 #include <PalmOS.h>
+#include "chain.h"
 
 #define kSyCr        'MnSy'
 #define kTrapBlt     0xA378
@@ -237,9 +240,10 @@ static UInt16 PatchOff(void)
 
     if (e == 0)
         return 1;
-    if ((UInt32)SysGetTrapAddress(kTrapBlt) != e)
+    if ((UInt32)SysGetTrapAddress(kTrapBlt) == e)
+        SysSetTrapAddress(kTrapBlt, (void *)*(const UInt32 *)(e - 4));
+    else if (SyBltLinked(e) != 0)   /* v3: 다른 패치 아래에 있거나 알 수 없음 → 그대로. 0 = 연결에서 이미 빠짐 → 풀기만 */
         return 2;
-    SysSetTrapAddress(kTrapBlt, (void *)*(const UInt32 *)(e - 4));
     MemHandleUnlock((MemHandle)GetF(kFtrJamoH));
     DmReleaseResource((MemHandle)GetF(kFtrJamoH));
     MemHandleUnlock((MemHandle)GetF(kFtrPatchH));
@@ -260,11 +264,16 @@ static UInt16 ImOff(void)
 
     if (code == NULL)
         return 1;
-    if ((UInt8 *)SysGetTrapAddress(sysTrapEvtGetEvent) != code + ((UInt32 *)code)[0] ||
-        (UInt8 *)SysGetTrapAddress(sysTrapWinDrawBitmap) != code + ((UInt32 *)code)[1])
-        return 2;
-    SysSetTrapAddress(sysTrapEvtGetEvent, (void *)((UInt32 *)code)[2]);
-    SysSetTrapAddress(sysTrapWinDrawBitmap, (void *)((UInt32 *)code)[3]);
+    for (k = 0; k < 2; k++)   /* v3: 맨 위(1)는 되돌리고, 이미 빠진 것(0)은 풀기만, 다른 패치가 위(2)면 그대로 */
+        if (SyImLinked(k == 0 ? sysTrapEvtGetEvent : sysTrapWinDrawBitmap,
+                       (UInt32)(code + ((UInt32 *)code)[k])) == 2)
+            return 2;
+    for (k = 0; k < 2; k++) {
+        UInt16 trap = k == 0 ? sysTrapEvtGetEvent : sysTrapWinDrawBitmap;
+
+        if (SyImLinked(trap, (UInt32)(code + ((UInt32 *)code)[k])) == 1)
+            SysSetTrapAddress(trap, (void *)((UInt32 *)code)[2 + k]);
+    }
     DmWrite(code, 16, &z, 4);
     for (k = 0; k < 2; k++) {
         MemHandle ih = (MemHandle)GetF(kFtrIcH0 + k);
@@ -296,9 +305,20 @@ static void SonyOff(void)
         StrCopy(gMsg, "off: ready to install");
 }
 
-static Boolean IsOn(void)
+/* v3: 실제 연결 상태. 0 꺼짐, 1 연결됨, 2 알 수 없음(위에 다른 패치), 3 빠짐(다시 이어야 함) */
+static UInt16 Status(void)
 {
-    return GetF(kFtrEntry) != 0 && GetF(kFtrImC) != 0;
+    UInt8  *code = (UInt8 *)GetF(kFtrImC);
+    UInt16  b, g, m;
+
+    if (GetF(kFtrEntry) == 0 || code == NULL)
+        return 0;
+    b = SyBltLinked(GetF(kFtrEntry));
+    g = SyImLinked(sysTrapEvtGetEvent, (UInt32)(code + ((UInt32 *)code)[0]));
+    m = SyImLinked(sysTrapWinDrawBitmap, (UInt32)(code + ((UInt32 *)code)[1]));
+    if (b == 0 || g == 0 || m == 0)
+        return 3;
+    return (b == 2 || g == 2 || m == 2) ? 2 : 1;
 }
 
 static void Row(UInt16 row, const Char *s)
@@ -361,10 +381,15 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v2", 12, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v3", 12, 0, 0);
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
-    StrPrintF(s, "Now: %s", IsOn() ? "ON" : "off");
+    {
+        static const Char *nm[4] = { "off", "ON", "ON (other patch above)", "broken: tap ON" };
+        UInt16             st = Status();
+
+        StrPrintF(s, "Now: %s", nm[st]);
+    }
     Row(2, s);
     ButtonAt(3, kRowOn, "ON");
     ButtonAt(40, kRowOn, "OFF");
@@ -391,11 +416,11 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v2 Debug [tap: back]", 30, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v3 Debug [tap: back]", 30, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);
-    StrPrintF(s, "draw %lu  ovl %lu  boot %lx", GetF(108), GetF(127), GetF(kFtrBoot));
+    StrPrintF(s, "draw %lu ovl %lu heal %lx b%lx", GetF(108), GetF(127), GetF(kSyFtrHeal), GetF(kFtrBoot) >> 28);
     Row(1, s);
     for (j = 15; j >= 0; j--) {   /* 최근 16개, 오래된 것부터 한 줄에 2개 */
         UInt32 v;
@@ -458,9 +483,18 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             else if (row == kRowOn && e.screenX >= 40)
                 SonyOff();
             else if (row == kRowOn) {
-                UInt16 rr = SonyOn();
+                if (Status() == 0) {
+                    UInt16 rr = SonyOn();
 
-                StrPrintF(gMsg, rr == 0 ? "ON" : rr == 0x11 ? "already ON" : "ON: result %x", rr);
+                    StrPrintF(gMsg, rr == 0 || rr == 0x11 ? "ON" : "ON: result %x", rr);
+                } else {   /* v3: 빠진 연결 다시 잇기 */
+                    UInt16 n = (SyBltHeal() ? 1 : 0) + SyImHeal();
+
+                    if (n != 0)
+                        StrPrintF(gMsg, "re-attached %u", n);
+                    else
+                        StrCopy(gMsg, Status() == 3 ? "broken: use Update" : "already ON");
+                }
             } else if (row == kRowAuto) {
                 PrefPut(0, PrefGet(0, 1) ? 0 : 1);
                 StrCopy(gMsg, PrefGet(0, 1) ? "start at reset: ON" : "start at reset: off");
