@@ -148,6 +148,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v25: 부팅 자동 시작. [Auto] 설정(앱 설정, 리셋 후 유지)이 on이면 리셋 알림 때 Patch ON과 같은 설치(결과 #95). 설치 함수는 전역·상수 표 없이 동작(빌드 때 %a5 검사). 비상: 위 버튼 + 리셋.
 - v26: Main 줄 6에 [Soft Reset (hold 3s)] (3초 누르면 리셋, 떼면 취소). 자동 시작 시험을 MnHangul 안에서 끝낼 수 있다. 줄 7은 calls 줄(이전 last len 줄 삭제).
 - v27: 리셋 버튼을 누르는 동안 폭 고정(`Hold... 3s`), `boot` 줄에서 bdc 주소를 빼 `a` 값이 다 보이게.
+- v28 (진단): KDlg 페이지 — `SysKeyboardDialog`·`SysKeyboardDialogV10`을 기록만 하는 코드(HgKd 0)로 교체. 호출 수, 마지막 키보드 종류, 포커스 필드 유무, 호출한 앱을 기록. CJKOS 화면 키보드처럼 리셋 없는 한글 키보드를 띄울 수 있는지 판단용.
 - 실측(CloudpilotEmu): Auto ON + Soft reset → 메모장 한글, 상태 `patch ON glyph font ok+24`, `boot n1 t340 h0 db1`. No extensions 리셋 → `patch off`, `boot n0` (비상 탈출 확인). Auto off + Soft reset → 설치 안 함.
 - 24 낱자모(gen-johab24.py): 글자마다 ① 조각 JSON jamo → ② hangul24-jamo.json 손그림(ㅅㅆㅈㅉㅊㅎ) → ③ 지금 조각으로 만들기(자음 초성 1벌, 겹받침 종성 1벌, 모음 중성 0벌, 가운데 맞춤). 예전 16×16 자동 확대는 쓰지 않음.
   남은 문제: 11/11 ×1 칸은 폭을 잴 때 글꼴(11)이 2배 그리기 칸과 같아 폭 9로 계산됨(실제 12) → 앱 확인 후 구분 방법 결정.
