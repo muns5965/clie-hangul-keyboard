@@ -329,6 +329,10 @@ static inline Boolean HanLabel(UInt8 c)
      *      c0 t3로 바꿔 그 키만 영문으로 남던 문제(v47 실측 LR667·LW674 H0 c0 t3 → 바로 c1) */
     if (!caps && temp != 0 && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) != 0)
         FtrSet(kHgCreator, kFtrHan, 0);
+    /* v49: 소문자 키 글자 + ⇪ 꺼짐 = 영문(키보드를 처음 띄울 때 이전 H=1이 남아 1~2줄이 쌍자음으로 나오던 문제).
+     *      ⇪+쉬프트는 그리는 순간 ⇪ 켜짐(이전 상태)이라 해당 없음 */
+    if (!caps && c >= 'a' && c <= 'z' && GetF(kFtrHan) != 0)
+        FtrSet(kHgCreator, kFtrHan, 0);
     {   /* v46 진단: (H, p, caps, temp)가 바뀔 때만 기록 */
         UInt32 st = ((GetF(kFtrHan) ? 1UL : 0) << 9) | ((GetF(kFtrPenCaps) & 3) << 7) | ((caps ? 1UL : 0) << 6) |
                     ((UInt32)(temp & 0xF) << 2);
