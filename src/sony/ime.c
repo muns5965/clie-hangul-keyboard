@@ -414,6 +414,8 @@ void HgImGet(EventType *event, Int32 timeout)
     if (event->eType == penDownEvent) {          /* 앱 영역을 누르면 커서가 옮겨질 수 있어 조합 끝 */
         UInt32 v = 0;
 
+        if (event->screenY >= 160)
+            SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
         if (event->screenY < 160) {
             st[0] = 0;
             FtrSet(kSyCr, kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
@@ -482,9 +484,12 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
     if (bmp != NULL && ic[0] != 0 && ((UInt32)bmp == ic[0] || (UInt32)bmp == ic[1])) {
         UInt16 on = (UInt32)bmp == ic[1] ? 1 : 0;
         UInt32 v = 0, pc = 0, d0 = 0, last = 0;
-        Boolean use;
+        Boolean use, healed;
 
-        SyBltHeal();   /* MnSonyKbd v3: 키 글자 패치가 연결에서 빠졌으면(CJKOS 끄기 등) 다시 잇는다 */
+        /* MnSonyKbd v3: 키 글자 패치가 연결에서 빠졌으면(CJKOS 끄기 등) 다시 잇는다.
+         * v6: 방금 이었으면 앞 키 글자 기록(#151)이 없으니 이 그림을 실제 상태로 쓴다(v5 실측: 기준값 S가 옛 값이라
+         *     다음 ⇪에서 영문인데 쌍자음 표시) */
+        healed = SyBltHeal();
 
         /* v47: 자판 전체 그리기에서 ⇪ 그림은 2줄 끝 키(\ 또는 |) 바로 다음(v46 실측). 그때만 Sony 실제 상태로 쓴다.
          *      ⇪ 누를 때의 눌림 표시(반전 그림, 앱이 펜을 받기 전에 그려짐)는 판정에 쓰지 않는다 */
@@ -492,7 +497,7 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
         FtrGet(kSyCr, kFtrPenDraw, &d0);
         FtrGet(kSyCr, 108, &v);
         FtrGet(kSyCr, 151, &last);
-        use = (last == '\\' || last == '|');
+        use = healed || (last == '\\' || last == '|');
         if (use) {
             FtrSet(kSyCr, kFtrHan, on);
             FtrSet(kSyCr, kFtrSonyCaps, 0x100 | on);   /* v45 */
