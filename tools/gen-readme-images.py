@@ -256,7 +256,7 @@ def stack(*imgs, gap=24, label=None):
 
 # 1. 전체 화면
 card("가상 실크스크린 자리에 한글 키보드",
-     "Sony CLIÉ PEG-NR70V · Palm OS 4.1",
+     "Mn 가상 키보드 · Sony CLIÉ PEG-NR70V · Palm OS 4.1S",
      frame(memo_screen(["한글 키보드 시험", "안녕하세요, 클리에!", "Palm OS 4.1 메모장", "다람쥐 헌 쳇바퀴에 타고파"],
                        keyboard('han'), cursor=3)),
      "01-overview.png",
@@ -265,14 +265,14 @@ card("가상 실크스크린 자리에 한글 키보드",
 
 # 2. 단모음 자판
 card("단모음 한글 자판",
-     "자음 14키 + 모음 8키 · Shift로 쌍자음",
+     "Mn 가상 키보드: 자음 14 + 모음 8 · Shift로 쌍자음",
      stack(frame(keyboard('han')), frame(keyboard('han', shift=True)), label=["기본", "Shift (^) — ㅃ ㅉ ㄸ ㄲ ㅆ"]),
      "02-hangul-layout.png",
      ["ㅏ·ㅓ·ㅗ·ㅜ를 한 번 더 누르면 ㅑ·ㅕ·ㅛ·ㅠ, ㅐ·ㅔ는 ㅒ·ㅖ가 됩니다."])
 
 # 3. 영문·숫자
 card("영문 QWERTY · 숫자/기호",
-     "한/A로 한·영 전환, 123으로 숫자·기호",
+     "Mn 가상 키보드: 한/A로 한·영, 123으로 숫자·기호",
      stack(frame(keyboard('eng')), frame(keyboard('num')), label=["영문 (한/A)", "숫자·기호 (123)"]),
      "03-english-number.png")
 
@@ -301,7 +301,8 @@ card("받침 넘김 · 자모 단위 지우기",
      frame(cell),
      "04-compose.png",
      ["받침 뒤에 모음이 오면 마지막 자음이 다음 글자로 넘어갑니다(닭 + ㅣ → 달기).",
-      "조합 중 BS는 자모 하나씩 지웁니다(닭 → 달)."])
+      "조합 중 BS는 자모 하나씩 지웁니다(닭 → 달).",
+      "Mn 가상 키보드와 MnSonyKbd(Sony 가상 키보드)가 같은 조합 규칙을 씁니다."])
 
 # 5. CJKOS 없이 (시험 중)
 lines12 = Image.new('RGB', (320, 140), PAPER)

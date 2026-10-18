@@ -33,7 +33,7 @@ H = 168 + sh + 50 + 90
 img = Image.new('RGB', (W, H), BG)
 d = ImageDraw.Draw(img)
 d.text((40, 36), 'Sony 가상 키보드로 한글', font=H1, fill=INK)
-d.text((40, 104), 'MnHangul 하나, 리셋 없음 · 한A 키 = 한/영', font=H2, fill=SUB)
+d.text((40, 104), 'MnSonyKbd · 리셋 없음 · 한A 키 = 한/영', font=H2, fill=SUB)
 d.rectangle((40, 146, 110, 150), fill=ACCENT)
 
 y = 168
