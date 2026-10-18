@@ -409,7 +409,10 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 r.topLeft.x += (wl - wg) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤 */
                 FtrSet(kHgCreator, 127, GetF(127) + 1);
                 FtrSet(kHgCreator, 128, ((UInt32)(f[7] & 0xFF) << 8) | (UInt8)rh);   /* 이유 0 = 바꿔 그림 */
-                res = DrawGlyphs((BltFn)orig, p1, &r, p3, j, 2, f, p7, ratio, tmp, (const UInt8 *)GetF(23));
+                /* v52: 자모는 ROM BltDrawChars로 직접(#152, 앱이 확인한 주소). 아래에 CJKOS 패치가 있으면
+                 *      임시 글꼴을 자기 방식으로 다시 그려 획이 빠졌다(v51 실측). 0이면 원래대로 아래 함수 */
+                res = DrawGlyphs(GetF(152) != 0 ? (BltFn)GetF(152) : (BltFn)orig, p1, &r, p3, j, 2, f, p7, ratio, tmp,
+                                 (const UInt8 *)GetF(23));
                 MemPtrFree(tmp);
                 return res;
             }
