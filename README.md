@@ -1,5 +1,20 @@
 # clie-hangul-keyboard
 
+> **Abstract.** This project adds Korean (Hangul) text entry and display to the Sony CLIÉ PEG-NR70V,
+> a Palm OS 4.1S handheld whose English ROM has no Korean support. It consists of three independently
+> installable modules. (1) *Mn virtual keyboard* (`MnSkPlugin` + `MnSkCore`) draws a Korean soft keyboard
+> in the device's virtual silkscreen area through Sony's undocumented `SkWr` plug-in interface,
+> reverse-engineered from the ROM's `SilkExtn` module. (2) *MnSonyKbd* turns Sony's built-in virtual keyboard into a
+> two-set (Dubeolsik) Hangul keyboard by intercepting system traps (`BltDrawChars`, `EvtGetEvent`,
+> `WinDrawBitmap`): key labels are redrawn as Hangul jamo, the caps-lock key becomes a Hangul/English toggle,
+> and keystrokes are composed into KS X 1001 (EUC-KR) syllables. (3) *MnHangul* is an experimental replacement for
+> the commercial CJKOS system that renders double-byte Hangul from compact Johab-style glyph packs and
+> patches the text-width and character-boundary routines. All runtime code is position-independent and
+> installed as RAM trap patches without ROM modification. The two patch-based modules need no reset,
+> detect and repair patch chains broken by other system extensions, and coexist with CJKOS.
+> The work was developed and verified on the CloudpilotEmu emulator; testing on real hardware and
+> in applications other than Memo Pad is pending.
+
 Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 한글 **표시**와 한글 **키보드**를 따로 골라 조합한다.
 
 | 모듈 | 파일 | 하는 일 | 상태 |
