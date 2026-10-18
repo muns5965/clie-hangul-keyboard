@@ -1,5 +1,5 @@
 /*
- * MnHangul v25 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v26 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,7 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v26: Main 줄 6에 [Soft Reset (hold 3s)] — 3초 누르면 SysReset(), 중간에 떼면 취소. last len 줄은 뺐다(calls 줄이 7로)
  * v25: 부팅 자동 시작 — [Auto] 설정(앱 설정 'MnHg' 0, 리셋 후에도 유지)이 on이면 리셋 알림 때 Patch ON과 같은 설치
  *      (패치·글꼴 12/16 잠금, 24 폰트 파일 연결, Mode glyph, Intl 6, Width 5). 결과 #95. 리셋 알림 중에는 앱 전역변수·상수 표·
  *      문자열 상수를 쓸 수 없으므로 설치 함수(Inst*)는 결과 코드만 돌려주고 표 대신 switch를 쓴다. 비상: 위 버튼 + 리셋(알림 없음).
@@ -118,6 +119,8 @@ static UInt16 IntlSel(UInt16 i)
 #define kRowOff       3
 #define kRowBox       4
 #define kRowClear     5
+#define kRowReset     6   /* v26: Soft Reset (hold 3s) */
+#define kResetHoldSec 3
 
 static Char   gMsg[40] = "-";
 static UInt16 gPage = 0;   /* 0 Main, 1 Font, 2 Sizes, 3 Calls, 4 Width, 5 Win, 6 Kbd */
@@ -467,7 +470,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v25 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v26 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -703,7 +706,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v25 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v26 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -818,7 +821,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v25 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v26 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -855,7 +858,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v25 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v26 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -893,7 +896,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v25 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v26 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -945,7 +948,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v25 Kbd [tap: Main]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v26 Kbd [tap: Main]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1002,7 +1005,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v25 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v26 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1020,12 +1023,10 @@ static void Draw(void)
     ButtonAt(84, kRowOff, "All OFF");
     ButtonAt(84, kRowBox, GetF(kFtrWidthC) ? "Width: ON" : "Width: off");
 
+    Button(kRowReset, "Soft Reset (hold 3s)");   /* v26 */
     StrPrintF(s, "calls %lu hi %lu drawn %lu 2c %lu x%lu", GetF(0), GetF(9), GetF(19),
               GetF(kFtrGlyphCnt), GetF(kFtrRatio));
-    Row(6, s);
-    Hex(a, GetF(2));
-    StrPrintF(s, "last len %lu  %s", GetF(1), a);
-    Row(7, s);
+    Row(7, s);   /* v26: last len 줄 대신 */
     XY(a, GetF(4));
     WH(b, GetF(5));
     XY(c, GetF(6));
@@ -1049,6 +1050,39 @@ static void Draw(void)
     Row(12, s);
 
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);   /* 빈 줄 1 (맨 아래는 줄 12까지 참) */
+}
+
+/* v26: 3초 동안 누르고 있으면 SysReset(), 중간에 떼면 취소 (ClieDiag와 같은 방식) */
+static void HoldReset(void)
+{
+    UInt32        t0 = TimGetTicks(), tps = SysTicksPerSecond();
+    Int16         x, y, shown = -1, left;
+    Boolean       down = true;
+    RectangleType r, b;
+    Char          s[24];
+
+    RctSetRectangle(&r, 0, (kRowReset + 1) * kLineH, 160, kLineH);
+    while (down) {
+        left = (Int16)(kResetHoldSec - (TimGetTicks() - t0) / tps);
+        if (left <= 0)
+            StrCopy(s, "Resetting...");
+        else
+            StrPrintF(s, "Hold... %d", left);
+        if (left != shown || left <= 0) {
+            WinEraseRectangle(&r, 0);
+            Button(kRowReset, s);
+            RctSetRectangle(&b, 3, (kRowReset + 1) * kLineH + 1, FntCharsWidth(s, StrLen(s)) + 6, kLineH - 2);
+            WinInvertRectangle(&b, 0);
+            shown = left;
+        }
+        if (left <= 0) {
+            SysReset();
+            return;
+        }
+        SysTaskDelay(tps / 20);
+        EvtGetPen(&x, &y, &down);
+    }
+    StrCopy(gMsg, "reset cancelled");
 }
 
 /* v25: 자동 시작 설정(앱 설정 'MnHg' 0번, 저장형) */
@@ -1144,6 +1178,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                     IntlOn();
             } else if (row == kRowClear)
                 ClearCounters();
+            else if (row == kRowReset && e.screenX < 120)
+                HoldReset();
             Draw();
             continue;
         }

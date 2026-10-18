@@ -146,6 +146,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v24(진단): 리셋 알림(sysAppLaunchCmdSystemReset) 수신 기록(#96 횟수, #97 tick, #98 BltDrawChars 주소, #99 hard·defaults·DB 열기). 동작 변경 없음.
 - v24 결과: 리셋 알림 수신(n1, 부팅 후 약 3.4초), 자기 DB 열기 가능, 그때 BltDrawChars는 ROM 주소(0x1008359A).
 - v25: 부팅 자동 시작. [Auto] 설정(앱 설정, 리셋 후 유지)이 on이면 리셋 알림 때 Patch ON과 같은 설치(결과 #95). 설치 함수는 전역·상수 표 없이 동작(빌드 때 %a5 검사). 비상: 위 버튼 + 리셋.
+- v26: Main 줄 6에 [Soft Reset (hold 3s)] (3초 누르면 리셋, 떼면 취소). 자동 시작 시험을 MnHangul 안에서 끝낼 수 있다. 줄 7은 calls 줄(이전 last len 줄 삭제).
 - 24 낱자모(gen-johab24.py): 글자마다 ① 조각 JSON jamo → ② hangul24-jamo.json 손그림(ㅅㅆㅈㅉㅊㅎ) → ③ 지금 조각으로 만들기(자음 초성 1벌, 겹받침 종성 1벌, 모음 중성 0벌, 가운데 맞춤). 예전 16×16 자동 확대는 쓰지 않음.
   남은 문제: 11/11 ×1 칸은 폭을 잴 때 글꼴(11)이 2배 그리기 칸과 같아 폭 9로 계산됨(실제 12) → 앱 확인 후 구분 방법 결정.
 - 진행 순서(디버그 먼저): ① 바뀐 함수 조사(**완료**, 실측 1) ② `BltDrawChars` 하나만 교체해 표시 시험(CJKOS 끈 복사본 세션)
