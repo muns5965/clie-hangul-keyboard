@@ -212,7 +212,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 | 문서 | 내용 |
 | --- | --- |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 가상 실크스크린 키보드 구현 방법: SkWr 플러그인 호출 방식, 그리기, 글자 보내기, 로더·본체 구조 |
-| [docs/RECOVERY.md](docs/RECOVERY.md) | 설치·업데이트·복구 절차, 위험 조건, 옛 DisS 절차 |
+| [docs/RECOVERY.md](docs/RECOVERY.md) | 문제가 생겼을 때 복구(먹통, 설치 실패, 연결 빠짐, 리셋 종류), 옛 DisS 절차 |
 | [docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md) | CJKOS 의존성, 대체 모듈(MnHangul)·Sony 가상 키보드 한글(MnSonyKbd) 검토와 판별 시험 기록 |
 | [docs/DEVELOPMENT_HISTORY.md](docs/DEVELOPMENT_HISTORY.md) | 1~12단계 개발 기록, ROM 역분석, ClieDiag 변경 기록, 실패한 가설 |
 
