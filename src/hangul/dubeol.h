@@ -43,6 +43,7 @@ static inline UInt8 Dubeol(UInt8 c)
 #define kFtrPenDraw  145
 #define kFtrSonyCaps 150   /* v45: 자판 전체를 그릴 때 본 ⇪ 그림 = Sony 실제 상태(0x100 | 켜짐) */
 #define kCapsKey(x, y)  ((x) >= 0 && (x) < 13 && (y) >= 182 && (y) < 192)
+#define kKeyAreaEnd  213   /* v50: 가상 키보드 키 5줄 = y 160~212 (그 아래 abc/int'l/sym 탭, 상태 표시줄) */
 
 /* v46 진단: 판정 순간 기록 고리 'MnHg' #160~#175(16칸), #176 다음 칸, #177 마지막 키 글자 기록 상태.
  *   칸 = 종류<<30 (1 키 글자, 2 ⇪ 그림) | d(#108 하위 12비트)<<18 | 글자<<10 | H<<9 | p<<7 | caps<<6 | temp<<2 |

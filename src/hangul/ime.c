@@ -427,8 +427,9 @@ void HgImGet(EventType *event, Int32 timeout)
             v = 0;
             FtrGet('MnHg', 108, &v);
             FtrSet('MnHg', kFtrPenDraw, v);
-        } else   /* v48: 가상 키보드 일반 키 = 3(키 누름 중 순간 상태 c0 t3로 영문 내림 안 함) */
-            FtrSet('MnHg', kFtrPenCaps, 3);
+        } else   /* v48: 가상 키보드 일반 키 = 3(키 누름 중 순간 상태로 영문 내림 안 함)
+                  * v50: 키 영역(y < 213)만 3. 아래 탭·상태 표시줄(키보드 띄우는 버튼 등)은 0 */
+            FtrSet('MnHg', kFtrPenCaps, event->screenY < kKeyAreaEnd ? 3 : 0);
         return;
     }
     if (event->eType == penUpEvent) {            /* v39: ⇪ 자리를 눌렀는데 키 글자 다시 그리기가 없었으면 되돌림 */

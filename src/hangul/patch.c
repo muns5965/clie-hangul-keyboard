@@ -330,8 +330,10 @@ static inline Boolean HanLabel(UInt8 c)
     if (!caps && temp != 0 && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) != 0)
         FtrSet(kHgCreator, kFtrHan, 0);
     /* v49: 소문자 키 글자 + ⇪ 꺼짐 = 영문(키보드를 처음 띄울 때 이전 H=1이 남아 1~2줄이 쌍자음으로 나오던 문제).
-     *      ⇪+쉬프트는 그리는 순간 ⇪ 켜짐(이전 상태)이라 해당 없음 */
-    if (!caps && c >= 'a' && c <= 'z' && GetF(kFtrHan) != 0)
+     *      ⇪+쉬프트는 그리는 순간 ⇪ 켜짐(이전 상태)이라 해당 없음
+     * v50: 키 영역 펜(3) 동안은 적용 안 함 — ⇪+쉬프트에서 키를 누르면 잠깐 c0 소문자로 그려 H가 내려가
+     *      쉬프트가 풀린 다시 그리기(c0 t0 대문자)의 qwerty 줄이 영문으로 나오던 문제 */
+    if (!caps && c >= 'a' && c <= 'z' && GetF(kFtrPenCaps) != 3 && GetF(kFtrHan) != 0)
         FtrSet(kHgCreator, kFtrHan, 0);
     {   /* v46 진단: (H, p, caps, temp)가 바뀔 때만 기록 */
         UInt32 st = ((GetF(kFtrHan) ? 1UL : 0) << 9) | ((GetF(kFtrPenCaps) & 3) << 7) | ((caps ? 1UL : 0) << 6) |
