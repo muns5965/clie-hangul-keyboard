@@ -49,6 +49,8 @@
 | 설치 실패("could not be overwritten") | 앱이 켜져 있어 코드가 잠김. 한쪽 앱의 `Update`로 다른 앱도 건너뛰는 기능은 MnHangul v57·MnSonyKbd v5부터 | 그 앱에서 `Update (hold 3s)` → 설치. 옛 판이라 안 되면 그 앱 자신의 `Update` |
 | `Hangul OFF`·`OFF`에서 `kept: use Update` | 다른 패치(CJKOS 등)가 위에 걸려 있어 안전을 위해 풀지 않음 | `Update` → 설치 |
 | MnHangul `Hangul ON`에서 `CJKOS? running` | CJKOS가 켜져 있음(같은 함수를 바꾸므로 충돌) | CJKOS를 끈 뒤 `Hangul ON`. CJKOS와 쓸 때는 MnSonyKbd만(설치 B) |
+| MnHangul을 켠 채 CJKOS를 켬 | 같은 함수를 이중으로 바꿈(MnHangul은 CJKOS가 먼저 켜져 있을 때만 막음) | CJKOS 끔 → 리셋(MnHangul `Start at reset`이 ON이면 MnHangul만 켜짐). 다음부터 CJKOS를 켜기 전에 `Hangul OFF`(`kept`이면 `Update`), CJKOS를 계속 쓸 때는 `Start at reset: off` |
+| CJKOS를 끈 뒤 `Hangul ON` 했는데 한글은 보이고 BS·커서가 반쪽 글자 단위 | Intl·Width 연결이 빠졌을 가능성(코드 검토로 추정, **미확인**). v58 `Hangul ON`은 그리기 연결만 다시 잇는다 | 리셋 → `Hangul ON`. 재현되면 CJKOS를 끈 직후 ClieDiag Trap 페이지 캡처 |
 | MnHangul `Hangul ON`을 다시 누르면 먹통(v57 이하) | MnSonyKbd가 위에 있을 때 자기를 한 번 더 끼워 순환 | 소프트 리셋 → v58 이상으로 업데이트 |
 | CJKOS를 켜거나 끈 뒤 Sony 키 글자가 영문 그대로, `한A`만 동작 | CJKOS가 시스템 함수를 되돌려 MnSonyKbd 키 글자 연결이 빠짐 | 가상 실크를 누르면 스스로 다시 이음(v6~). 안 되면 MnSonyKbd `Now: broken` → `ON`. 그래도 안 되면 리셋 |
 | 한/영 표시가 한 번 틀림 | Sony 그리기 순서에 기댄 판정의 한계 | `한A`를 한 번 더 누르거나 키보드를 다시 연다. 반복되면 MnSonyKbd 제목을 눌러 판정 기록 캡처 |
