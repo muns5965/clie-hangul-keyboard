@@ -413,9 +413,10 @@ void HgImGet(EventType *event, Int32 timeout)
     if (event->eType == penDownEvent) {          /* 앱 영역을 누르면 커서가 옮겨질 수 있어 조합 끝 */
         UInt32 v = 0;
 
-        if (event->screenY < 160)
+        if (event->screenY < 160) {
             st[0] = 0;
-        else if (kCapsKey(event->screenX, event->screenY)) {   /* v39: ⇪ → 한글 모드 전환 */
+            FtrSet('MnHg', kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
+        } else if (kCapsKey(event->screenX, event->screenY)) {   /* v39: ⇪ → 한글 모드 전환 */
             FtrGet('MnHg', kFtrHan, &v);
             FtrSet('MnHg', kFtrHan, v ? 0 : 1);
             FtrSet('MnHg', kFtrPenCaps, 1);
@@ -471,10 +472,14 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
 
     if (bmp != NULL && ic[0] != 0 && ((UInt32)bmp == ic[0] || (UInt32)bmp == ic[1])) {
         UInt16 on = (UInt32)bmp == ic[1] ? 1 : 0;
-        UInt32 v = 0;
+        UInt32 v = 0, pc = 0, d0 = 0;
 
-        FtrSet('MnHg', kFtrHan, on);
+        /* v44: ⇪를 누른 직후 키 글자를 그리기 전의 그림은 눌린 키 표시(옛 상태) → 판정에 쓰지 않음 */
+        FtrGet('MnHg', kFtrPenCaps, &pc);
+        FtrGet('MnHg', kFtrPenDraw, &d0);
         FtrGet('MnHg', 108, &v);
+        if (pc == 0 || v - d0 >= 5)
+            FtrSet('MnHg', kFtrHan, on);
         FtrSet('MnHg', 146, v);
         v = 0;
         FtrGet('MnHg', 147, &v);

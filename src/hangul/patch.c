@@ -322,6 +322,10 @@ static inline Boolean HanLabel(UInt8 c)
      *      (⇪를 막 눌렀을 때는 상태가 한 박자 늦어 맞추지 않는다) */
     if (caps && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) == 0)
         FtrSet(kHgCreator, kFtrHan, 1);
+    /* v44: ⇪ 꺼짐 + 일시 쉬프트(자동 쉬프트 등)이고 마지막 펜이 ⇪가 아니면 영문(새 메모에서 시스템이 ⇪를 푼 경우).
+     *      ⇪를 막 누른 경우(빈 메모 자동 쉬프트에서 켜기: 그리는 순간 U g0031)는 펜 판정을 따른다 */
+    if (!caps && temp != 0 && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) != 0)
+        FtrSet(kHgCreator, kFtrHan, 0);
     return GetF(kFtrHan) != 0;
 }
 
