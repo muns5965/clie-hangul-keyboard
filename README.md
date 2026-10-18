@@ -10,8 +10,9 @@
 > and keystrokes are composed into KS X 1001 (EUC-KR) syllables. (3) *MnHangul* is an experimental replacement for
 > the commercial CJKOS system that renders double-byte Hangul from compact Johab-style glyph packs and
 > patches the text-width and character-boundary routines. All runtime code is position-independent and
-> installed as RAM trap patches without ROM modification. The two patch-based modules need no reset,
-> detect and repair patch chains broken by other system extensions, and coexist with CJKOS.
+> installed as RAM trap patches without ROM modification. The two patch-based modules need no reset and
+> re-attach patches that other system extensions have unhooked; MnSonyKbd also works alongside CJKOS,
+> while MnHangul detects CJKOS and stays off.
 > The work was developed and verified on the CloudpilotEmu emulator; testing on real hardware and
 > in applications other than Memo Pad is pending.
 
