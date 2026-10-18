@@ -33,11 +33,11 @@ H = 168 + sh + 50 + 90
 img = Image.new('RGB', (W, H), BG)
 d = ImageDraw.Draw(img)
 d.text((40, 36), 'Sony 가상 키보드로 한글', font=H1, fill=INK)
-d.text((40, 104), 'MnHangul 하나, 리셋 없음 · 쉬프트 고정 = 한/영', font=H2, fill=SUB)
+d.text((40, 104), 'MnHangul 하나, 리셋 없음 · 한A 키 = 한/영', font=H2, fill=SUB)
 d.rectangle((40, 146, 110, 150), fill=ACCENT)
 
 y = 168
-caps = ['쉬프트 고정: 두벌식 자모', '+ Shift: 쌍자음']
+caps = ['한A 켜짐: 두벌식 자모', '+ Shift: 쌍자음']
 for i, s in enumerate(shots):
     x = 40 + i * (sw + 20)
     d.rectangle((x - 6, y - 6, x + sw + 5, y + sh + 5), fill=(48, 52, 54))
