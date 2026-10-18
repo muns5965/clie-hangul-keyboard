@@ -13,8 +13,9 @@
 > installed as RAM trap patches without ROM modification. The two patch-based modules need no reset and
 > re-attach patches that other system extensions have unhooked; MnSonyKbd also works alongside CJKOS,
 > while MnHangul detects CJKOS and stays off.
-> The work was developed and verified on the CloudpilotEmu emulator; testing on real hardware and
-> in applications other than Memo Pad is pending.
+> **Test environment.** All development and verification were done in the CloudpilotEmu web emulator
+> running a PEG-NR70V (Palm OS 4.1S) ROM image, mainly in Memo Pad, with and without CJKOS installed.
+> **No testing has been performed on a physical device**, and applications other than Memo Pad remain untested.
 
 Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 한글 **표시**와 한글 **키보드**를 따로 골라 조합한다.
 
@@ -235,7 +236,8 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 
 ## 시험 환경
 
-- 에뮬레이터: [CloudpilotEmu](https://github.com/cloudpilot-emu/cloudpilot-emu) (웹)
+- **실기기 시험은 하지 않았다.** 모든 개발·검증은 아래 에뮬레이터에서 했다.
+- 에뮬레이터: [CloudpilotEmu](https://github.com/cloudpilot-emu/cloudpilot-emu) (웹, 휴대폰 브라우저에서 실행)
 - 기기 ROM: PEG-NR70V, Palm OS 4.1S
 - 한글: CJKOS(설치 A·B) / MnHangul, CJKOS 끈 세션(설치 C·D)
 
