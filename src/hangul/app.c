@@ -1,5 +1,5 @@
 /*
- * MnHangul v26 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v27 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,7 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v27: 리셋 버튼을 누르는 동안 폭 고정("Hold... 3s"), boot 줄에서 bdc 주소를 빼 a(결과) 값이 다 보이게
  * v26: Main 줄 6에 [Soft Reset (hold 3s)] — 3초 누르면 SysReset(), 중간에 떼면 취소. last len 줄은 뺐다(calls 줄이 7로)
  * v25: 부팅 자동 시작 — [Auto] 설정(앱 설정 'MnHg' 0, 리셋 후에도 유지)이 on이면 리셋 알림 때 Patch ON과 같은 설치
  *      (패치·글꼴 12/16 잠금, 24 폰트 파일 연결, Mode glyph, Intl 6, Width 5). 결과 #95. 리셋 알림 중에는 앱 전역변수·상수 표·
@@ -470,7 +471,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v26 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v27 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -706,7 +707,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v26 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v27 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -821,7 +822,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v26 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v27 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -858,7 +859,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v26 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v27 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -896,7 +897,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v26 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v27 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -948,7 +949,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v26 Kbd [tap: Main]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v27 Kbd [tap: Main]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1005,7 +1006,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v26 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v27 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1045,8 +1046,8 @@ static void Draw(void)
     StrPrintF(s, "hi rect %s %s  p3 %s", a, b, c);
     Row(11, s);
     /* v24: 리셋 알림 진단(#96~#99) */
-    StrPrintF(s, "boot n%lu t%lu h%lu db%lu bdc %lx a%lx", GetF(96), GetF(97), GetF(99) >> 24,
-              GetF(99) & 1, GetF(98), GetF(95));
+    StrPrintF(s, "boot n%lu t%lu h%lu db%lu a%lx", GetF(96), GetF(97), GetF(99) >> 24,
+              GetF(99) & 1, GetF(95));   /* v27: bdc 주소(#98)는 화면에서 뺌(잘림) */
     Row(12, s);
 
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);   /* 빈 줄 1 (맨 아래는 줄 12까지 참) */
@@ -1060,18 +1061,21 @@ static void HoldReset(void)
     Boolean       down = true;
     RectangleType r, b;
     Char          s[24];
+    /* v27: 버튼 폭은 처음 글자 기준으로 고정 */
+    UInt16        w = FntCharsWidth("Soft Reset (hold 3s)", 20) + 6;
 
     RctSetRectangle(&r, 0, (kRowReset + 1) * kLineH, 160, kLineH);
+    RctSetRectangle(&b, 3, (kRowReset + 1) * kLineH + 1, w, kLineH - 2);
     while (down) {
         left = (Int16)(kResetHoldSec - (TimGetTicks() - t0) / tps);
         if (left <= 0)
             StrCopy(s, "Resetting...");
         else
-            StrPrintF(s, "Hold... %d", left);
+            StrPrintF(s, "Hold... %ds", left);
         if (left != shown || left <= 0) {
             WinEraseRectangle(&r, 0);
-            Button(kRowReset, s);
-            RctSetRectangle(&b, 3, (kRowReset + 1) * kLineH + 1, FntCharsWidth(s, StrLen(s)) + 6, kLineH - 2);
+            WinDrawChars(s, StrLen(s), 6, (kRowReset + 1) * kLineH);
+            WinDrawRectangleFrame(roundFrame, &b);
             WinInvertRectangle(&b, 0);
             shown = left;
         }

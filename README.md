@@ -64,7 +64,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | 리셋 없는 본체 업데이트 / 리셋 1번 로더 업데이트 | 구현 완료 (CloudpilotEmu 실측) |
 | 나랏글 | 개발 보류 |
 | 키 반복 | 미구현 |
-| CJKOS 대체 한글 지원 모듈 | 시험 단계: 시험 앱(MnHangul)으로 CJKOS 없이 메모장 실측 — 조합형 글꼴 그리기(12·16·24, 24는 추가 설치 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈. 부팅 후 자동 시작 미구현(리셋하면 Patch ON 다시) |
+| CJKOS 대체 한글 지원 모듈 | 시험 단계: 시험 앱(MnHangul)으로 CJKOS 없이 메모장 실측 — 조합형 글꼴 그리기(12·16·24, 24는 추가 설치 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈. 설치 후 리셋 없이 `Patch ON`으로 바로 동작, `Auto: ON`이면 리셋 뒤 자동 시작(v25~v27, CloudpilotEmu 실측) |
 
 ## 배포 파일
 
@@ -95,6 +95,18 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 - 확인: ClieDiag Main에 `loader: build N`, `protect: released`, `core: build N`, `load: ok`.
 - 로더 리셋 1번 업데이트는 CloudpilotEmu에서 실측 성공했다. 단, **설치 후 리셋 전에 □→로 키보드를 켜지 않는다**(실크 확장이 옛 로더 코드 주소를 쓰므로 멈출 수 있음).
   이상이 생겨도 자동 복구는 보장하지 않으므로 시험 전에 에뮬레이터 세션을 백업한다. 자세한 내용: [docs/RECOVERY.md](docs/RECOVERY.md).
+
+**한글 지원 모듈(MnHangul, 시험 단계)** — 리셋이 필요 없다. CJKOS를 끈 백업 세션에서만 시험한다.
+
+| 작업 | 절차 | 리셋 |
+| --- | --- | --- |
+| 처음 설치 | `MnHangul.prc`(24 글꼴은 `MnHgFont24.prc` 추가) 설치 → MnHangul `Patch ON` | 없음 |
+| 업데이트 | MnHangul `All OFF` → 설치 → `Patch ON` | 없음 |
+| 리셋 뒤 자동 시작 | `Auto: ON`으로 두면 리셋 알림 때 `Patch ON`과 같은 설치를 한다 | — |
+| 비상 탈출 | 위 버튼을 누른 채 리셋(CloudpilotEmu: Reset → No extensions). 리셋 알림이 오지 않아 설치하지 않는다. `Auto` 설정은 남으므로 끄려면 MnHangul에서 `Auto: off` | — |
+
+- 패치는 RAM의 트랩 표에 걸리므로 어떤 리셋이든 풀린다. 리셋 뒤 켜져 있는 것은 `Auto`가 다시 설치했기 때문이다.
+- MnHangul Main에도 `Soft Reset (hold 3s)`가 있다. `boot` 줄의 `a80000000`은 자동 설치가 모두 성공했다는 뜻이다.
 
 ## 제한사항
 
