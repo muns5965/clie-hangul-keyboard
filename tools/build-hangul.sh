@@ -142,7 +142,7 @@ cp "$root/src/hangul/data/HgJ16.bin" HgJb0000.bin
 cp "$root/src/hangul/data/HgJ12.bin" HgJb0001.bin
 # v25: 리셋 알림(앱 전역변수 없음)에서 부르는 함수는 %a5(전역) 참조가 없어야 한다
 m68k-palmos-objdump -d app > app.dis
-for fn in ResetDiag AutoGet InstallAll InstPatch InstIntl InstWidth LockGlyphs Lock24 Installed AppDB GetF WidthTrap IntlSel; do
+for fn in ResetDiag AutoGet SonyGet ImOn InstallAll InstPatch InstIntl InstWidth LockGlyphs Lock24 Installed AppDB GetF WidthTrap IntlSel; do
   n=$(awk -v f="<$fn>:" '$2==f {on=1; next} /^[0-9a-f]+ </ {on=0} on && /%a5/' app.dis | wc -l)
   grep -q "<$fn>:" app.dis || { echo "error: $fn not found" >&2; exit 1; }
   [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
