@@ -268,7 +268,8 @@ static inline UInt32 FontInfo(const void *f)
 
 /* v29 진단: 활성 창이 아닌 창(가상 실크 등)에 찍히는 글자. MnHangul 실행 중(#106)에는 기록하지 않는다.
  *   #108 횟수, #109 창 주소, #110 위치(x<<16|y), #111 길이<<16 | windowFlags, #112 글꼴(FontInfo)
- *   #113 글자 고리 위치, #114~#121 글자 고리(32바이트, 그린 글자열의 앞 4글자까지 이어 붙임) */
+ *   #113 글자 고리 위치, #114~#121 글자 고리(32바이트, 그린 글자열의 앞 4글자까지 이어 붙임)
+ * v30: #126 오버레이 켜짐(1), #127 오버레이로 바꿔 그린 횟수 */
 static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, const void *p6)
 {
     const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
@@ -295,6 +296,41 @@ static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, cons
     FtrSet(kHgCreator, 113, pos);
 }
 
+/* v30: Sony 가상 키보드 키 글자 → 두벌식 자모(KS X 1001 0xA4xx 둘째 바이트). 0 = 바꾸지 않음.
+ * 대문자(shift)는 ㅃㅉㄸㄲㅆㅒㅖ, 나머지 대문자는 소문자와 같은 자모. 상수 표 대신 switch(코드 리소스) */
+static inline UInt8 Dubeol(UInt8 c)
+{
+    switch (c) {
+    case 'Q': return 0xB3;  case 'W': return 0xB9;  case 'E': return 0xA8;  case 'R': return 0xA2;
+    case 'T': return 0xB6;  case 'O': return 0xC2;  case 'P': return 0xC6;
+    }
+    if (c >= 'A' && c <= 'Z')
+        c = (UInt8)(c - 'A' + 'a');
+    switch (c) {
+    case 'q': return 0xB2;  case 'w': return 0xB8;  case 'e': return 0xA7;  case 'r': return 0xA1;
+    case 't': return 0xB5;  case 'y': return 0xCB;  case 'u': return 0xC5;  case 'i': return 0xC1;
+    case 'o': return 0xC0;  case 'p': return 0xC4;
+    case 'a': return 0xB1;  case 's': return 0xA4;  case 'd': return 0xB7;  case 'f': return 0xA9;
+    case 'g': return 0xBE;  case 'h': return 0xC7;  case 'j': return 0xC3;  case 'k': return 0xBF;
+    case 'l': return 0xD3;
+    case 'z': return 0xBB;  case 'x': return 0xBC;  case 'c': return 0xBA;  case 'v': return 0xBD;
+    case 'b': return 0xD0;  case 'n': return 0xCC;  case 'm': return 0xD1;
+    }
+    return 0;
+}
+
+/* v30: 지금 그리는 곳이 가상 실크 창인가(화면 밖 창 0x4000, 비트맵 폭 320 — v29 실측 flags C000) */
+static inline Boolean SilkWin(void)
+{
+    const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
+    const UInt8 *bm;
+
+    if (w == NULL || (*(const UInt16 *)(w + 8) & 0x4000) == 0)
+        return false;
+    bm = *(const UInt8 * const *)(w + 26);
+    return bm != NULL && *(const Int16 *)bm == 320;
+}
+
 UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7)
 {
     UInt32 orig = OrigAddr();
@@ -303,6 +339,32 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
     if (p2 != NULL)
         OtherLog(chars, len, p2, p6);   /* v29 진단 */
+    /* v30: 오버레이(#126 = 1) — 가상 실크 창에 높이 22 글꼴로 찍는 영문 한 글자를 두벌식 자모로 */
+    if (orig != 0 && len == 1 && chars != NULL && p2 != NULL && p6 != NULL && GetF(126) == 1 &&
+        GetF(23) != 0 && ((const Int16 *)p6)[7] == 22 && Dubeol(chars[0]) != 0 && SilkWin()) {
+        const Int16 *f = (const Int16 *)p6;
+        Int16        rh = ((const Int16 *)p2)[3];
+
+        if (rh > 0 && (f[7] == rh || f[7] == rh * 2)) {
+            UInt16 *tmp = MemPtrNew(TmpWords(f[7]) * 2);
+
+            if (tmp != NULL) {
+                UInt8         j[2];
+                RectangleType r = *(const RectangleType *)p2;
+                UInt16        ratio = (UInt16)(f[7] / rh);
+                Int16         wl = (Int16)CharW(f, chars[0]), wg = kCell16;
+                UInt32        res;
+
+                j[0] = 0xA4;
+                j[1] = Dubeol(chars[0]);
+                r.topLeft.x += (wl - wg) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤 */
+                FtrSet(kHgCreator, 127, GetF(127) + 1);
+                res = DrawGlyphs((BltFn)orig, p1, &r, p3, j, 2, f, p7, ratio, tmp, (const UInt8 *)GetF(23));
+                MemPtrFree(tmp);
+                return res;
+            }
+        }
+    }
 
     FtrSet(kHgCreator, 0, GetF(0) + 1);
     FtrSet(kHgCreator, 1, len);
