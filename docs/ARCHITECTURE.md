@@ -1,4 +1,4 @@
-# 구조: NR70V 가상 실크스크린 키보드 (현행: 로더 11 · 본체 12)
+# 구조: NR70V 가상 실크스크린 키보드 (현행: 로더 11 · 본체 12) · 의존 수준(10절)
 
 > 현행 구조만 적는다. 단계별 시험·실패한 가설은 [DEVELOPMENT_HISTORY.md](DEVELOPMENT_HISTORY.md),
 > 업데이트·복구는 [RECOVERY.md](RECOVERY.md).
@@ -116,3 +116,46 @@ ClieDiag의 디버그 페이지에서 볼 수 있다.
 | `SeSi` | 크리에이터 ID | Sony `SilkExtn`(ROM), DisS DB |
 | `DisS` | DB 타입 | 실크 초기화를 건너뛰는 비상 스위치 |
 | `extn` | DB 타입 | 시스템 확장(`SilkExtn`) |
+| `MnHg` | 크리에이터 ID | MnHangul(한글 표시). 리소스 `HgPt`(그리기 패치)·`HgIt`(Intl)·`HgWd`(폭)·`HgJb`(조합형 글꼴) |
+| `MnSy` | 크리에이터 ID | MnSonyKbd(Sony 가상 키보드 한글). 리소스 `SyPt`(키 글자 패치)·`SyIm`(입력·`한A`)·`SyIc`(`한A` 그림)·`SyJm`(자모) |
+
+### 10. 의존 수준 (이식할 때 다시 확인할 곳)
+
+이 저장소의 모듈이 무엇에 기대어 동작하는지 세 단계로 나눈다. 아래로 갈수록 ROM·OS 버전이나 기종이 바뀌면 깨지기 쉽다.
+MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므로 NR70V 전용이다. MnHangul은 2단계(`BltDrawChars`)와
+3단계 중 글꼴 구조에 기대지만 Sony 키보드와는 무관해, 같은 Palm OS 4.x 기종으로 옮길 가능성이 상대적으로 높다.
+
+**1단계: 공개 API (SDK에 원형·문서 있음)**
+- 트랩 교체 `SysGetTrapAddress`/`SysSetTrapAddress`, Intl 루틴 교체 `IntlGetRoutineAddress`/`IntlSetRoutineAddress`
+- 기록·설정 `FtrGet`/`FtrSet`, `PrefGetAppPreferences`/`PrefSetAppPreferences`
+- 리소스 잠금·보호 `DmGetResource`, `DmWrite`, `DmDatabaseProtect`
+- 입력 `EvtEnqueueKey`, `GrfGetState`, 이벤트 구조의 펜 좌표 / 리셋 알림 `sysAppLaunchCmdSystemReset`, `SysReset`
+
+**2단계: 비공개 함수 (존재하지만 문서·원형 없음, 역분석)**
+
+| 대상 | 쓰는 곳 | 근거 |
+| --- | --- | --- |
+| `BltDrawChars`(트랩 0xA378) | MnHangul 그리기, MnSonyKbd 키 글자 | ROM 호출부 역분석으로 인자 7개(26바이트) 확인([KOREAN_SUPPORT.md](KOREAN_SUPPORT.md)) |
+| Sony `SkWr` 플러그인 호출 방식 | Mn 가상 키보드 로더 | `SilkExtn` ROM 역분석(1절) |
+| Sony HR 라이브러리 `HRWinScreenMode`(sysLibTrapCustom + 48) | 앱 화면 고해상도 | Sony SDK에 있으나 헤더를 커밋하지 않아 직접 선언 |
+
+**3단계: 함수가 아니라 내부 구조·관찰에 기댄 부분 (가장 취약)**
+
+| 분류 | 내용 | 쓰는 곳 |
+| --- | --- | --- |
+| OS 내부 구조체 직접 읽기 | 창 구조 `+8`(windowFlags, 0x4000 = 화면 밖 창)·`+26`(비트맵) | MnSonyKbd 가상 실크 창 판별 |
+| | 글꼴 구조(`FontType`) 필드·폭 표를 읽고 1글자 임시 글꼴을 만들어 `BltDrawChars`에 넘김 | MnHangul 한글, MnSonyKbd 자모 |
+| ROM 고정 주소 | `BltDrawChars` = `0x1008359A`, 시작 바이트 `4E56FFF0 48E71E30` 확인 뒤 사용 | MnSonyKbd 자모 그리기 |
+| | ROM = `0x10000000`~`0x107FFFFF` 범위 판정 | 연결 확인(`src/sony/chain.h`, MnHangul `BltFind`), CJKOS 감지 |
+| ROM 리소스 내용 | `SilkExtn`(`extn`/`SeSi`)의 `Tbmp` 2400·2500 = ⇪ 그림(보통·켜짐) | `한A` 그림, 한/영 판정 |
+| Sony 키보드 동작 관찰 | 자판 그리는 순서(숫자 줄 → qwerty 줄 → `\` → ⇪ 그림 → …), 키 글자 글꼴 높이 22 | 한/영 표시 판정 |
+| | 상태(`GrfSetState`)를 그린 **뒤에** 바꿈, 키를 누르는 순간 잠깐 ⇪ 꺼짐 + 일시 쉬프트 | 판정 규칙 |
+| | 펜이 Sony 다시 그리기보다 앱 `EvtGetEvent`에 먼저 옴 | 펜 누름 때 연결 복구, ⇪ 판단 |
+| 화면 좌표 | ⇪ 키 x 0~12·y 182~191, 키 영역 y < 213(저해상도 좌표) | MnSonyKbd |
+| 다른 프로그램 동작 | CJKOS 감지 = `FntSetFont`·`FrmDrawForm`·`FldHandleEvent`·`StrCompare`가 ROM 밖인가 | MnHangul `CJKOS?` |
+| | CJKOS는 꺼질 때 자기가 켜질 때 저장한 주소로 되돌린다(실측) | 연결 복구 설계 |
+| 자체 약속 | 다른 모듈의 아래 함수 주소 = 진입점 − 4, 자기가 넣은 키 표시 keyCode `0x4D48` | 연결 따라가기, 입력 되먹임 방지 |
+| 부팅·복구 | `DisS` DB가 있으면 `SilkExtn`이 실크 초기화를 건너뜀(ROM 0x27EC) | 복구 수단([RECOVERY.md](RECOVERY.md)) |
+
+자세한 실측 근거는 [KOREAN_SUPPORT.md](KOREAN_SUPPORT.md)(MnHangul·MnSonyKbd 판별 기록)와
+[DEVELOPMENT_HISTORY.md](DEVELOPMENT_HISTORY.md)(ROM 역분석)에 있다.
