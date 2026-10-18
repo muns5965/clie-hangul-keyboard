@@ -296,28 +296,8 @@ static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, cons
     FtrSet(kHgCreator, 113, pos);
 }
 
-/* v30: Sony 가상 키보드 키 글자 → 두벌식 자모(KS X 1001 0xA4xx 둘째 바이트). 0 = 바꾸지 않음.
- * 대문자(shift)는 ㅃㅉㄸㄲㅆㅒㅖ, 나머지 대문자는 소문자와 같은 자모. 상수 표 대신 switch(코드 리소스) */
-static inline UInt8 Dubeol(UInt8 c)
-{
-    switch (c) {
-    case 'Q': return 0xB3;  case 'W': return 0xB9;  case 'E': return 0xA8;  case 'R': return 0xA2;
-    case 'T': return 0xB6;  case 'O': return 0xC2;  case 'P': return 0xC6;
-    }
-    if (c >= 'A' && c <= 'Z')
-        c = (UInt8)(c - 'A' + 'a');
-    switch (c) {
-    case 'q': return 0xB2;  case 'w': return 0xB8;  case 'e': return 0xA7;  case 'r': return 0xA1;
-    case 't': return 0xB5;  case 'y': return 0xCB;  case 'u': return 0xC5;  case 'i': return 0xC1;
-    case 'o': return 0xC0;  case 'p': return 0xC4;
-    case 'a': return 0xB1;  case 's': return 0xA4;  case 'd': return 0xB7;  case 'f': return 0xA9;
-    case 'g': return 0xBE;  case 'h': return 0xC7;  case 'j': return 0xC3;  case 'k': return 0xBF;
-    case 'l': return 0xD3;
-    case 'z': return 0xBB;  case 'x': return 0xBC;  case 'c': return 0xBA;  case 'v': return 0xBD;
-    case 'b': return 0xD0;  case 'n': return 0xCC;  case 'm': return 0xD1;
-    }
-    return 0;
-}
+/* v35: Sony 가상 키보드 두벌식 배치·한글 모드(⇪) 판정은 dubeol.h (입력 ime.c와 같은 표) */
+#include "dubeol.h"
 
 /* v31: 지금 그리는 곳이 화면 밖 창(0x4000, v29 실측 가상 실크 flags C000)인가. 비트맵 폭은 #129에 기록만 */
 static inline Boolean SilkWin(void)
@@ -334,7 +314,7 @@ static inline Boolean SilkWin(void)
 
 /* v31: 오버레이 후보(영문 한 글자, 활성 창 아닌 곳)가 걸러진 이유. #128 = 이유<<24 | 글꼴 높이<<8 | 사각형 높이
  *   1 오버레이 꺼짐, 2 16 글꼴 없음(Patch ON 전), 3 글꼴 높이 22 아님, 4 화면 밖 창 아님(#129 = flags<<16 | 비트맵 폭),
- *   5 임시 메모리 없음 */
+ *   5 임시 메모리 없음, 6 쉬프트 고정(⇪) 꺼짐 = 영문 모드(v35) */
 static inline void OvlReject(UInt16 why, const Int16 *f, const Int16 *rc)
 {
     FtrSet(kHgCreator, 128, ((UInt32)why << 24) | ((UInt32)(f[7] & 0xFF) << 8) | (UInt8)rc[3]);
@@ -364,6 +344,8 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
             OvlReject(3, f, (const Int16 *)p2);
         else if (!SilkWin())
             OvlReject(4, f, (const Int16 *)p2);
+        else if (!HanMode())
+            OvlReject(6, f, (const Int16 *)p2);
         else if ((tmp = MemPtrNew(TmpWords(f[7]) * 2)) == NULL)
             OvlReject(5, f, (const Int16 *)p2);
         else {

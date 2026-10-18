@@ -9,6 +9,7 @@
 #   2c) 글자 경계 코드(src/hangul/intl.c) → 리소스 HgIt 0(Intl 루틴 6개 교체, 3a 단계).
 #   2d) 폭 계산 코드(src/hangul/width.c) → 리소스 HgWd 0(폭 함수 트랩 5개 교체, 3b 단계).
 #   2e) 키보드 대화상자 진단 코드(src/hangul/kbd.c) → 리소스 HgKd 0(SysKeyboardDialog 호출 기록, v28).
+#   2f) Sony 가상 키보드 한글 입력(src/hangul/ime.c) → 리소스 HgIm 0(EvtGetEvent, v35).
 #   3) 조합형 글꼴 묶음 HgJb 0(Neo둥근모 16×16)·1(물마루 기반 12×12)(src/hangul/data, OFL, tools/gen-johab.py).
 # 패치 코드 검사(하나라도 어긋나면 실패): .data/.bss 0, PatchOrig 오프셋 0, PatchBlt 오프셋 4,
 #   %a5 참조 없음, 재배치 없음.
@@ -113,6 +114,26 @@ fi
 m68k-palmos-objcopy -O binary -j .text kbd.coff HgKd0000.bin
 m68k-palmos-objdump -d kbd.coff > kbd.dis
 
+# 1f) v35 Sony 가상 키보드 한글 입력(src/hangul/ime.c) → 리소스 HgIm 0. 오프셋 0 = 진입점 오프셋, 4 = 원래 주소, 8 = 상태 버퍼
+m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
+  -fno-builtin -nostartfiles -nostdlib \
+  -Wl,-e,HgImGet \
+  "$root/src/hangul/ime.c" -o ime.coff
+data=$(m68k-palmos-size ime.coff | awk 'NR==2 {print $2 + $3}')
+[ "$data" = "0" ] || { echo "error: ime data+bss = $data" >&2; exit 1; }
+a=$(m68k-palmos-nm ime.coff | awk '$3=="ImBase" {print $1}')
+[ "$((16#$a))" -eq 0 ] || { echo "error: ImBase at $a" >&2; exit 1; }
+a=$(m68k-palmos-nm ime.coff | awk '$3=="ImOrig" {print $1}')
+[ "$((16#$a))" -eq 4 ] || { echo "error: ImOrig at $a" >&2; exit 1; }
+if m68k-palmos-objdump -d ime.coff | grep -q '%a5'; then
+  echo "error: ime references %a5" >&2; exit 1
+fi
+if m68k-palmos-objdump -r ime.coff | grep -qE '^[0-9a-f]{8} '; then
+  echo "error: ime has relocations" >&2; exit 1
+fi
+m68k-palmos-objcopy -O binary -j .text ime.coff HgIm0000.bin
+m68k-palmos-objdump -d ime.coff > ime.dis
+
 # 2) 앱
 m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar "$root/src/hangul/app.c" -o app 2>&1 | tee build.log
 m68k-palmos-obj-res app
@@ -127,5 +148,5 @@ for fn in ResetDiag AutoGet InstallAll InstPatch InstIntl InstWidth LockGlyphs L
   [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
 done
 
-build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgJb0000.bin HgJb0001.bin
+build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgIm0000.bin HgJb0000.bin HgJb0001.bin
 ls -l "$root/bin/MnHangul.prc"

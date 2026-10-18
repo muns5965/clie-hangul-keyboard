@@ -1,5 +1,5 @@
 /*
- * MnHangul v34 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v35 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,9 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v35: Sony 가상 키보드 한글 — KDlg [Sony Hangul]이 오버레이와 입력(HgIm 0, EvtGetEvent)을 함께 켠다.
+ *      쉬프트 고정(⇪) = 한글 모드. 대문자 = 기본 자모, ⇪+쉬프트(소문자) = 쌍자음·ㅒㅖ. 조합은 MnSkCore와 같은 방식.
+ *      ⇪ 꺼지면 오버레이·변환 없음(영문). All OFF가 함께 끈다.
  * v34: KDlg 진단 — 글자 키만 최근 4개, 넣는 순간(add)과 받는 순간(get)의 Graffiti 상태를 나란히(⇪+쉬프트 쌍자음과 영문 소문자 구별용).
  * v33: KDlg 진단 — EvtAddEventToQueue keyDown 최근 4개를 한 줄에 하나씩, 넣는 순간 Graffiti 상태(g = caps num temp auto).
  * v32: KDlg 진단에 EvtGetEvent keyDown(글자·modifiers·keyCode·Graffiti caps/num/temp/auto) 최근 4개 표시,
@@ -104,7 +107,13 @@
 #define kKbdN         5   /* v29: + EvtEnqueueKey, v32: + EvtGetEvent, EvtAddEventToQueue */
 #define kFtrKbdBuf    107 /* v29: EvtEnqueueKey 기록 버퍼(동적 힙, 소유자 0) */
 #define kKbdBufSz     216 /* v33: EvtAddEventToQueue도 8개.  v30: EvtEnqueueKey 8개, v32: + EvtGetEvent keyDown 8개, EvtAddEventToQueue (kbd.c 참고) */
-#define kFtrOverlay   126 /* v30: Sony 가상 키보드 두벌식 자모 오버레이(1 = 켜짐) */
+#define kFtrOverlay   126 /* v30: Sony 가상 키보드 두벌식 자모 오버레이(1 = 켜짐). v35: Sony 한글(오버레이 + 입력) */
+/* v35: Sony 가상 키보드 한글 입력(HgIm 0, EvtGetEvent) — #131 핸들, #132 코드, #133 상태 버퍼 */
+#define kImRes        'HgIm'
+#define kFtrImH       131
+#define kFtrImC       132
+#define kFtrImBuf     133
+#define kImBufSz      16
 #define kWidthN       5
 /* v25: 리셋 알림(전역 없음)에서도 쓰므로 상수 표 대신 switch */
 static UInt16 WidthTrap(UInt16 i)
@@ -563,11 +572,71 @@ static void ClearKbdDlg(void)
     FtrSet(kHgCreator, 129, 0);
 }
 
+/* v35: Sony 가상 키보드 한글 입력 켜기/끄기 (EvtGetEvent 교체). 0 성공, 1 이미, 2 리소스 없음 */
+static UInt16 ImOn(void)
+{
+    MemHandle h;
+    UInt8    *code;
+    UInt32   *buf;
+    void     *o;
+    UInt16    card;
+    LocalID   id;
+
+    if (GetF(kFtrImC) != 0)
+        return 1;
+    h = DmGetResource(kImRes, 0);
+    if (h == NULL)
+        return 2;
+    code = MemHandleLock(h);
+    o = SysGetTrapAddress(sysTrapEvtGetEvent);
+    DmWrite(code, 4, &o, 4);
+    buf = MemPtrNew(kImBufSz);
+    if (buf != NULL) {
+        MemSet(buf, kImBufSz, 0);
+        MemPtrSetOwner(buf, 0);
+    }
+    DmWrite(code, 8, &buf, 4);
+    if (AppDB(&card, &id))
+        DmDatabaseProtect(card, id, true);
+    FtrSet(kHgCreator, kFtrImH, (UInt32)h);
+    FtrSet(kHgCreator, kFtrImC, (UInt32)code);
+    FtrSet(kHgCreator, kFtrImBuf, (UInt32)buf);
+    SysSetTrapAddress(sysTrapEvtGetEvent, code + ((UInt32 *)code)[0]);
+    return 0;
+}
+
+/* 0 꺼짐, 1 원래 켜져 있지 않음, 2 다른 것이 그 뒤에 바꿔서 못 끔 */
+static UInt16 ImOff(void)
+{
+    UInt8  *code = (UInt8 *)GetF(kFtrImC);
+    void   *buf = (void *)GetF(kFtrImBuf), *z = NULL;
+    UInt16  card;
+    LocalID id;
+
+    if (code == NULL)
+        return 1;
+    if ((UInt8 *)SysGetTrapAddress(sysTrapEvtGetEvent) != code + ((UInt32 *)code)[0])
+        return 2;
+    SysSetTrapAddress(sysTrapEvtGetEvent, (void *)((UInt32 *)code)[1]);
+    DmWrite(code, 8, &z, 4);
+    if (buf != NULL)
+        MemPtrFree(buf);
+    if (AppDB(&card, &id))
+        DmDatabaseProtect(card, id, false);
+    MemHandleUnlock((MemHandle)GetF(kFtrImH));
+    DmReleaseResource((MemHandle)GetF(kFtrImH));
+    FtrSet(kHgCreator, kFtrImH, 0);
+    FtrSet(kHgCreator, kFtrImC, 0);
+    FtrSet(kHgCreator, kFtrImBuf, 0);
+    return 0;
+}
+
 /* 켜진 기능 수 = 걸려 있는 DB 삭제 보호 수 */
 static UInt16 ProtectCount(void)
 {
     return (GetF(kFtrEntry) ? 1 : 0) + (GetF(kFtrCountC) ? 1 : 0) +
-           (GetF(kFtrIntlC) ? 1 : 0) + (GetF(kFtrWidthC) ? 1 : 0) + (GetF(kFtrKbdC) ? 1 : 0);
+           (GetF(kFtrIntlC) ? 1 : 0) + (GetF(kFtrWidthC) ? 1 : 0) + (GetF(kFtrKbdC) ? 1 : 0) +
+           (GetF(kFtrImC) ? 1 : 0);
 }
 
 static void PatchOff(void);
@@ -576,8 +645,14 @@ static void CountOff(void);
 /* 모두 끄기: 켠 반대 순서 */
 static void AllOff(void)
 {
+    /* v35: EvtGetEvent는 Hooks와 Sony 한글이 겹쳐 바꾸므로 나중에 건 것부터 풀리게 두 번 시도 */
+    if (GetF(kFtrImC) != 0)
+        ImOff();
     if (GetF(kFtrKbdC) != 0)
         KbdOff();
+    if (GetF(kFtrImC) != 0)
+        ImOff();
+    FtrSet(kHgCreator, kFtrOverlay, 0);
     if (GetF(kFtrWidthC) != 0)
         WidthOff();
     if (GetF(kFtrIntlC) != 0)
@@ -601,7 +676,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -837,7 +912,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -952,7 +1027,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -989,7 +1064,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -1027,7 +1102,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -1079,7 +1154,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 Kbd [tap: KDlg]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 Kbd [tap: KDlg]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1128,7 +1203,7 @@ static void DrawKbdDlgPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 KDlg [tap: Main]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 KDlg [tap: Main]", 29, 0, 0);
     Button(0, GetF(kFtrKbdC) ? "Hooks: ON" : "Hooks: off");
     ButtonAt(100, 0, "Clear");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
@@ -1196,7 +1271,7 @@ static void DrawKbdDlgPage(void)
             }
         }
     }
-    Button(10, GetF(kFtrOverlay) == 1 ? "Overlay: ON" : "Overlay: off");
+    Button(10, GetF(kFtrOverlay) == 1 && GetF(kFtrImC) ? "Sony Hangul: ON" : "Sony Hangul: off");
     w = GetF(128);
     StrPrintF(s, "ovl why %u fh %u rh %u  win %lx", (UInt16)(w >> 24), (UInt16)((w >> 8) & 0xFF), (UInt16)(w & 0xFF),
               GetF(129));
@@ -1238,7 +1313,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v34 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v35 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1384,9 +1459,19 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 if (row == 0)
                     ClearKbdLog();
             } else if (gPage == 7) {
-                if (row == 10) {
-                    FtrSet(kHgCreator, kFtrOverlay, GetF(kFtrOverlay) == 1 ? 0 : 1);
-                    StrCopy(gMsg, GetF(kFtrOverlay) == 1 ? "overlay ON (Sony kbd)" : "overlay off");
+                if (row == 10) {   /* v35: Sony 한글 = 오버레이 + 입력 */
+                    if (GetF(kFtrImC) != 0) {
+                        UInt16 r = ImOff();
+
+                        FtrSet(kHgCreator, kFtrOverlay, 0);
+                        StrCopy(gMsg, r == 0 ? "Sony Hangul off" : "Sony Hangul: kept (Hooks after?)");
+                    } else {
+                        UInt16 r = ImOn();
+
+                        if (r == 0)
+                            FtrSet(kHgCreator, kFtrOverlay, 1);
+                        StrCopy(gMsg, r == 0 ? "Sony Hangul ON: caps lock = Hangul" : "HgIm resource missing");
+                    }
                 } else if (row == 0 && e.screenX >= 100)
                     ClearKbdDlg();
                 else if (row == 0) {
