@@ -28,7 +28,7 @@ jobs:
       - name: Install base packages
         run: |
           apt-get update -qq
-          apt-get install -y -qq curl ca-certificates unzip git > /dev/null
+          apt-get install -y -qq curl ca-certificates unzip git python3 > /dev/null
 
       - uses: actions/checkout@v4
 

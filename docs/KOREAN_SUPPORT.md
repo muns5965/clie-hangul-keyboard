@@ -39,11 +39,20 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 | 인코딩 정보 | `TxtCharEncoding`, `TxtStrEncoding`, `TxtEncodingName`(Intl), `FtrGet`, `IntlDispatch` | 필요(시스템이 다바이트 인코딩으로 인식) |
 | 단어·비교·정렬 | `TxtWordBounds`, `TxtCompare`, `TxtCaselessCompare`, `TxtTransliterate`(Intl), `StrCompare`, `StrCaselessCompare`, `GetCharSortValue`, `GetCharAttr`, `GetCharCaselessValue` | 선택 |
 | 화면 현지화 | `FrmInitForm`, `FrmDrawForm`, `MenuAddItem`, `DateToAscii`, `FontSelect` | 불필요(또는 나중) |
-| CJKOS 자체 입력기 | `EvtGetEvent`, `FldHandleEvent`, `SysKeyboardDialog` | 불필요(이 프로젝트 키보드가 대신함) |
+| CJKOS 자체 입력기 | `EvtGetEvent`, `FldHandleEvent`, `SysKeyboardDialog` | 불필요(이 프로젝트 키보드가 대신함). `SysKeyboardDialog`는 실측 3 참고 |
 | CJKOS 자체 관리 | `SysAppLaunch`, `DmOpenDatabase`, `DmCloseDatabase`, `DmDeleteDatabase`, `DmGet1Resource`, `DmNextOpenResDatabase`, `DmMoveOpenDBContext`, `IntlGetRoutineAddress`(Intl) | 불필요(글꼴 DB·리소스 관리로 추정) |
 
 초기 구현 후보: 글자 그리기, 문자열 폭 계산, 2바이트 글자 경계 처리에 관련된 트랩·Intl 선택자(잠정 후보 트랩 약 10개 + Intl 약 13개).
 실제로 필요한 최소 범위는 함수 하나씩 교체 시험과 함수 간 의존성 확인으로 확정한다. 지금까지 확정된 것은 `BltDrawChars` 하나(2a~2c 실측)다.
+
+#### 실측 3: 소프트 키보드 경로 (MnHangul v28 KDlg, 2026-10-18)
+- **방법**: `SysKeyboardDialog`·`SysKeyboardDialogV10`을 호출만 기록하고 원래 함수로 넘기는 코드로 교체(CJKOS OFF).
+- **관찰**: 메뉴 → Keyboard(`default`), 가상 실크 Graffiti 영역의 ⓐ(`alpha`)·①로 여는 Palm 표준 **소프트 키보드**는 모두 `SysKeyboardDialog`로 열린다
+  (메모장, 포커스 필드 있음). `V10`은 0회. 가상 실크의 ⌨ 아이콘으로 여는 Sony **가상 키보드**는 이 함수를 거치지 않는다.
+  소프트 키보드 창의 편집칸에서도 MnHangul 그리기·폭 패치로 한글이 정상 표시된다.
+- **판단**: CJKOS 화면 키보드는 이 함수를 교체하는 방식으로 본다(트랩 교체라 리셋 불필요).
+- **결정**: 한글 소프트 키보드는 만들지 않는다. 창이 앱 화면 대부분을 가리고(복사본 칸에 입력 후 `Done`),
+  실크 키보드(MnSk)의 리셋은 로더 처음 설치 때 1회뿐이라 얻는 것이 적다. 가상 실크가 없는 기종을 지원할 때 다시 검토한다.
 
 #### 실측 2: CJKOS 한글 글꼴 크기·폭 (ClieDiag v20 Info, v21 Font 페이지)
 | 쓰는 곳 | 줄 높이 | CJKOS가 그리는 한글 | 한 글자 폭 | 대체 모듈 계획 |
