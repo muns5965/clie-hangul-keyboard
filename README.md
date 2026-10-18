@@ -68,19 +68,24 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 
 ## 배포 파일
 
-| 파일 | 역할 |
-| --- | --- |
-| `bin/MnSkPlugin.prc` | 로더. `SilkExtn`에 등록되는 `SkWr` 플러그인(약 1KB)으로, 부팅 때 호출되어 키보드 본체와 연결한다 |
-| `bin/MnSkCore.prc` | 키보드 본체(자판 그리기·터치 판정·한글 조합). 로더가 불러 실행한다 |
-| `bin/ClieDiag.prc` | 상태 확인·소프트 리셋(3초 누르기)·진단(Debug 체크 시) |
+| 파일 | 구분 | 역할 |
+| --- | --- | --- |
+| `bin/MnSkPlugin.prc` | 필수 | 로더. `SilkExtn`에 등록되는 `SkWr` 플러그인(약 1KB)으로, 부팅 때 호출되어 키보드 본체와 연결한다 |
+| `bin/MnSkCore.prc` | 필수 | 키보드 본체(자판 그리기·터치 판정·한글 조합). 로더가 불러 실행한다 |
+| `bin/ClieDiag.prc` | 선택 | 키보드 상태 확인(로더·본체 빌드, 불러오기 결과)·소프트 리셋(3초 누르기)·복구 스위치(DisS)·진단(Debug 체크 시). 키보드 동작에는 필요 없다 |
 
 ## 설치·업데이트
 
 | 작업 | 절차 | 리셋 |
 | --- | --- | --- |
-| 처음 설치 | 세 PRC 설치 → ClieDiag `Soft Reset` 3초 → 상태바 □→로 키보드 켜기 | 1번 |
+| 처음 설치 | `MnSkPlugin.prc`·`MnSkCore.prc` 설치(ClieDiag는 선택) → 리셋 → 상태바 □→로 키보드 켜기 | 1번 |
 | 본체(키보드) 업데이트 | □→로 끄기 → `MnSkCore.prc` 설치 → □→로 켜기 | 없음 |
-| 로더 업데이트 | □→로 끄기 → `MnSkPlugin.prc` 설치 → 바로 ClieDiag `Soft Reset` 3초 | 1번 |
+| 로더 업데이트 | □→로 끄기 → `MnSkPlugin.prc` 설치 → 바로 리셋 | 1번 |
+
+- 리셋 방법(아무것이나): ClieDiag 또는 MnHangul의 `Soft Reset (hold 3s)`, CloudpilotEmu의 Reset 메뉴(Soft reset), 실기기는 뒷면 리셋 구멍.
+- **로더는 고정한다.** 로더와 본체 사이 약속(ABI 1: 본체 찾는 방법, 이벤트 넘기는 방식, 기록 번호)은 바꾸지 않고 새 기능은 본체에만 넣는다.
+  그래서 업데이트는 보통 본체만이고 리셋이 필요 없다. 로더는 로더 자체 버그나 약속으로 넘길 수 없는 정보가 필요할 때만 바꾸며,
+  그때는 릴리스 안내에 "로더 변경 — 리셋 1번"을 적는다. 사용자가 겪는 리셋은 처음 설치 1번이 된다.
 
 - □→는 상태바 5번째 아이콘(외부 플러그인이 있을 때만 보임). 누를 때마다 기본 실크와 한글 키보드가 바뀐다.
 
@@ -92,7 +97,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)의 가상 실크스크린(Graffiti 영역) �
 | 로더 업데이트 → 리셋 | `SilkExtn`은 부팅 때 등록한 **옛 로더 코드 주소**로 계속 호출한다. 리셋해야 새 로더가 등록된다. 리셋 전에 □→로 켜면 지워진 옛 코드로 호출되어 멈출 수 있다. |
 | 본체 업데이트 → 리셋 없음 | 본체는 로더가 키보드를 켤 때(Start)마다 DB에서 불러와 잠그고, 끌 때(Stop) 잠금을 푼다. 그래서 끈 상태에서 바꿔 넣으면 다음에 켤 때 새 본체를 불러온다. |
 | 본체 업데이트 전 □→로 끄기 | 켜 둔 채 설치하면 로더가 잠가 둔 옛 본체가 지워진다. 이후 끄거나 켤 때 `MemoryMgr.c … Chunk under-locked` 오류로 멈출 수 있다(리셋하면 복구). |
-- 확인: ClieDiag Main에 `loader: build N`, `protect: released`, `core: build N`, `load: ok`.
+- 확인(ClieDiag를 설치했다면): ClieDiag Main에 `loader: build N`, `protect: released`, `core: build N`, `load: ok`.
 - 로더 리셋 1번 업데이트는 CloudpilotEmu에서 실측 성공했다. 단, **설치 후 리셋 전에 □→로 키보드를 켜지 않는다**(실크 확장이 옛 로더 코드 주소를 쓰므로 멈출 수 있음).
   이상이 생겨도 자동 복구는 보장하지 않으므로 시험 전에 에뮬레이터 세션을 백업한다. 자세한 내용: [docs/RECOVERY.md](docs/RECOVERY.md).
 
