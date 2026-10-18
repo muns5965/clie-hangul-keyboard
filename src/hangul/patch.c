@@ -299,6 +299,30 @@ static inline void OtherLog(const UInt8 *chars, UInt16 len, const void *p2, cons
 /* v35: Sony 가상 키보드 두벌식 배치·한글 모드(⇪) 판정은 dubeol.h (입력 ime.c와 같은 표) */
 #include "dubeol.h"
 
+/* v36: 키 글자를 그리는 순간의 한글 판정. Graffiti 상태는 다시 그리기보다 한 박자 늦게 바뀌므로
+ *   (v35 실측: ⇪를 켜면 대문자 키 글자를 먼저 그리고 그다음 ⇪ 상태가 켜짐) 키 글자 대·소문자와 함께 본다.
+ *     대문자: ⇪ 켜짐 → 한글, ⇪ 꺼짐·일시 쉬프트 없음 → ⇪를 막 켬 → 한글, 일시 쉬프트 있음 → 영문(쉬프트·자동 쉬프트)
+ *     소문자: ⇪ 켜짐 → 한글(⇪+쉬프트), ⇪ 꺼짐 → 영문
+ *   진단: 판정 입력(대·소문자, g = caps num temp auto)이 바뀔 때마다 #134~#141 고리(#142 다음 칸)에 기록 */
+static inline Boolean HanLabel(UInt8 c)
+{
+    Boolean caps = false, num = false, autoS = false;
+    UInt16  temp = 0;
+    UInt32  e, k;
+
+    GrfGetState(&caps, &num, &temp, &autoS);
+    e = ((UInt32)(c >= 'A' && c <= 'Z' ? 1 : 0) << 16) | ((caps ? 1 : 0) << 12) | ((num ? 1 : 0) << 8) |
+        ((temp & 0xF) << 4) | (autoS ? 1 : 0);
+    k = GetF(142);
+    if (GetF(134 + (UInt16)((k + 7) & 7)) != (e | 0x80000000UL)) {
+        FtrSet(kHgCreator, 134 + (UInt16)(k & 7), e | 0x80000000UL);
+        FtrSet(kHgCreator, 142, k + 1);
+    }
+    if (caps)
+        return true;
+    return (c >= 'A' && c <= 'Z') && temp == 0;
+}
+
 /* v31: 지금 그리는 곳이 화면 밖 창(0x4000, v29 실측 가상 실크 flags C000)인가. 비트맵 폭은 #129에 기록만 */
 static inline Boolean SilkWin(void)
 {
@@ -344,7 +368,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
             OvlReject(3, f, (const Int16 *)p2);
         else if (!SilkWin())
             OvlReject(4, f, (const Int16 *)p2);
-        else if (!HanMode())
+        else if (!HanLabel(chars[0]))
             OvlReject(6, f, (const Int16 *)p2);
         else if ((tmp = MemPtrNew(TmpWords(f[7]) * 2)) == NULL)
             OvlReject(5, f, (const Int16 *)p2);

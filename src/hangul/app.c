@@ -1,5 +1,5 @@
 /*
- * MnHangul v35 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v36 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v36: 오버레이 판정 보완 — 키 글자 대·소문자와 Graffiti 상태를 함께 봄(⇪를 켜자마자 자판 전체가 자모).
+ *      KDlg 6~9줄: 그리는 순간 판정 입력 변화 기록(⇪+쉬프트 표시 판정용).
  * v35: Sony 가상 키보드 한글 — KDlg [Sony Hangul]이 오버레이와 입력(HgIm 0, EvtGetEvent)을 함께 켠다.
  *      쉬프트 고정(⇪) = 한글 모드. 대문자 = 기본 자모, ⇪+쉬프트(소문자) = 쌍자음·ㅒㅖ. 조합은 MnSkCore와 같은 방식.
  *      ⇪ 꺼지면 오버레이·변환 없음(영문). All OFF가 함께 끈다.
@@ -570,6 +572,8 @@ static void ClearKbdDlg(void)
     FtrSet(kHgCreator, 127, 0);
     FtrSet(kHgCreator, 128, 0);
     FtrSet(kHgCreator, 129, 0);
+    for (n = 134; n <= 142; n++)
+        FtrSet(kHgCreator, n, 0);
 }
 
 /* v35: Sony 가상 키보드 한글 입력 켜기/끄기 (EvtGetEvent 교체). 0 성공, 1 이미, 2 리소스 없음 */
@@ -676,7 +680,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -912,7 +916,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -1027,7 +1031,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -1064,7 +1068,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -1102,7 +1106,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -1154,7 +1158,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 Kbd [tap: KDlg]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 Kbd [tap: KDlg]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1203,7 +1207,7 @@ static void DrawKbdDlgPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 KDlg [tap: Main]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 KDlg [tap: Main]", 29, 0, 0);
     Button(0, GetF(kFtrKbdC) ? "Hooks: ON" : "Hooks: off");
     ButtonAt(100, 0, "Clear");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
@@ -1240,35 +1244,24 @@ static void DrawKbdDlgPage(void)
             StrPrintF(s, "enq %lu add %lu get %lu g%x", kb ? kb[0] : 0, kb ? kb[36] : 0, kb ? kb[18] : 0, (UInt16)g);
             Row(5, s);
         }
-        /* v34: 글자 키(0x100 미만)만 최근 4개씩 골라 넣는 순간(add)·받는 순간(get) Graffiti 상태를 나란히.
-         *      g = caps num temp auto. 오래된 것부터 짝지음 */
-        if (kb != NULL) {
-            UInt32 av[4], gv[4];
-            UInt16 na = 0, ng = 0, i2;
+        /* v36: 키 글자 그리는 순간 판정 입력이 바뀐 기록 8개(오래된 것부터, 한 줄에 2개).
+         *      U/L = 키 글자 대·소문자, g = caps num temp auto */
+        {
+            UInt32 k8 = GetF(142);
             Int16  j;
+            UInt16 m = 0;
 
-            for (j = 7; j >= 0 && na < 4; j--) {   /* 새 것부터 거꾸로 */
-                UInt32 v = kb[38 + 2 * (UInt16)((kb[37] + (UInt16)j) & 7)];
+            for (j = 7; j >= 0; j--) {
+                UInt32 v;
 
-                if (v != 0 && (v >> 16) < 0x100)
-                    av[na++] = v;
+                if ((UInt32)j >= k8)
+                    continue;
+                v = GetF(134 + (UInt16)((k8 - 1 - (UInt32)j) & 7));
+                StrPrintF(s, "%s g%x", (v >> 16) & 1 ? "U" : "L", (UInt16)v);
+                WinDrawChars(s, StrLen(s), 2 + (m % 2) * 80, (7 + m / 2) * kLineH);
+                m++;
             }
-            for (j = 7; j >= 0 && ng < 4; j--) {
-                UInt16 e = (UInt16)((kb[19] + (UInt16)j) & 7);
-
-                if (kb[20 + 2 * e] != 0 && (kb[20 + 2 * e] >> 16) < 0x100)
-                    gv[ng++] = kb[21 + 2 * e];
-            }
-            for (i2 = 0; i2 < na; i2++) {
-                UInt32 v = av[na - 1 - i2];
-
-                if (i2 < ng)
-                    StrPrintF(s, "add %x g%x  get g%x", (UInt16)(v >> 16), (UInt16)v, (UInt16)gv[ng - 1 - i2]);
-                else
-                    StrPrintF(s, "add %x g%x  get -", (UInt16)(v >> 16), (UInt16)v);
-                Row(6 + n, s);
-                n++;
-            }
+            n = m;
         }
     }
     Button(10, GetF(kFtrOverlay) == 1 && GetF(kFtrImC) ? "Sony Hangul: ON" : "Sony Hangul: off");
@@ -1313,7 +1306,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v35 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v36 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
