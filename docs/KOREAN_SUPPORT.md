@@ -158,6 +158,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v26: Main 줄 6에 [Soft Reset (hold 3s)] (3초 누르면 리셋, 떼면 취소). 자동 시작 시험을 MnHangul 안에서 끝낼 수 있다. 줄 7은 calls 줄(이전 last len 줄 삭제).
 - v27: 리셋 버튼을 누르는 동안 폭 고정(`Hold... 3s`), `boot` 줄에서 bdc 주소를 빼 `a` 값이 다 보이게.
 - v28 (진단): KDlg 페이지 — `SysKeyboardDialog`·`SysKeyboardDialogV10`을 기록만 하는 코드(HgKd 0)로 교체. 호출 수, 마지막 키보드 종류, 포커스 필드 유무, 호출한 앱을 기록. CJKOS 화면 키보드처럼 리셋 없는 한글 키보드를 띄울 수 있는지 판단용.
+- v31: v30의 EvtEnqueueKey 8개 기록이 kbd.c에 반영되지 않아 표시가 깨졌던 것 수정. 오버레이 조건 완화(비트맵 폭 검사 뺌, 사각형 높이 22·11 아니면 배율 1), 걸러진 이유(#128) 표시.
 - v30: KDlg `Overlay` — Sony 가상 키보드 키 글자(영문 한 글자, 가상 실크 창·글꼴 높이 22)를 두벌식 자모로 바꿔 그림. 표시만, 입력은 영문. EvtEnqueueKey 기록 최근 8개.
 - v29 (진단): Sony 가상 키보드 한글 오버레이·입력 변환 가능성 판단용. 활성 창이 아닌 창(가상 실크 등)에 찍히는 글자 기록(그리기 패치, #108~#121), `EvtEnqueueKey` 호출 기록(글자·modifier·부른 곳, 인터럽트에서도 불릴 수 있어 동적 힙 버퍼에 직접 기록).
 - 실측(CloudpilotEmu): Auto ON + Soft reset → 메모장 한글, 상태 `patch ON glyph font ok+24`, `boot n1 t340 h0 db1`. No extensions 리셋 → `patch off`, `boot n0` (비상 탈출 확인). Auto off + Soft reset → 설치 안 함.

@@ -12,7 +12,7 @@
  * v29: 2 EvtEnqueueKey(ascii, keycode, modifiers) (0xA12D) — 가상 키보드 글자가 이 함수로 들어오는지
  *   하드웨어 버튼 등은 인터럽트 안에서 이 함수를 부를 수 있어 Feature(메모리 관리자)를 쓰지 않는다.
  *   앱이 동적 힙에 잡아 둔 버퍼(오프셋 24에 주소)에 바로 쓴다:
- *   [0] 호출 수, [1] 마지막 = 글자<<16 | modifiers, [2] 부른 곳(복귀 주소), [3] keycode
+ *   [0] 호출 수, [1] 다음 칸 번호, [2 + 2k] 글자<<16 | modifiers, [3 + 2k] 부른 곳(복귀 주소) - 최근 8개(v31)
  *
  * 리소스 배치: 오프셋 0 = 진입점 3개의 오프셋 표, 12 = 원래 함수 주소 3개, 24 = 기록 버퍼 주소(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
@@ -95,10 +95,12 @@ Err HgEnqueueKey(WChar ascii, UInt16 keycode, UInt16 modifiers)
     asm("lea KbdBuf(%%pc),%0" : "=a" (bp));
     b = *bp;
     if (b != NULL) {
+        UInt16 k = (UInt16)(b[1] & 7);
+
         b[0]++;
-        b[1] = ((UInt32)ascii << 16) | modifiers;
-        b[2] = (UInt32)__builtin_return_address(0);
-        b[3] = keycode;
+        b[2 + 2 * k] = ((UInt32)ascii << 16) | modifiers;
+        b[3 + 2 * k] = (UInt32)__builtin_return_address(0);
+        b[1] = k + 1;
     }
     return ((EnqFn)Orig(2))(ascii, keycode, modifiers);
 }
