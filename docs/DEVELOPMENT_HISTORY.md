@@ -129,6 +129,11 @@ v2의 `SysLibTblEntry` 표 읽기, v3의 Silk(Vsk) 페이지는 Fatal Exception�
   일반 C 레지스터 규약, 호출 전 A5 미설정(전역변수 금지), `code 0` 맨 앞을 바로 호출(`jsr`). Open 때 `out`은 NULL.
 - 로딩 시점(확정): 부팅 중 `extn` 초기화. `SilkStartup`(0x278C) → `PrvInitStage2` → `PrvInitSilkWare`(0x2E2A). 직전에 `FtrGet`을 쓰므로 Feature Manager 사용 가능(높음).
 - 실크 비활성화 스위치(확정, 0x27EC): 타입 `DisS`·크리에이터 `SeSi` DB가 있으면 실크 초기화 전체를 건너뜀.
+- 플러그인 재등록 경로 조사(2026-10-18, 리셋 없이 첫 설치·로더 교체가 되는지): **없음(확정)**.
+  `DmGetNextDatabaseByTypeCreator` 호출 4곳 중 `SkWr`를 찾는 곳은 0x2F1E(PrvInitSilkWare 안) 하나뿐이고(나머지 0x2D12·0x2DC4·0x52F4는 자기 DB `extn`/`SeSi`),
+  PrvInitSilkWare(0x2E2A)를 부르는 곳도 0x2C0E(부팅 초기화 0x2872 안) 하나뿐이다. 등록하는 알림(`scrd`·`SnSs`·`SnS1`·`time`·`hots`·`sync`) 처리기는 플러그인을 다시 찾지 않는다.
+  0x2E2A를 직접 부르면 모든 `SkWr`를 슬롯 번호(전역 +154)를 늘리며 다시 등록(이중 등록·이중 잠금)하고, 진입점 0x278C를 다시 부르면 트랩 가로채기가 이중 설치되므로 쓰지 않는다.
+  → 첫 설치·로더 교체의 리셋 1번은 유지(ClieDiag Soft Reset).
 - 플러그인 전환 방법, Draw·Pen 이벤트 구조체 배치는 미확정. 첫 시험은 CloudpilotEmu 세션 백업 후 진행한다.
 
 ### 1차 결과 (v1, 2026-10-15)
