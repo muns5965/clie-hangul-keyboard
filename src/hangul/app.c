@@ -1,5 +1,5 @@
 /*
- * MnHangul v23 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v24 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v24(진단): 리셋 알림(sysAppLaunchCmdSystemReset) 수신 기록만 — #96 횟수, #97 tick, #98 그때 BltDrawChars 트랩 주소,
+ *      #99 = hardReset<<24 | createDefaults<<16 | 자기 DB 열기 성공(1/0). 메인 12줄에 표시. 동작 변경 없음(자동 설치는 다음 판).
  * v23: 큰 글자 칸 26 → 24(글자 사이 약 5 → 3픽셀). Patch ON이 이미 켜져 있어도 추가 글꼴 연결을 다시 시도하고,
  *      결과를 메시지로(f24 ok / f24: none / open fail / no res / bad fmt).
  * v22: 추가 글꼴 MnHgFont24.prc(타입 HgFt, 리소스 HgJb 2 = 24×24 조합형 묶음 판 2)가 있으면 Patch ON 때 잠가 연결(#92 주소,
@@ -436,7 +438,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v23 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v24 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -670,7 +672,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v23 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v24 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -785,7 +787,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v23 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v24 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -822,7 +824,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v23 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v24 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -860,7 +862,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v23 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v24 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -912,7 +914,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v23 Kbd [tap: Main]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v24 Kbd [tap: Main]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -969,7 +971,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v23 [tap: Font] CJKOS OFF", 34, 0, 0);
+    WinDrawInvertedChars("MnHangul v24 [tap: Font] CJKOS OFF", 34, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1010,18 +1012,43 @@ static void Draw(void)
     XY(c, GetF(16));
     StrPrintF(s, "hi rect %s %s  p3 %s", a, b, c);
     Row(11, s);
-    Font(a, GetF(15));
-    Hex(b, GetF(17));
-    StrPrintF(s, "hi font %s  p1 %s", a, b);
+    /* v24: 리셋 알림 진단(#96~#99) */
+    StrPrintF(s, "boot n%lu t%lu h%lu c%lu db%lu bdc %lx", GetF(96), GetF(97), GetF(99) >> 24,
+              (GetF(99) >> 16) & 0xFF, GetF(99) & 1, GetF(98));
     Row(12, s);
 
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);   /* 빈 줄 1 (맨 아래는 줄 12까지 참) */
+}
+
+/* v24 진단: 리셋 알림 기록. 이 호출에서는 앱 전역변수·문자열 상수(데이터 구역)를 쓸 수 없으므로 상수와 지역변수만 쓴다 */
+static void ResetDiag(MemPtr pb)
+{
+    UInt32    n = 0;
+    UInt32    flags = 0;
+    DmOpenRef db;
+
+    FtrGet(kHgCreator, 96, &n);
+    FtrSet(kHgCreator, 96, n + 1);
+    FtrSet(kHgCreator, 97, TimGetTicks());
+    FtrSet(kHgCreator, 98, (UInt32)SysGetTrapAddress(kTrapBlt));
+    if (pb != NULL)
+        flags = ((UInt32)(((const UInt8 *)pb)[0] ? 1 : 0) << 24) | ((UInt32)(((const UInt8 *)pb)[1] ? 1 : 0) << 16);
+    db = DmOpenDatabaseByTypeCreator('appl', kHgCreator, dmModeReadOnly);
+    if (db != NULL) {
+        flags |= 1;
+        DmCloseDatabase(db);
+    }
+    FtrSet(kHgCreator, 99, flags);
 }
 
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 {
     EventType e;
 
+    if (cmd == sysAppLaunchCmdSystemReset) {
+        ResetDiag(cmdPBP);
+        return 0;
+    }
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
 
