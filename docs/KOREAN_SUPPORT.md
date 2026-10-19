@@ -184,6 +184,9 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
   MnSonyKbd 판정 기록 8~10줄 = 키 글자 후보마다 창 판정 세 가지(windowFlags 0x4000 / `WinGetBitmap` 비교 / SilkWareLib `GetScrWindow` 일치)의 표본·일치 수·마지막 불일치, 글꼴(`FntGetFontPtr()` == p6, `FntCharWidth`·`FntBaseLine` 대 폭 표·ascent)의 일치·불일치.
   `GetScrWindow`는 ROM 정적 분석으로 확인(라이브러리 이름 "Silk Ware Library", 디스패치 표 9번째 = custom + 4, 0x1035CF12: SilkExtn 전역 +172를 출력 인자에 쓰고 0 반환, 'inoT' 확인 실패면 0x7704). 앱 화면에서만 부른다.
   비교 상태: 순정(CJKOS 없음) / CJKOS 켬 / CJKOS 끔 / MnHangul 켬 / MnHangul 켬 → CJKOS 켬.
+- v60 / v8 실측(2026-10-19, CJKOS 켬):
+  - MnHangul KDlg: `CJKOS? running`(함수 4개 방식)인데 Feature는 `enc 3`(PalmLatin)·`flags 1`·`lang 0`(영어)·`ctry 23`·`tsm` 없음(오류) — CJKOS가 `FtrGet`을 바꾸지만 이 시스템 Feature들은 영문 그대로 돌려준다. **Feature 방식으로는 CJKOS를 감지할 수 없다** → 함수 4개 방식 유지.
+  - MnSonyKbd(키 글자 후보 80개): 창 판정 windowFlags 0x4000 = `WinGetBitmap` 비교 80/80, 글꼴 `FntGetFontPtr()` = p6·`FntCharWidth` = 폭 표·`FntBaseLine` = ascent 80/80. `GetScrWindow`는 0(라이브러리 못 찾음 또는 실패)이라 비교에서 빠짐.
 - v45: ⇪ 펜 누름은 Sony 실제 상태(자판 전체 그리기의 ⇪ 그림, #150)의 반대로 정함. v44 실측: 값을 뒤집는 방식은 한 번 어긋나면 ⇪ 켜기·끄기 모두 1·2줄이 틀림.
 - v44: ⇪ 판정 보완(눌림 표시 그림 무시, ⇪ 꺼짐 + 일시 쉬프트 → 영문). v43 실측: Sony는 줄 순서로 그려 ⇪ 그림이 3줄 맨 앞 — 1·2줄은 그 전에 그려짐. ⇪ 누를 때 눌림 표시로 보통 그림을 먼저 한 번 그림.
 - v43: Sony ⇪ 키 그림(ROM SilkExtn Tbmp 2400 보통·2500 반전, 8비트 글자 0·바탕 0xD8/0x39)을 `한A`(22×18, Galmuri11 OFL)로 바꿔 그리고, 그 그림으로 한글 모드 판정(WinDrawBitmap). v42 실측: 새 메모에서 Sony가 쉬프트 고정을 풀었는데 표시는 한글로 남고 입력은 A.
