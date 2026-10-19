@@ -33,8 +33,10 @@
  *   - 받침 넘김(닭+ㅏ → 달가). KSC5601에 없는 음절이 되면 앞 글자를 확정하고 새로 시작.
  *   - BS: 조합 중이면 자모 하나씩(각→가→ㄱ→없음), 아니면 보통 BS.
  *   - 조합 끝: 한글 자모 외의 키, 한/A·123, Start/Stop, 현재 앱이 바뀜.
- *   - 한계: 조합 중 본문을 탭해 커서를 옮기는 것은 알 수 없다.
  *   - build 16 (진단): 키를 누를 때 입력칸·커서 위치를 직전 키 처리 뒤 기대 위치와 비교(#81~#87, ClieDiag SkEv 6줄).
+ *     실측: 옮기지 않은 입력 14회 모두 같음, 조합 중 커서 이동 1회를 잡음(e6 a2).
+ *   - build 17: 조합 중인데 커서가 기대 위치와 다르거나 입력칸이 바뀌었으면 조합을 끝낸다(옛 글자를 고치는 BS를 보내지 않음).
+ *     폼 필드를 못 찾는 앱, 기대 위치를 모를 때(조합 아닌 BS 직후)는 예전처럼 알 수 없다.
  *
  * 기록 (feature 'MnSk'):
  *   #0 Open 표시, #1~#16 이벤트 0~15 횟수, #17 마지막 이벤트, #18 번호≥16 횟수, #19 out≠NULL 횟수
@@ -66,7 +68,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      16   /* 16: 조합 중 커서 이동 진단(동작 같음). 15: 한글 조합 공용(src/common/hangul_compose.h) */
+#define kSkBuild      17   /* 17: 조합 중 커서 이동·입력칸 바뀜이면 조합 끝. 16: 그 진단. 15: 한글 조합 공용 */
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -714,7 +716,8 @@ static inline FieldType *FocusField(void)
 }
 #endif
 
-/* build 16 진단(동작 변경 없음): 키를 누를 때 직전 키 처리 뒤의 기대 위치와 실제 커서 위치를 비교.
+/* 키를 누를 때 직전 키 처리 뒤의 기대 위치와 실제 커서 위치를 비교(build 16 진단 기록).
+ * build 17: 조합 중인데 다르거나 입력칸이 바뀌었으면 조합을 끝낸다 → 새 자모는 옮긴 자리에서 새로 시작.
  * 앞 키가 넣은 키 이벤트는 다음 펜 누름 전에 앱이 처리했다고 본다(사람 손 속도). */
 static inline void FldCheck(void)
 {
@@ -728,13 +731,17 @@ static inline void FldCheck(void)
         return;
     }
     pos = FldGetInsPtPosition(fld);
+    if (pf != 0 && pf != (UInt32)fld && (GetFtr(kFtrComp) & 0xFF) != 0)
+        Commit();   /* build 17: 다른 입력칸으로 옮김 */
     if (pf == (UInt32)fld && (pp & 0x80000000UL) == 0) {
         UInt16 e = (UInt16)((Int32)(pp & 0xFFFF) + (Int32)GetFtr(kFtrFldDelta));
         UInt32 fl = (e != pos ? 1 : 0) | ((GetFtr(kFtrComp) & 0xFF) != 0 ? 2 : 0);
 
         BumpFtr(kFtrFldN);
-        if (e != pos)
+        if (e != pos) {
             BumpFtr(kFtrFldBad);
+            Commit();   /* build 17: 커서가 옮겨짐 — 옛 조합 글자를 고치지 않는다 */
+        }
         FtrSet(kSkCreator, kFtrFldLast, ((UInt32)e << 16) | pos);
         FtrSet(kSkCreator, kFtrFldFlag, fl);
     }
