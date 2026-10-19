@@ -202,6 +202,7 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - build 16 실측(2026-10-19, MnHangul ON 메모장): 커서를 옮기지 않은 입력·BS 14회 모두 기대=실제(`fld 14 bad 0`). 조합 중(`달`) 본문 앞쪽을 탭한 뒤 `ㅏ` → `fld 7 bad 1 e6 a2 X C`로 감지. 화면은 `다라나다달`(조합 고치기 BS·새 글자가 옮긴 자리에 들어가고 끝의 `달`은 남음 — 커서 앞에 글자가 있었다면 지워졌을 것).
 - MnSkCore build 17: 조합 중인데 커서가 기대 위치와 다르거나 입력칸이 바뀌었으면 조합을 끝낸다(`Commit`, BS 안 보냄). 진단 기록은 유지.
   실측(2026-10-19, MnHangul ON 메모장): `가`+`달`(조합 중) → `가`와 `달` 사이로 커서 이동 → `ㅏ` = `가ㅏ달`(옮긴 자리에 ㅏ만, 다른 글자 그대로). 조합 중 커서 이동 뒤 BS = 일반 BS(커서 앞 `가`만 지움, 예전에는 `가` 자리에 `다`가 들어감).
+- MnSkCore build 18 / MnSonyKbd v10: 커서 위치 비교를 `src/common/cursor_track.h`로 옮겨 두 키보드가 공용(MnSkCore 동작 같음). MnSonyKbd는 키를 받을 때 비교해 조합 중 어긋나면 조합 끝, 앱에 그대로 넘기는 키(영문 모드·명령 키·조합 아닌 BS·자모 아닌 글자)와 앱 화면 펜 누름 뒤에는 비교 안 함. 진단 화면 9줄 `fld N bad N eE aA [X][C]`(v9의 blt top 줄 자리).
 - v44: ⇪ 판정 보완(눌림 표시 그림 무시, ⇪ 꺼짐 + 일시 쉬프트 → 영문). v43 실측: Sony는 줄 순서로 그려 ⇪ 그림이 3줄 맨 앞 — 1·2줄은 그 전에 그려짐. ⇪ 누를 때 눌림 표시로 보통 그림을 먼저 한 번 그림.
 - v43: Sony ⇪ 키 그림(ROM SilkExtn Tbmp 2400 보통·2500 반전, 8비트 글자 0·바탕 0xD8/0x39)을 `한A`(22×18, Galmuri11 OFL)로 바꿔 그리고, 그 그림으로 한글 모드 판정(WinDrawBitmap). v42 실측: 새 메모에서 Sony가 쉬프트 고정을 풀었는데 표시는 한글로 남고 입력은 A.
 - v42: 사용자 화면 이름 Hangul ON/OFF, Start at reset, Sony keyboard(한 줄씩). Start at reset·Sony keyboard는 저장한 적 없으면 ON.

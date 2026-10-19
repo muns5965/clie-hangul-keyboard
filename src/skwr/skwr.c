@@ -68,7 +68,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      17   /* 17: 조합 중 커서 이동·입력칸 바뀜이면 조합 끝. 16: 그 진단. 15: 한글 조합 공용 */
+#define kSkBuild      18   /* 18: 커서 이동 감지를 src/common/cursor_track.h(MnSonyKbd와 공용)로, 동작 같음. 17: 조합 중 커서 이동·입력칸 바뀜이면 조합 끝. 16: 그 진단. 15: 한글 조합 공용 */
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -105,14 +105,7 @@
 #define kFtrEvLog     64
 #define kFtrEvIdx     80
 #define kEvLogN       16
-/* build 16 진단(동작 변경 없음): 키를 누를 때 입력칸·커서 위치가 직전 키 처리 뒤의 기대 위치와 같은지 */
-#define kFtrFldN      81   /* 같은 입력칸에서 비교한 횟수 */
-#define kFtrFldBad    82   /* 기대 위치와 다른 횟수 */
-#define kFtrFldLast   83   /* 마지막 비교: 31~16 기대 위치, 15~0 실제 위치(바이트) */
-#define kFtrFldFlag   84   /* 마지막 비교: 비트0 다름, 비트1 조합 중이었음 */
-#define kFtrFldPrev   85   /* 직전 키 때 입력칸(FieldType*, 0 = 없음) */
-#define kFtrFldPos    86   /* 직전 키 때 커서 위치, 비트31 = 기대 위치 모름(조합 아닌 BS 등) */
-#define kFtrFldDelta  87   /* 직전 키 뒤 보낸 키로 생길 위치 변화(바이트, 부호 있음) */
+#define kFtrFld       81   /* #81~#87 조합 중 커서 이동 감지(src/common/cursor_track.h, build 16~) */
 
 #define kStEng        0x0001
 #define kStNum        0x0002
@@ -641,22 +634,13 @@ static inline UInt16 PenKey(UInt32 hwin, const UInt8 *event)
 }
 
 /* ---------------- 한글 조합 (src/common/hangul_compose.h, MnSonyKbd와 공용) ---------------- */
-/* build 16 진단: 보낸 키로 커서가 몇 바이트 움직일지 누적(2바이트 글자 2, 1바이트 1, 조합 BS는 우리 2바이트 글자를 지움 -2) */
-static inline void FldDelta(UInt16 c)
-{
-#ifndef MNSK_HOST_TEST
-    Int32 d = (Int32)GetFtr(kFtrFldDelta);
-
-    d += (c == chrBackspace) ? -2 : (c > 0xFF) ? 2 : 1;
-    FtrSet(kSkCreator, kFtrFldDelta, (UInt32)d);
-#endif
-}
+#include "../common/cursor_track.h"
 
 static inline void HcSend(UInt16 c)
 {
     EvtEnqueueKey(c, 0, 0);
     BumpFtr(kFtrKeyCount);
-    FldDelta(c);
+    CtDelta(kSkCreator, kFtrFld, c);
 }
 
 #include "../common/hangul_compose.h"
@@ -695,60 +679,9 @@ static inline void SkComposeBack(void)
     FtrSet(kSkCreator, kFtrComp, st[0]);
     FtrSet(kSkCreator, kFtrCompApp, st[1]);
     if (!done) {
-        FtrSet(kSkCreator, kFtrFldPos, GetFtr(kFtrFldPos) | 0x80000000UL);   /* 지울 글자 크기를 모름 */
+        CtUnknown(kSkCreator, kFtrFld);   /* 지울 글자 크기를 모름 */
         SendKey(chrBackspace);
     }
-}
-
-#ifndef MNSK_HOST_TEST
-/* 지금 입력 초점이 있는 입력칸(폼의 필드만, 표 안 필드 등은 NULL) */
-static inline FieldType *FocusField(void)
-{
-    FormType *f = FrmGetActiveForm();
-    UInt16    i;
-
-    if (f == NULL)
-        return NULL;
-    i = FrmGetFocus(f);
-    if (i == noFocus || FrmGetObjectType(f, i) != frmFieldObj)
-        return NULL;
-    return (FieldType *)FrmGetObjectPtr(f, i);
-}
-#endif
-
-/* 키를 누를 때 직전 키 처리 뒤의 기대 위치와 실제 커서 위치를 비교(build 16 진단 기록).
- * build 17: 조합 중인데 다르거나 입력칸이 바뀌었으면 조합을 끝낸다 → 새 자모는 옮긴 자리에서 새로 시작.
- * 앞 키가 넣은 키 이벤트는 다음 펜 누름 전에 앱이 처리했다고 본다(사람 손 속도). */
-static inline void FldCheck(void)
-{
-#ifndef MNSK_HOST_TEST
-    FieldType *fld = FocusField();
-    UInt32     pf = GetFtr(kFtrFldPrev), pp = GetFtr(kFtrFldPos);
-    UInt16     pos;
-
-    if (fld == NULL) {
-        FtrSet(kSkCreator, kFtrFldPrev, 0);
-        return;
-    }
-    pos = FldGetInsPtPosition(fld);
-    if (pf != 0 && pf != (UInt32)fld && (GetFtr(kFtrComp) & 0xFF) != 0)
-        Commit();   /* build 17: 다른 입력칸으로 옮김 */
-    if (pf == (UInt32)fld && (pp & 0x80000000UL) == 0) {
-        UInt16 e = (UInt16)((Int32)(pp & 0xFFFF) + (Int32)GetFtr(kFtrFldDelta));
-        UInt32 fl = (e != pos ? 1 : 0) | ((GetFtr(kFtrComp) & 0xFF) != 0 ? 2 : 0);
-
-        BumpFtr(kFtrFldN);
-        if (e != pos) {
-            BumpFtr(kFtrFldBad);
-            Commit();   /* build 17: 커서가 옮겨짐 — 옛 조합 글자를 고치지 않는다 */
-        }
-        FtrSet(kSkCreator, kFtrFldLast, ((UInt32)e << 16) | pos);
-        FtrSet(kSkCreator, kFtrFldFlag, fl);
-    }
-    FtrSet(kSkCreator, kFtrFldPrev, (UInt32)fld);
-    FtrSet(kSkCreator, kFtrFldPos, pos);
-    FtrSet(kSkCreator, kFtrFldDelta, 0);
-#endif
 }
 
 /* 키 동작. 다시 그려야 하면 true */
@@ -758,7 +691,8 @@ static inline Boolean DoKey(UInt16 k)
     UInt16 code = KeyCode(st, (k - 1) / 16, (k - 1) % 16);
     UInt16 nst = st;
 
-    FldCheck();   /* build 16 진단 */
+    if (CtCheck(kSkCreator, kFtrFld, (GetFtr(kFtrComp) & 0xFF) != 0))
+        Commit();   /* build 17: 조합 중 커서가 옮겨졌거나 입력칸이 바뀜 */
     switch (code) {
     case kKShift:
         nst ^= kStShift;
@@ -837,13 +771,13 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
         FtrSet(kSkCreator, kFtrCoreBuild, (kSkMagic << 16) | kSkBuild);
         FtrSet(kSkCreator, kFtrHires, event[14]);
         Commit();
-        FtrSet(kSkCreator, kFtrFldPrev, 0);   /* build 16 진단: 키보드를 새로 띄우면 비교 다시 시작 */
+        CtReset(kSkCreator, kFtrFld);   /* 키보드를 새로 띄우면 비교 다시 시작 */
         DrawKeys((UInt32)slot);
         break;
 
     case kEvtStop:
         Commit();
-        FtrSet(kSkCreator, kFtrFldPrev, 0);
+        CtReset(kSkCreator, kFtrFld);
         break;
 
     case kEvtDraw:

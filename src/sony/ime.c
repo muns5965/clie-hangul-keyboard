@@ -14,6 +14,8 @@
  *   (1) 그 그림으로 한글 모드(#143)를 정하고(Sony 키보드의 실제 ⇪ 상태 — 새 메모 등 시스템이 바꿔도 맞음),
  *   (2) 대신 '한A' 그림(SyIc 0·1, 22×18, 2픽셀 왼쪽)을 그린다.
  *   기록: #146 = ⇪ 그림 그린 순간의 다른 창 글자 그리기 수(#108, 키 글자보다 먼저인지 확인용), #147 = 횟수
+ * MnSonyKbd v10: 조합 중 커서 이동 감지(src/common/cursor_track.h, MnSkCore와 공용) — 키를 받을 때 입력칸·커서가
+ *   기대와 다르면 조합 끝. 기록 #191~#197.
  * MnSonyKbd v9: ⇪ 그림 때 입력 연결(EvtGetEvent)이 빠졌으면 다시 잇는다(CJKOS 끈 뒤 ON 없이 복구).
  *   진단: #188 입력 함수 불린 수, #189·#190 ⇪ 그림 순간의 EvtGetEvent·BltDrawChars 맨 위 주소
  *
@@ -74,9 +76,13 @@ static inline GetFn OrigGet(void)
 #include "chain.h"
 
 /* ---------------- 한글 조합 (src/common/hangul_compose.h, MnSkCore와 공용) ---------------- */
+#define kSyFtrFld 191   /* #191~#197 조합 중 커서 이동 감지(src/common/cursor_track.h, MnSonyKbd v10) */
+#include "../common/cursor_track.h"
+
 static inline void HcSend(UInt16 c)
 {
     EvtEnqueueKey(c, kImMark, 0);
+    CtDelta(kSyCr, kSyFtrFld, c);
 }
 
 #define HC_FN static
@@ -105,6 +111,7 @@ void HgImGet(EventType *event, Int32 timeout)
             SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
         if (event->screenY < 160) {
             st[0] = 0;
+            CtUnknown(kSyCr, kSyFtrFld);     /* v10: 앱 화면 누름은 커서를 옮길 수 있음(조합은 이미 끝) */
             FtrSet(kSyCr, kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
         } else if (kCapsKey(event->screenX, event->screenY)) {   /* v39: ⇪ → 한글 모드 전환 */
             UInt32 sc = 0;
@@ -151,18 +158,25 @@ void HgImGet(EventType *event, Int32 timeout)
     if (event->eType != keyDownEvent || event->data.keyDown.keyCode == kImMark)
         return;
     ch = event->data.keyDown.chr;
+    /* v10: 조합 중인데 커서가 옮겨졌거나 입력칸이 바뀌었으면(펜 없이 앱이 옮긴 경우 등) 조합 끝 */
+    if (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0))
+        st[0] = 0;
     if ((event->data.keyDown.modifiers & commandKeyMask) != 0 || !HanMode()) {
         st[0] = 0;
+        CtUnknown(kSyCr, kSyFtrFld);   /* 앱에 그대로 넘기는 키: 커서 변화 모름 */
         return;
     }
     if (ch == chrBackspace) {
         if (ComposeBack(st))
             event->eType = nilEvent;
+        else
+            CtUnknown(kSyCr, kSyFtrFld);
         return;
     }
     j = (ch < 0x80) ? Dubeol((UInt8)ch) : 0;
     if (j == 0) {
         st[0] = 0;
+        CtUnknown(kSyCr, kSyFtrFld);
         return;
     }
     st[2]++;

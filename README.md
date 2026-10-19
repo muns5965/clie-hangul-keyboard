@@ -90,7 +90,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 한글 조합: 초성·중성·종성, 복합모음, 겹받침, 받침 넘김, 조합 중 자모 단위 BS | 구현 완료 (메모장 실측, PC 조합 시험 41개 통과) |
 | Mn 가상 키보드: 리셋 없는 본체(`MnSkCore`) 업데이트 / 리셋 1번 로더(`MnSkPlugin`) 업데이트 | 구현 완료 (CloudpilotEmu 실측) |
 | Mn 가상 키보드: 나랏글 / 키 반복 | 개발 보류 / 미구현 |
-| Sony 가상 키보드 한글(MnSonyKbd v9): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
+| Sony 가상 키보드 한글(MnSonyKbd v10): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
 | MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. v7에서 CJKOS 끈 뒤 ⇪ 켬·끔·켬 정상 (CloudpilotEmu 실측) |
 | 한글 표시(MnHangul v58): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `Hangul ON`, 리셋 뒤 자동 시작 |
 | MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56) |
@@ -218,7 +218,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 - **조합 중 커서 이동**: Mn 가상 키보드(MnSkCore build 17~)는 다음 키를 누를 때 커서가 옮겨졌거나 입력칸이 바뀌었으면 조합을 끝내고
   옮긴 자리에서 새로 시작한다(메모장 등 일반 입력칸). 표 안의 입력칸처럼 폼 필드가 아닌 곳에서는 감지하지 못해, 이전 조합 글자를
   고치기 위한 BS가 옮겨진 커서 위치에 적용될 수 있다. 그런 곳에서는 스페이스 등으로 조합을 끝낸 뒤 옮긴다.
-  MnSonyKbd는 앱 화면을 누르면 조합을 끝낸다. (원인·방법: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
+  MnSonyKbd는 앱 화면을 누르면 조합을 끝내고, v10부터 같은 커서 위치 비교도 한다(펜 없이 앱이 커서를 옮긴 경우). (원인·방법: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md))
 - **CJKOS 의존**(설치 A·B): 한글 글꼴 표시와 2바이트 글자 경계 처리(완성된 글자 단위 BS, 커서 위치, 줄바꿈)는 CJKOS에 의존한다.
   한글 조합과 조합 중 자모 단위 BS는 키보드(`MnSkCore`·`MnSonyKbd`)가 처리한다. 한글 표시 모듈 없이 쓰면 이 시험 환경(NR70V 영문 ROM)에서는
   한글이 라틴 문자 두 개로 깨져 보이고, BS가 2바이트 글자의 반쪽만 지울 수 있다. CJKOS 대신 MnHangul(시험 단계)을 쓸 수 있다(C·D).

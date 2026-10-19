@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v9 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v10 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v10: 조합 중 커서 이동 감지(MnSkCore build 17과 같은 방식, src/common/cursor_track.h). 진단 화면 9줄 = fld 비교·다름 수·기대/실제.
  * v9: CJKOS를 끈 뒤 입력 연결도 ⇪ 그림 때 스스로 다시 잇는다(v8 실측: 키 글자만 복구, 입력은 ON 필요).
  *   진단 화면 7줄 = 입력 함수 불린 수·EvtGetEvent 맨 위·입력 아래 주소, 9줄 = BltDrawChars 맨 위(⇪ 그림 순간).
  * v8 (진단, 동작 변경 없음): 판정 기록 화면 8~10줄 = 창 판정 세 가지(windowFlags / WinGetBitmap 비교 / GetScrWindow)·글꼴 공개 함수 비교.
@@ -437,7 +438,7 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v9", 12, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v10", 13, 0, 0);
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
     {
@@ -479,7 +480,7 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v9 Debug [tap: back]", 30, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v10 Debug [tap: back]", 31, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);
@@ -515,8 +516,13 @@ static void DrawDebug(void)
         StrPrintF(s, "get %lu ev %lx/%lx", GetF(188), GetF(189),
                   GetF(kFtrImC) ? *(const UInt32 *)(GetF(kFtrImC) + 8) : 0UL);   /* v9: 입력 불린 수, 맨 위/아래 */
         Row(7, s);
-        StrPrintF(s, "blt top %lx scr %lx", GetF(190), GetF(kFtrScr));   /* v9: ⇪ 그림 순간 키 글자 맨 위 */
-        Row(9, s);
+        {   /* v10: 조합 중 커서 이동 감지 — 비교 수, 다름 수, 마지막 기대/실제 위치, X 다름, C 조합 중 (v9의 blt top 줄 자리) */
+            UInt32 fl = GetF(194), la = GetF(193);
+
+            StrPrintF(s, "fld %lu bad %lu e%u a%u%s%s", GetF(191), GetF(192), (UInt16)(la >> 16), (UInt16)la,
+                      (fl & 1) ? " X" : "", (fl & 2) ? " C" : "");
+            Row(9, s);
+        }
         StrPrintF(s, "font %lu ptr %lu bad %lu id%lu h%lu fw%lu t%lu", GetF(184), GetF(185), GetF(187), fv >> 24,
                   (fv >> 16) & 0xFF, (fv >> 8) & 0xFF, fv & 0xFF);
         Row(10, s);
@@ -561,10 +567,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             if (e.screenY < kLineH)   /* 제목 = 판정 기록 화면 ↔ 첫 화면 */
                 gDebug = !gDebug;
             else if (gDebug) {
-                if (row == 12) {   /* v8: 진단 기록 지우기(v9: #188~#190 포함) */
+                if (row == 12) {   /* v8: 진단 기록 지우기(v9: #188~#190, v10: #191~#194 포함) */
                     UInt16 n;
 
-                    for (n = 180; n <= 190; n++)
+                    for (n = 180; n <= 194; n++)
                         FtrSet(kSyCr, n, 0);
                 }
             }
