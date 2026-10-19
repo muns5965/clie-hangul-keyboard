@@ -137,7 +137,10 @@ MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므
 | --- | --- | --- |
 | `BltDrawChars`(트랩 0xA378) | MnHangul 그리기, MnSonyKbd 키 글자 | ROM 호출부 역분석으로 인자 7개(26바이트) 확인([KOREAN_SUPPORT.md](KOREAN_SUPPORT.md)) |
 | Sony `SkWr` 플러그인 호출 방식 | Mn 가상 키보드 로더 | `SilkExtn` ROM 역분석(1절) |
-| Sony HR 라이브러리 `HRWinScreenMode`(sysLibTrapCustom + 48) | 앱 화면 고해상도 | Sony SDK에 있으나 헤더를 커밋하지 않아 직접 선언 |
+| Sony "Silk Ware Library" `GetScrWindow`(custom + 4) | MnSonyKbd v8 진단만 | ROM `SlSW` v100 정적 분석: `Err (UInt16 ref, WinHandle *out)`, SilkExtn 전역 +172를 읽기만 함 |
+
+**1.5단계: 제조사 공개 확장 API (Sony CLIÉ SDK에 원형 있음)**
+- Sony HR 라이브러리 `HRWinScreenMode`(sysLibTrapCustom + 48): 앱 화면 고해상도. Sony SDK 헤더는 저작권 문제로 커밋하지 않아 필요한 트랩만 직접 선언
 
 **3단계: 함수가 아니라 내부 구조·관찰에 기댄 부분 (가장 취약)**
 

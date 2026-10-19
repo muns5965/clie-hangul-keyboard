@@ -151,6 +151,38 @@ static inline Boolean HanLabel(UInt8 c)
     return GetF(kFtrHan) != 0;
 }
 
+/* v8 진단(동작 변경 없음): 내부 구조 대신 공개 함수로 같은 판정이 나오는지 비교한다.
+ *   창: a = 창 구조 windowFlags 0x4000(지금 쓰는 판정), b = 그리는 창 비트맵 != 화면 창 비트맵(WinGetBitmap),
+ *       c = 그리는 창 == SilkWareLib GetScrWindow(앱이 #154에 기록, 0이면 모름=2)
+ *       #180 표본 수, #181 모두 일치 수, #182 마지막 불일치(a | b<<1 | c<<2 | 글자<<8), #183 그때 그리는 창
+ *   글꼴: #184 표본 수, #185 FntGetFontPtr() == p6 수, #186 마지막 불일치(FntGetFont<<24 | 높이<<16 | FntCharWidth<<8 | 폭 표),
+ *       #187 불일치 수(포인터·폭·기준선 FntBaseLine 중 하나라도 다름) */
+static inline void Diag(UInt8 c, const Int16 *f)
+{
+    UInt32 dw = (UInt32)WinGetDrawWindow(), scr = GetF(154);
+    UInt16 a = SilkWin() ? 1 : 0;
+    UInt16 b = (WinGetBitmap((WinHandle)dw) != WinGetBitmap(WinGetDisplayWindow())) ? 1 : 0;
+    UInt16 k = scr == 0 ? 2 : (dw == scr ? 1 : 0);
+    UInt16 fw = (UInt16)FntCharWidth((Char)c), tw = CharW(f, c);
+    Boolean pm = (const Int16 *)FntGetFontPtr() == f;
+
+    FtrSet(kSyCr, 180, GetF(180) + 1);
+    if (a == b && (k == 2 || k == a))
+        FtrSet(kSyCr, 181, GetF(181) + 1);
+    else {
+        FtrSet(kSyCr, 182, (UInt32)a | ((UInt32)b << 1) | ((UInt32)k << 2) | ((UInt32)c << 8));
+        FtrSet(kSyCr, 183, dw);
+    }
+    FtrSet(kSyCr, 184, GetF(184) + 1);
+    if (pm)
+        FtrSet(kSyCr, 185, GetF(185) + 1);
+    if (!pm || fw != tw || FntBaseLine() != f[9]) {
+        FtrSet(kSyCr, 186, ((UInt32)FntGetFont() << 24) | ((UInt32)(f[7] & 0xFF) << 16) | ((UInt32)(fw & 0xFF) << 8) |
+                           (tw & 0xFF));
+        FtrSet(kSyCr, 187, GetF(187) + 1);
+    }
+}
+
 static inline void Reject(UInt16 why, const Int16 *f, const Int16 *rc)
 {
     FtrSet(kSyCr, 128, ((UInt32)why << 24) | ((UInt32)(f[7] & 0xFF) << 8) | (UInt8)rc[3]);
@@ -171,6 +203,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
             const Int16 *f = (const Int16 *)p6, *rc = (const Int16 *)p2;
             UInt16      *tmp = NULL;
 
+            Diag(c, f);   /* v8 진단 */
             if (f[7] != 22)
                 Reject(3, f, rc);
             else if (!SilkWin())

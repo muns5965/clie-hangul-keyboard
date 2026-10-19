@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v7 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v8 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v8 (진단, 동작 변경 없음): 판정 기록 화면 8~10줄 = 창 판정 세 가지(windowFlags / WinGetBitmap 비교 / GetScrWindow)·글꼴 공개 함수 비교.
  * v7: 연결 복구 때 ⇪ 실제 상태(#150)를 모름으로, 모를 때 ⇪ 누름은 Graffiti ⇪ 상태의 반대.
  * v6: 가상 실크 펜 누름 때(Sony가 다시 그리기 전) 키 글자 연결 확인·복구, 복구 직후 ⇪ 그림은 실제 상태로 씀.
  * v5: Update는 설치되어 있는 MnHangul도 다음 리셋 한 번 자동 시작을 건너뛰게 한다.
@@ -41,7 +42,8 @@
 #define kFtrRun      106
 #define kFtrBlt      152
 #define kImBufSz     16
-#define kRomBlt      0x1008359AUL   /* NR70V ROM BltDrawChars(MnHangul v24 실측) */
+#define kRomBlt      0x1008359AUL
+#define kFtrScr      154            /* v8 진단: SilkWareLib GetScrWindow 결과(0 = 모름) */   /* NR70V ROM BltDrawChars(MnHangul v24 실측) */
 
 #define kLineH        11
 #define kRowOn        3
@@ -228,6 +230,22 @@ static UInt16 ImOn(void)
 }
 
 /* 모두 켜기. 결과 = 패치<<4 | 입력 */
+/* v8 진단: Sony "Silk Ware Library"(ROM libr SlSW v100) GetScrWindow = 디스패치 표 9번째(custom + 4).
+ *   ROM 0x1035CF12 정적 분석: Err (UInt16 ref, WinHandle *out) — SilkExtn 전역(+172)을 읽기만 함, 'inoT' 확인 실패면 0x7704.
+ *   앱 화면에서만 부른다(리셋 알림·패치 안에서는 부르지 않음). */
+Err SwGetScrWindow(UInt16 ref, WinHandle *winP) SYS_TRAP(sysLibTrapCustom + 4);
+
+static void ScrWin(void)
+{
+    UInt16    ref;
+    WinHandle w = NULL;
+
+    if (SysLibFind("Silk Ware Library", &ref) == errNone && SwGetScrWindow(ref, &w) == errNone)
+        FtrSet(kSyCr, kFtrScr, (UInt32)w);
+    else
+        FtrSet(kSyCr, kFtrScr, 0);
+}
+
 static UInt16 SonyOn(void)
 {
     UInt16 p = PatchOn();
@@ -417,7 +435,7 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v7", 12, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v8", 12, 0, 0);
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
     {
@@ -459,13 +477,13 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v7 Debug [tap: back]", 30, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v8 Debug [tap: back]", 30, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);
     StrPrintF(s, "draw %lu ovl %lu heal %lx b%lx", GetF(108), GetF(127), GetF(kSyFtrHeal), GetF(kFtrBoot) >> 28);
     Row(1, s);
-    for (j = 15; j >= 0; j--) {   /* 최근 16개, 오래된 것부터 한 줄에 2개 */
+    for (j = 9; j >= 0; j--) {   /* 최근 10개(v8: 진단 줄 자리로 16 → 10), 오래된 것부터 한 줄에 2개 */
         UInt32 v;
         Char   ch[2];
 
@@ -483,9 +501,25 @@ static void DrawDebug(void)
         WinDrawChars(s, StrLen(s), 2 + (m % 2) * 80, (3 + m / 2) * kLineH);
         m++;
     }
+    {   /* v8 진단: 창 판정 세 가지, 글꼴 공개 함수 비교(row 12 누르면 지움) */
+        UInt32 v = GetF(182), fv = GetF(186);
+        Char   ch[2];
+
+        ScrWin();
+        ch[0] = (Char)((v >> 8) & 0xFF) ? (Char)((v >> 8) & 0xFF) : '-';   /* StrPrintF는 %c를 지원하지 않는다 */
+        ch[1] = 0;
+        StrPrintF(s, "win %lu ok %lu last a%lub%luc%lu %s", GetF(180), GetF(181), v & 1, (v >> 1) & 1, (v >> 2) & 3, ch);
+        Row(8, s);
+        StrPrintF(s, "scr %lx last draw %lx", GetF(kFtrScr), GetF(183));
+        Row(9, s);
+        StrPrintF(s, "font %lu ptr %lu bad %lu id%lu h%lu fw%lu t%lu", GetF(184), GetF(185), GetF(187), fv >> 24,
+                  (fv >> 16) & 0xFF, (fv >> 8) & 0xFF, fv & 0xFF);
+        Row(10, s);
+    }
     StrPrintF(s, "why%u H%lu S%lx p%lu ic%lu@%lu", (UInt16)(w >> 24), GetF(143), GetF(150), GetF(144),
               GetF(147), GetF(146));
     Row(11, s);
+    Row(12, "[tap here: clear diag]");
 }
 
 static void Draw(void)
@@ -521,11 +555,18 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 
             if (e.screenY < kLineH)   /* 제목 = 판정 기록 화면 ↔ 첫 화면 */
                 gDebug = !gDebug;
-            else if (gDebug)
-                ;
+            else if (gDebug) {
+                if (row == 12) {   /* v8: 진단 기록 지우기 */
+                    UInt16 n;
+
+                    for (n = 180; n <= 187; n++)
+                        FtrSet(kSyCr, n, 0);
+                }
+            }
             else if (row == kRowOn && e.screenX >= 40)
                 SonyOff();
             else if (row == kRowOn) {
+                ScrWin();   /* v8 진단 */
                 if (Status() == 0) {
                     UInt16 rr = SonyOn();
 
