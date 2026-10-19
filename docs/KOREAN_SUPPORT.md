@@ -194,6 +194,9 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
   진단: 판정 기록 7줄 `get N ev 맨위/아래`(입력 함수 불린 수, ⇪ 그림 순간 EvtGetEvent 맨 위, MnSonyKbd 입력의 아래 주소), 9줄 `blt top`(⇪ 그림 순간 BltDrawChars 맨 위). CJKOS를 나중에 켠 경우 CJKOS가 아래(MnSonyKbd)를 부르는지 판단 자료. 불린 수만으로 CJKOS 내부 방식을 단정하지 않고, 위로 다시 끼우는 동작은 연결 안에 없음이 확인되기 전에는 하지 않는다.
 - v45: ⇪ 펜 누름은 Sony 실제 상태(자판 전체 그리기의 ⇪ 그림, #150)의 반대로 정함. v44 실측: 값을 뒤집는 방식은 한 번 어긋나면 ⇪ 켜기·끄기 모두 1·2줄이 틀림.
 - v9 실측(2026-10-19, 시험 A): MnHangul ON, CJKOS 켬 → MnSonyKbd `ON`(입력 아래 = 0x341D60 CJKOS) → CJKOS 끔 → MnSonyKbd를 열지 않고 메모장: 자판·입력 정상. 진단 heal `00010000`(입력 +1, ⇪ 그림 때 자동), 입력 아래 = ROM 0x100496FC, get 계속 증가. **CJKOS를 끈 뒤 `ON` 없이 입력 연결 복구 확인.** 이번 순서에서는 키 글자 연결이 CJKOS·MnHangul 아래(below ROM)라 빠지지 않음(키 글자 복구는 v3~v8에서 확인).
+- v9 실측(2026-10-19, 시험 B): MnHangul·MnSonyKbd ON(키 글자 MnSonyKbd → MnHangul 0x3C2516, 입력 아래 ROM) → CJKOS 켬(`ON` 안 누름) → 메모장 자판 한글·입력 한글 정상. 진단: 입력 맨 위 0x341D60·키 글자 맨 위 0x340AA0 = CJKOS인데 입력 함수 176회, 키 글자 표본 94·덧그리기 38 → **CJKOS는 위에 걸려도 자기 아래(MnSonyKbd)를 부른다**(맨 위 주소와 호출 수를 함께 본 판단). CJKOS 끔 → 맨 위가 MnSonyKbd로 돌아오고 heal 변화 없음, 정상.
+  → CJKOS 위로 다시 끼우면 두 번 호출·순환 위험이 있으므로 하지 않는다(자동 재설치 불필요).
+  → 10:46의 "CJKOS 켬 → 자판·입력 영문"은 CJKOS를 나중에 켠 탓이 아니라, 그 전 CJKOS 끄기로 입력 연결이 빠진 채(v8, `Now: broken`) CJKOS를 켠 상태였다(10:43 진단 `p0`, 10:59 `Now: broken` → `re-attached 1`). v9는 CJKOS를 끈 뒤 첫 키보드에서 입력을 다시 이으므로 이 상태는 "CJKOS 끔 → 키보드 안 열고 → CJKOS 다시 켬"일 때만 남는다(그때는 `ON`).
 - v44: ⇪ 판정 보완(눌림 표시 그림 무시, ⇪ 꺼짐 + 일시 쉬프트 → 영문). v43 실측: Sony는 줄 순서로 그려 ⇪ 그림이 3줄 맨 앞 — 1·2줄은 그 전에 그려짐. ⇪ 누를 때 눌림 표시로 보통 그림을 먼저 한 번 그림.
 - v43: Sony ⇪ 키 그림(ROM SilkExtn Tbmp 2400 보통·2500 반전, 8비트 글자 0·바탕 0xD8/0x39)을 `한A`(22×18, Galmuri11 OFL)로 바꿔 그리고, 그 그림으로 한글 모드 판정(WinDrawBitmap). v42 실측: 새 메모에서 Sony가 쉬프트 고정을 풀었는데 표시는 한글로 남고 입력은 A.
 - v42: 사용자 화면 이름 Hangul ON/OFF, Start at reset, Sony keyboard(한 줄씩). Start at reset·Sony keyboard는 저장한 적 없으면 ON.

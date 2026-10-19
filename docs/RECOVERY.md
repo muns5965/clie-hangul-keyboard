@@ -53,7 +53,8 @@
 | CJKOS를 끈 뒤 한글은 보이고 BS·커서가 반쪽 글자 단위 | MnHangul → CJKOS 켬·끔 순서에서는 **Intl·Width 연결이 빠지지 않음**(2026-10-18 실측: CJKOS를 끈 뒤 ClieDiag Trap 페이지에 MnHangul 폭 함수 5개·Intl 6개가 그대로). CJKOS는 꺼질 때 자기가 켜질 때 저장한 주소로 되돌리는 것으로 보인다(먼저 켜진 MnHangul 주소로 복귀). 빠지는 경우는 CJKOS보다 나중에 켠 모듈뿐이고, MnHangul은 그 경우를 감지해 막는다 | 그래도 생기면 리셋 → `Hangul ON`, ClieDiag Trap 페이지 캡처 |
 | MnHangul `Hangul ON`을 다시 누르면 먹통(v57 이하) | MnSonyKbd가 위에 있을 때 자기를 한 번 더 끼워 순환 | 소프트 리셋 → v58 이상으로 업데이트 |
 | CJKOS를 끈 뒤 Sony 키 글자·입력이 영문 | CJKOS가 꺼질 때 저장해 둔 주소로 되돌려 MnSonyKbd 키 글자·입력 연결이 빠짐 | 키보드를 열면(⇪ 그림) 스스로 다시 이음(키 글자 v3~, 입력 v9~). 안 되면 MnSonyKbd `Now: broken` → `ON` |
-| MnSonyKbd를 켠 뒤 CJKOS를 켬: 자판 영문, 누른 키만 자모, 입력 영문 | CJKOS가 MnSonyKbd 위에 걸림. 다른 패치가 위에 있으면 MnSonyKbd는 안전을 위해 스스로 올라가지 않음 | 현재는 MnSonyKbd `ON`(위로 다시 잇기). 자동 처리는 v9 진단 결과로 검토 중 |
+| MnSonyKbd를 켠 뒤 CJKOS를 켬 | 장애 아님. CJKOS가 위에 걸리지만 아래(MnSonyKbd)를 불러 자판·입력 모두 정상(v9 실측) | 할 일 없음 |
+| CJKOS를 켠 채 자판 영문, 누른 키만 자모, 입력 영문 | 그 전에 입력 연결이 빠진 채(`Now: broken`)로 CJKOS를 켬. CJKOS가 위에 있으면 MnSonyKbd는 안전을 위해 스스로 다시 잇지 않음 | MnSonyKbd `ON`. v9부터는 CJKOS를 끈 뒤 키보드를 열면 입력이 바로 복구되어 이 상태가 생기기 어려움 |
 | 한/영 표시가 한 번 틀림 | Sony 그리기 순서에 기댄 판정의 한계 | `한A`를 한 번 더 누르거나 키보드를 다시 연다. 반복되면 MnSonyKbd 제목을 눌러 판정 기록 캡처 |
 | 입력한 한글이 라틴 문자 두 개로 깨짐 | 한글 표시 모듈 없음 | CJKOS 또는 MnHangul `Hangul ON`. MnSonyKbd 첫 화면 `Hangul display:` 줄로 확인 |
 
