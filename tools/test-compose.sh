@@ -1,5 +1,5 @@
 #!/bin/bash
-# skwr.c 한글 조합 로직을 PC에서 시험 (Palm API는 test/host_stub.h 흉내)
+# 한글 조합 로직(src/common/hangul_compose.h, skwr.c를 통해)을 PC에서 시험 — MnSkCore·MnSonyKbd 공용 (Palm API는 test/host_stub.h 흉내)
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$root/build/test"
