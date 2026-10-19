@@ -1,5 +1,5 @@
 /*
- * ClieDiag v22 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v23 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -19,6 +19,7 @@
  *      기본 글꼴들의 줄 높이(h)·기준선(b)·'A'/'W' 폭, CJKOS가 그리는 '가'(B0A1) 폭과 HR 글꼴 값.
  * v21: 진단 "Font" 페이지 — KS X 1001 "가나다 한글"을 기존 함수(std·bold·large)와 HR 함수(HR std·bold·small)로
  *      실제로 그려 CJKOS가 각 경로에서 한글을 그리는지 확인. 줄마다 측정 폭(w)도 표시.
+ * v23: SkEv 페이지 6줄 = MnSkCore build 16 조합 중 커서 이동 진단(#81~#87), 기록 지우기에 포함.
  * v22: 진단 "Trap" 페이지 — 바뀐(ROM 밖을 가리키는) 시스템 트랩 목록과 Intl 디스패치 표(Txt 계열 함수) 목록.
  *      트랩 0xA000~sysTrapLastTrapNumber를 SysGetTrapAddress로, Intl 선택자 0~intlMaxSelector를
  *      IntlGetRoutineAddress로 읽어, 주소의 상위 바이트가 ROM(SysReset 주소 기준)과 다르면 "바뀐 것"으로 본다.
@@ -480,6 +481,8 @@ static void ClearRecord(void)
 
     for (i = kSkFtrCount0; i <= kSkFtrMax; i++)
         FtrUnregister(kSkCreator, i);
+    for (i = 81; i <= 87; i++)   /* v23: 커서 이동 진단 */
+        FtrUnregister(kSkCreator, i);
     StrPrintF(s, "clear record e=%x (+counters)", (UInt16)err);
     SetLast(s);
     StrCopy(NextLine(&gLog), s);
@@ -664,6 +667,13 @@ static void DrawSkevPage(void)
                   i, SkFtr(kSkFtrCount0 + i), i + 1, SkFtr(kSkFtrCount0 + i + 1),
                   i + 2, SkFtr(kSkFtrCount0 + i + 2), i + 3, SkFtr(kSkFtrCount0 + i + 3));
         DrawRow(1 + r, s);
+    }
+    {   /* v23: 커서 이동 진단 — 비교 수, 다름 수, 마지막 기대/실제 위치, 다름·조합 중 표시 */
+        UInt32 fl = SkFtr(84), la = SkFtr(83);
+
+        StrPrintF(s, "fld %lu bad %lu e%u a%u%s%s", SkFtr(81), SkFtr(82), (UInt16)(la >> 16), (UInt16)la,
+                  (fl & 1) ? " X" : "", (fl & 2) ? " C" : "");
+        DrawRow(5, s);
     }
     StrPrintF(s, ">=16: %lu  out!=0: %lu", SkFtr(kSkFtrOver), SkFtr(kSkFtrOut));
     DrawRow(6, s);
