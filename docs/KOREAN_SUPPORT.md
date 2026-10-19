@@ -187,6 +187,11 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - v60 / v8 실측(2026-10-19, CJKOS 켬):
   - MnHangul KDlg: `CJKOS? running`(함수 4개 방식)인데 Feature는 `enc 3`(PalmLatin)·`flags 1`·`lang 0`(영어)·`ctry 23`·`tsm` 없음(오류) — CJKOS가 `FtrGet`을 바꾸지만 이 시스템 Feature들은 영문 그대로 돌려준다. **Feature 방식으로는 CJKOS를 감지할 수 없다** → 함수 4개 방식 유지.
   - MnSonyKbd(키 글자 후보 80개): 창 판정 windowFlags 0x4000 = `WinGetBitmap` 비교 80/80, 글꼴 `FntGetFontPtr()` = p6·`FntCharWidth` = 폭 표·`FntBaseLine` = ascent 80/80. `GetScrWindow`는 0(라이브러리 못 찾음 또는 실패)이라 비교에서 빠짐.
+- v8 실측(2026-10-19, CJKOS 끔): 키 글자 후보 224·422·522개 모두 창 판정·글꼴 공개 함수 일치(불일치 0). CJKOS 켬·끔 두 상태 모두 일치 → 공개 함수로 바꿀 근거(바꾸기는 다음 판).
+- v8 실측(2026-10-19): CJKOS 켬 → MnSonyKbd `ON`(blt below = 0x340AA0 CJKOS) → CJKOS 끔 → 메모장: `한A` 켜짐인데 자판 영문, 입력 영문. 진단: heal 키 글자 +1(⇪ 그림 때 복구, blt below = 0x3C3CAE MnHangul), 입력 복구 0, 판정 기록 `p0`만(펜 기록 없음 = 입력 함수 안 불림), `why6 H0`. 첫 화면 `Now: broken: tap ON` → `ON` = `re-attached 1` → 정상. → CJKOS를 끄면 **입력(EvtGetEvent) 연결도 빠지고**, 입력 복구는 앱 `ON`에서만 했다. ⇪ 그림(WinDrawBitmap) 연결은 남는다.
+- v8 실측(2026-10-19): MnSonyKbd ON → CJKOS 켬(`ON` 안 누름) → 메모장: 자판 영문, 누른 키만 자모, 입력 `GA`(영문). CJKOS가 MnSonyKbd 위에 걸린 상태. 다른 패치가 위에 있으면 다시 잇지 않는 원칙이라 자동 처리 없음(아래 v9 진단으로 원인 조사).
+- MnSonyKbd v9: ⇪ 그림 연결(`HgImBmp`)에서 키 글자 다음으로 입력 연결도 확인해, ROM이 맨 위면(빠짐) 다시 잇는다(`SyImHealOne(0)`, 그림 연결 자신은 건드리지 않음). CJKOS를 끈 뒤 키보드를 처음 그릴 때 `ON` 없이 복구.
+  진단: 판정 기록 7줄 `get N ev 맨위/아래`(입력 함수 불린 수, ⇪ 그림 순간 EvtGetEvent 맨 위, MnSonyKbd 입력의 아래 주소), 9줄 `blt top`(⇪ 그림 순간 BltDrawChars 맨 위). CJKOS를 나중에 켠 경우 CJKOS가 아래(MnSonyKbd)를 부르는지 판단 자료. 불린 수만으로 CJKOS 내부 방식을 단정하지 않고, 위로 다시 끼우는 동작은 연결 안에 없음이 확인되기 전에는 하지 않는다.
 - v45: ⇪ 펜 누름은 Sony 실제 상태(자판 전체 그리기의 ⇪ 그림, #150)의 반대로 정함. v44 실측: 값을 뒤집는 방식은 한 번 어긋나면 ⇪ 켜기·끄기 모두 1·2줄이 틀림.
 - v44: ⇪ 판정 보완(눌림 표시 그림 무시, ⇪ 꺼짐 + 일시 쉬프트 → 영문). v43 실측: Sony는 줄 순서로 그려 ⇪ 그림이 3줄 맨 앞 — 1·2줄은 그 전에 그려짐. ⇪ 누를 때 눌림 표시로 보통 그림을 먼저 한 번 그림.
 - v43: Sony ⇪ 키 그림(ROM SilkExtn Tbmp 2400 보통·2500 반전, 8비트 글자 0·바탕 0xD8/0x39)을 `한A`(22×18, Galmuri11 OFL)로 바꿔 그리고, 그 그림으로 한글 모드 판정(WinDrawBitmap). v42 실측: 새 메모에서 Sony가 쉬프트 고정을 풀었는데 표시는 한글로 남고 입력은 A.

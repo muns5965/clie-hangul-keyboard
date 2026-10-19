@@ -15,6 +15,8 @@
  *   (1) 그 그림으로 한글 모드(#143)를 정하고(Sony 키보드의 실제 ⇪ 상태 — 새 메모 등 시스템이 바꿔도 맞음),
  *   (2) 대신 '한A' 그림(SyIc 0·1, 22×18, 2픽셀 왼쪽)을 그린다.
  *   기록: #146 = ⇪ 그림 그린 순간의 다른 창 글자 그리기 수(#108, 키 글자보다 먼저인지 확인용), #147 = 횟수
+ * MnSonyKbd v9: ⇪ 그림 때 입력 연결(EvtGetEvent)이 빠졌으면 다시 잇는다(CJKOS 끈 뒤 ON 없이 복구).
+ *   진단: #188 입력 함수 불린 수, #189·#190 ⇪ 그림 순간의 EvtGetEvent·BltDrawChars 맨 위 주소
  *
  * 리소스 배치: 오프셋 0·4 = 진입점 오프셋(EvtGetEvent, WinDrawBitmap), 8·12 = 원래 주소, 16 = 상태 버퍼 주소,
  *   20·24 = ROM ⇪ 그림 주소(보통·반전), 28·32 = 대신 그릴 그림 주소(보통·켜짐) — 모두 앱이 DmWrite.
@@ -408,6 +410,12 @@ void HgImGet(EventType *event, Int32 timeout)
     UInt8   j;
 
     OrigGet()(event, timeout);
+    {   /* v9 진단: 입력 함수가 불린 횟수(CJKOS가 위에 있을 때 아래로 부르는지 확인용) */
+        UInt32 n = 0;
+
+        FtrGet(kSyCr, 188, &n);
+        FtrSet(kSyCr, 188, n + 1);
+    }
     st = St();
     if (st == NULL || event == NULL)
         return;
@@ -498,6 +506,12 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
          * v6: 방금 이었으면 앞 키 글자 기록(#151)이 없으니 이 그림을 실제 상태로 쓴다(v5 실측: 기준값 S가 옛 값이라
          *     다음 ⇪에서 영문인데 쌍자음 표시) */
         healed = SyBltHeal();
+        /* v9: CJKOS를 끄면 입력(EvtGetEvent) 연결도 빠진다(v8 실측: 키 글자만 복구되고 Now: broken, ON = re-attached 1).
+         *     이 그림 연결은 CJKOS를 꺼도 남으므로 여기서 입력만 다시 잇는다(ROM이 맨 위일 때만, 그림 연결 자신은 건드리지 않음) */
+        SyImHealOne(0);
+        /* v9 진단: 이 순간의 맨 위 주소(입력·키 글자) */
+        FtrSet(kSyCr, 189, (UInt32)SysGetTrapAddress(sysTrapEvtGetEvent));
+        FtrSet(kSyCr, 190, (UInt32)SysGetTrapAddress(kSyTrapBlt));
 
         /* v47: 자판 전체 그리기에서 ⇪ 그림은 2줄 끝 키(\ 또는 |) 바로 다음(v46 실측). 그때만 Sony 실제 상태로 쓴다.
          *      ⇪ 누를 때의 눌림 표시(반전 그림, 앱이 펜을 받기 전에 그려짐)는 판정에 쓰지 않는다 */

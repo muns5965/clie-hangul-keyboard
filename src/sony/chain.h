@@ -72,32 +72,34 @@ static inline UInt16 SyImLinked(UInt16 trap, UInt32 entry)
     return t == entry ? 1 : SyRom(t) ? 0 : 2;
 }
 
-/* 입력·그림 중 빠진 것을 다시 잇는다(앱에서만 부름: 이 코드가 빠져 있으면 스스로는 불리지 않으므로) */
-static inline UInt16 SyImHeal(void)
+/* v9: 입력(k = 0, EvtGetEvent)·그림(k = 1, WinDrawBitmap) 중 하나가 빠졌으면(ROM이 맨 위) 다시 잇는다. 다시 이었으면 1.
+ * 다른 패치가 위에 있으면(2) 손대지 않는다. */
+static inline UInt16 SyImHealOne(UInt16 k)
 {
     UInt32  c = 0;
     UInt8  *code;
-    UInt16  k, n = 0;
+    UInt16  trap = k == 0 ? sysTrapEvtGetEvent : sysTrapWinDrawBitmap;
+    UInt32  entry, cur;
 
     FtrGet('MnSy', kSyFtrImC, &c);
     if (c == 0)
         return 0;
     code = (UInt8 *)c;
-    for (k = 0; k < 2; k++) {
-        UInt16 trap = k == 0 ? sysTrapEvtGetEvent : sysTrapWinDrawBitmap;
-        UInt32 entry = (UInt32)(code + ((const UInt32 *)code)[k]);
+    entry = (UInt32)(code + ((const UInt32 *)code)[k]);
+    if (SyImLinked(trap, entry) != 0)
+        return 0;
+    cur = (UInt32)SysGetTrapAddress(trap);
+    DmWrite(code, 8 + 4 * k, &cur, 4);
+    SysSetTrapAddress(trap, (void *)entry);
+    SyHealCount(1UL << 16);
+    return 1;
+}
 
-        if (SyImLinked(trap, entry) == 0) {
-            UInt32 cur = (UInt32)SysGetTrapAddress(trap);
-
-            DmWrite(code, 8 + 4 * k, &cur, 4);
-            SysSetTrapAddress(trap, (void *)entry);
-            n++;
-        }
-    }
-    if (n)
-        SyHealCount((UInt32)n << 16);
-    return n;
+/* 입력·그림 둘 다 확인(앱 ON). v9: ⇪ 그림 연결(ime.c HgImBmp)은 입력(k = 0)만 SyImHealOne으로 부른다
+ * (CJKOS를 꺼도 WinDrawBitmap 연결은 남음 실측, 실행 중인 그림 연결 자신은 건드리지 않음) */
+static inline UInt16 SyImHeal(void)
+{
+    return SyImHealOne(0) + SyImHealOne(1);
 }
 
 #endif
