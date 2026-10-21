@@ -140,6 +140,8 @@ MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므
 - CJKOS 감지 `FtrGet('dCJK', 0)`: CJKOS가 켜질 때 등록하고 끌 때 지우는 자기 Feature(MnHangul v61·MnSonyKbd v11, ClieDiag Ftr 페이지 실측)
 
 **1.5단계: 제조사 공개 확장 API (Sony CLIÉ SDK에 원형 있음)**
+
+NR70V(HAL·기기 ID `'rdwd'` Redwood, Palm OS 4.1)에 맞는 SDK는 **Sony CLIÉ SDK 3.0**이다(`SonyHwrOEMIDs.h`: `/* PEG-NR70,NR70V(J,US) */`). SDK 5.0은 Palm OS 5 기종용이라 그 API(`Vsk…` 실크 관리자 2판 등)는 쓰지 않는다.
 - Sony HR 라이브러리 `HRWinScreenMode`(sysLibTrapCustom + 48): 앱 화면 고해상도. Sony SDK 헤더는 저작권 문제로 커밋하지 않아 필요한 트랩만 직접 선언
 - Sony SysInfo(`FtrGet('SoNy', 1)` → Sony SDK `SonySystemFtr.h` 구조, +4 `extn` 비트 0x10 = 소프트웨어 실크): MnSonyKbd v17 켜기 전 기종 확인. 구조 칸 위치만 직접 적음
 
@@ -148,7 +150,7 @@ MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므
 | 대상 | 쓰는 곳 | 근거 |
 | --- | --- | --- |
 | `BltDrawChars`(트랩 0xA378) | MnHangul 그리기, MnSonyKbd 키 글자 | ROM 호출부 역분석으로 인자 7개(26바이트) 확인([KOREAN_SUPPORT.md](KOREAN_SUPPORT.md)) |
-| Sony `SkWr` 플러그인 호출 방식 | Mn 가상 키보드 로더 | `SilkExtn` ROM 역분석(1절) |
+| Sony `SkWr` 플러그인 호출 방식 | Mn 가상 키보드 로더 | `SilkExtn` ROM 역분석(1절). NR70V용 SDK 3.0에는 정의 없음. 후속 기종용 SDK 5.0 `SonySlkw.h`의 이벤트 번호(Open 1, Close 2, Start 3, Stop 4, Draw 5, DispChange 6, PenDown 7, PenMove 8, PenUp 9, TimerFired 10, DoCommand 11)가 역분석 번호와 모두 같음 — 강한 정황이지만 NR70V 공식 정의는 아니고, 이벤트 구조 배치(펜 좌표 위치)는 다름. PenMove(8)는 NR70V에서도 들어옴(ClieDiag SkEv), TimerFired(10)는 타이머 설정 API가 SDK 5.0 전용이라 쓰지 않음 |
 | (참고) Sony "Silk Ware Library" `GetScrWindow`(custom + 4) | 쓰지 않음(MnSonyKbd v8~v15 진단에서 실측 0을 돌려줘 v16에서 뺌) | ROM `SlSW` v100 정적 분석: `Err (UInt16 ref, WinHandle *out)`, SilkExtn 전역 +172를 읽기만 함 |
 
 **3단계: 함수가 아니라 내부 구조·관찰에 기댄 부분 (가장 취약)**
