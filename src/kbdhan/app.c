@@ -1,6 +1,7 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v5: 한/영 표시('한'/'A')를 키 글자가 그려진 뒤에 그림(v4 실측: 표시가 덮여 안 보임).
  * v4: PC 두벌식 규칙(소문자 = 기본 자모, 대문자 = 쌍자음). 한/영은 Int'l 오른쪽 빈칸(키보드 화면 왼쪽 아래 '한'/'A' 표시).
  *   v3 실측: Palm 키보드는 cap 켜진 채 shift를 누르면 cap이 꺼져 cap 기반 한/영을 쓸 수 없음.
  * v3: cap 키 위치를 키보드 화면 창 기준으로 고침(x 0~21, y 89~105).
@@ -16,7 +17,7 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v4"
+#define kVer      "v5"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     96

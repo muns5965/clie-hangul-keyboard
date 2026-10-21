@@ -8,6 +8,7 @@
  *   v3 실측(T600C): Palm 키보드는 cap이 켜진 채 shift를 누르면 cap이 꺼져 "cap+shift = 쌍자음"(MnSonyKbd 규칙)을 쓸 수 없음.
  *   전환 직후 키보드가 키 글자를 다시 그리게 할 공개 방법이 없어, 이번 화면에서 그린 키 글자 위치(표 [16]~)를 기억해 두었다가
  *   그 자리를 지우고 우리가 다시 그린다. 빈칸 누름은 nilEvent로 바꿔 키보드에 넘기지 않는다.
+ * v5: 한/영 표시를 키 글자가 그려진 뒤(표 [14] > 0)에 그림 — v4는 열린 직후 첫 이벤트에 그려 키보드 화면 그리기에 덮임(실측).
  * v2·v3: 펜이 cap 키를 누르면 한글 모드(v1 실측: 그리는 순간의 Graffiti caps가 한 박자 늦음). v3에서 좌표를 창 기준으로 고침.
  * 좌표는 모두 키보드 화면 창 기준(v3 실측: z~m 줄 글자 y 95). 빈칸은 GSI(⇧ 표시, 약 x 135~)를 피해 x 110~131, y 121~141.
  *   0 SysKeyboardDialog  1 SysKeyboardDialogV10  — 열려 있는 동안 = 버퍼 [0] 깊이
@@ -225,7 +226,7 @@ void KhGetEvent(EventType *event, Int32 timeout)
     b = Buf();
     if (b == NULL || b[0] == 0 || event == NULL)
         return;
-    if (b[15] != 0 && event->eType != penDownEvent) {   /* 열린 뒤 첫 이벤트 때 한/영 표시 */
+    if (b[15] != 0 && b[14] != 0 && event->eType != penDownEvent) {   /* v5: 키 글자를 그린 뒤 첫 이벤트 때 한/영 표시 */
         b[15] = 0;
         Mark(b);
     }
