@@ -1,5 +1,5 @@
 /*
- * ClieDiag v23 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v24 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -19,6 +19,8 @@
  *      기본 글꼴들의 줄 높이(h)·기준선(b)·'A'/'W' 폭, CJKOS가 그리는 '가'(B0A1) 폭과 HR 글꼴 값.
  * v21: 진단 "Font" 페이지 — KS X 1001 "가나다 한글"을 기존 함수(std·bold·large)와 HR 함수(HR std·bold·small)로
  *      실제로 그려 CJKOS가 각 경로에서 한글을 그리는지 확인. 줄마다 측정 폭(w)도 표시.
+ * v24: 진단 "Ftr" 페이지 — RAM Feature 표 전체(FtrGetByIndex, 이 저장소 모듈 MnSk·MnHg·MnSy·MnDg 제외).
+ *      CJKOS를 켜고/끄고 비교해, CJKOS가 켜질 때만 등록하는 Feature가 있으면 공개 함수로 CJKOS를 감지할 수 있다.
  * v23: SkEv 페이지 6줄 = MnSkCore build 16 조합 중 커서 이동 진단(#81~#87), 기록 지우기에 포함.
  * v22: 진단 "Trap" 페이지 — 바뀐(ROM 밖을 가리키는) 시스템 트랩 목록과 Intl 디스패치 표(Txt 계열 함수) 목록.
  *      트랩 0xA000~sysTrapLastTrapNumber를 SysGetTrapAddress로, Intl 선택자 0~intlMaxSelector를
@@ -158,7 +160,7 @@ typedef struct {
     Char   name[dmDBNameLength];
 } SkwrInfo;
 
-enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain, kPgFont, kPgTrap };
+enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain, kPgFont, kPgTrap, kPgFtr };
 
 #define kAppCreator    'MnDg'
 #define kPrefDebug     0
@@ -167,7 +169,7 @@ enum { kPgInfo, kPgLibr, kPgSkwr, kPgSkev, kPgSkraw, kPgEvents, kPgMain, kPgFont
 #define kResetHoldSec  3
 #define kCoreType      'SkCo'
 
-static LineBuf  gInfo, gLibr, gLog, gTrap;
+static LineBuf  gInfo, gLibr, gLog, gTrap, gFtrL;
 static Char     gLast[kLineLen] = "-";
 static UInt16   gPage = 0;
 static Boolean  gIntercept = false;
@@ -222,7 +224,7 @@ static UInt16 TotalPages(void)
 {
     if (!gDebug)
         return 1;                                    /* Main만 */
-    return 1 + PagesOf(&gInfo) + PagesOf(&gLibr) + PagesOf(&gTrap) + 5; /* Main + Info + Libr + Trap + Font + SkWr + SkEv + SkRaw + Events */
+    return 1 + PagesOf(&gInfo) + PagesOf(&gLibr) + PagesOf(&gTrap) + PagesOf(&gFtrL) + 5; /* Main + Info + Libr + Trap + Ftr + Font + SkWr + SkEv + SkRaw + Events */
 }
 
 /* 현재 페이지 종류와, Info/Libr이면 버퍼와 하위 페이지 번호 */
@@ -231,6 +233,7 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
     UInt16 pi = PagesOf(&gInfo);
     UInt16 pl = PagesOf(&gLibr);
     UInt16 pt = PagesOf(&gTrap);
+    UInt16 pf = PagesOf(&gFtrL);
     UInt16 pg, q;
 
     *bufP = NULL; *subP = 0; *subNP = 1;
@@ -249,7 +252,11 @@ static UInt16 PageKind(LineBuf **bufP, UInt16 *subP, UInt16 *subNP)
         *bufP = &gTrap; *subP = pg - pi - pl; *subNP = pt;
         return kPgTrap;
     }
-    q = pg - (pi + pl + pt);
+    if (pg < pi + pl + pt + pf) {
+        *bufP = &gFtrL; *subP = pg - pi - pl - pt; *subNP = pf;
+        return kPgFtr;
+    }
+    q = pg - (pi + pl + pt + pf);
     if (q == 0)
         return kPgFont;
     if (q == 1)
@@ -333,6 +340,30 @@ static void CollectTraps(void)
         }
     }
     StrPrintF(NextLine(&gTrap), "= %u intl not in ROM", cnt);
+}
+
+/* v24: RAM Feature 표 전체. 한 줄에 2개 "크리에이터 번호 값" (이 저장소 모듈 제외) */
+static void CollectFtrs(void)
+{
+    UInt16  i, n = 0, all = 0, rom = 0;
+    UInt32  cr, v;
+    UInt16  num;
+    Char   *line = NULL, item[24], cc[5];
+
+    for (i = 0; FtrGetByIndex(i, true, &cr, &num, &v) == errNone; i++)
+        rom++;
+    for (i = 0; FtrGetByIndex(i, false, &cr, &num, &v) == errNone; i++) {
+        all++;
+        if (cr == 'MnSk' || cr == 'MnHg' || cr == 'MnSy' || cr == kAppCreator)
+            continue;
+        if (n % 2 == 0)
+            line = NextLine(&gFtrL);
+        FourCC(cr, cc);
+        StrPrintF(item, "%s %u %lx ", cc, num, v);
+        StrCat(line, item);
+        n++;
+    }
+    StrPrintF(NextLine(&gFtrL), "= RAM %u (shown %u), ROM %u", all, n, rom);
 }
 
 static void CollectInfo(void)
@@ -921,8 +952,10 @@ static void Draw(void)
     case kPgInfo:
     case kPgLibr:
     case kPgTrap:
+    case kPgFtr:
         StrPrintF(title, "%u/%u %s %u/%u", gPage + 1, TotalPages(),
-                  (kind == kPgInfo) ? "Info" : (kind == kPgLibr) ? "Libr" : "Trap", sub + 1, subN);
+                  (kind == kPgInfo) ? "Info" : (kind == kPgLibr) ? "Libr" : (kind == kPgTrap) ? "Trap" : "Ftr",
+                  sub + 1, subN);
         start = (Int16)(sub * kVisible);
         for (i = 0; i < kVisible && start + i < (Int16)b->n; i++)
             DrawRow((UInt16)i, b->t[start + i]);
@@ -1097,6 +1130,7 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
     MeasureHrFonts();
     CollectLibr();
     CollectTraps();
+    CollectFtrs();
     CollectSkwr();
     Draw();
 
