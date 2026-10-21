@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v15: 창·글꼴 공개 함수 전환(spatch.c) — 화면 밖 창 = WinGetBitmap 비교, 자모 가운데 = FntCharWidth, 세로 위치 = FntBaseLine
+ *   (v8 실측 일치). 글꼴 높이 f[7]은 그대로, FntCharHeight와 비교만(진단 10줄 hbad). 임시 글꼴 만들기는 구조 그대로.
  * v14: 첫 화면 3줄 [All OFF] = 자기와 MnHangul을 순서대로 끄기(src/common/mod_off.h). MnHangul이 실행 코드 kCmdModOff로 부르면 자기를 끈다.
  * v13: 판 번호를 kSyVer 한 곳에. 첫 화면 한글 표시 줄: CJKOS와 MnHangul이 둘 다 켜져 있으면 'CJKOS (+MnHangul)'.
  * v12: CJKOS 감지는 'dCJK' Feature만(함수 4개 방식 뺌). 첫 화면 'CJKOS'.
@@ -30,7 +32,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v14"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v15"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -515,7 +517,7 @@ static void DrawDebug(void)
         m++;
     }
     {   /* v8 진단: 창 판정 세 가지, 글꼴 공개 함수 비교(row 12 누르면 지움) */
-        UInt32 v = GetF(182), fv = GetF(186);
+        UInt32 v = GetF(182);
         Char   ch[2];
 
         ScrWin();
@@ -533,8 +535,8 @@ static void DrawDebug(void)
                       (fl & 1) ? " X" : "", (fl & 2) ? " C" : "");
             Row(9, s);
         }
-        StrPrintF(s, "font %lu ptr %lu bad %lu id%lu h%lu fw%lu t%lu", GetF(184), GetF(185), GetF(187), fv >> 24,
-                  (fv >> 16) & 0xFF, (fv >> 8) & 0xFF, fv & 0xFF);
+        StrPrintF(s, "font %lu ptr %lu bad %lu hbad %lu last %lx", GetF(184), GetF(185), GetF(187), GetF(198),
+                  GetF(199));   /* v15: 높이 FntCharHeight 대 f[7] */
         Row(10, s);
     }
     StrPrintF(s, "why%u H%lu S%lx p%lu ic%lu@%lu", (UInt16)(w >> 24), GetF(143), GetF(150), GetF(144),
@@ -579,11 +581,13 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             if (e.screenY < kLineH)   /* 제목 = 판정 기록 화면 ↔ 첫 화면 */
                 gDebug = !gDebug;
             else if (gDebug) {
-                if (row == 12) {   /* v8: 진단 기록 지우기(v9: #188~#190, v10: #191~#194 포함) */
+                if (row == 12) {   /* v8: 진단 기록 지우기(v9: #188~#190, v10: #191~#194, v15: #198·#199 포함) */
                     UInt16 n;
 
                     for (n = 180; n <= 194; n++)
                         FtrSet(kSyCr, n, 0);
+                    FtrSet(kSyCr, 198, 0);
+                    FtrSet(kSyCr, 199, 0);
                 }
             }
             else if (row == kRowOn && e.screenX >= 78)   /* v14: 두 모듈 순서대로 끄기 */

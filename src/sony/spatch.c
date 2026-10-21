@@ -53,7 +53,8 @@ static inline UInt16 RdW(const UInt8 *p)
     return ((UInt16)p[0] << 8) | p[1];
 }
 
-/* 글꼴 f(SDK FontType)에서 글자 c의 폭. 없는 글자는 '없는 글자' 칸의 폭 */
+/* 글꼴 f(SDK FontType)에서 글자 c의 폭. 없는 글자는 '없는 글자' 칸의 폭.
+ * v15: 동작에는 쓰지 않음(FntCharWidth로 바꿈) — v8 진단 비교(Diag)에서만 쓴다 */
 static inline UInt16 CharW(const Int16 *f, UInt8 c)
 {
     const UInt16 *owt = (const UInt16 *)((const UInt8 *)f + 16 + (UInt16)f[8] * 2);
@@ -98,7 +99,7 @@ static inline void PutJamo(UInt16 *t, const UInt8 *pk, UInt8 trail, const Int16 
 {
     UInt16       H = pk[3], w = pk[2] >= 2 ? 4 : 2, fh = (UInt16)f[7], y;
     const UInt8 *j = pk + RdW(pk + 124) + (UInt16)(trail - 0xA1) * H * w;
-    Int16        top = f[9] - 15;
+    Int16        top = FntBaseLine() - 15;   /* v15: 글꼴 구조 ascent(f[9]) 대신 공개 함수(v8 실측 일치) */
 
     if (top > (Int16)fh - (Int16)H)
         top = (Int16)fh - (Int16)H;
@@ -115,8 +116,18 @@ static inline void PutJamo(UInt16 *t, const UInt8 *pk, UInt8 trail, const Int16 
     }
 }
 
-/* 지금 그리는 곳이 화면 밖 창(0x4000, 가상 실크 flags C000)인가 */
+/* 지금 그리는 곳이 화면 밖 창(가상 실크)인가.
+ * v15: 창 구조 +8 windowFlags 0x4000 직접 읽기 대신 공개 함수 — 화면 밖 창은 자기 비트맵을 따로 가진다
+ *      (v8 실측: 두 방식 80·224·422·522개 모두 일치, CJKOS 켬·끔) */
 static inline Boolean SilkWin(void)
+{
+    WinHandle w = WinGetDrawWindow();
+
+    return w != NULL && WinGetBitmap(w) != WinGetBitmap(WinGetDisplayWindow());
+}
+
+/* v8 진단에서만: 예전 판정(창 구조 +8 windowFlags 0x4000) */
+static inline Boolean SilkWinFlags(void)
 {
     const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
 
@@ -160,8 +171,8 @@ static inline Boolean HanLabel(UInt8 c)
 static inline void Diag(UInt8 c, const Int16 *f)
 {
     UInt32 dw = (UInt32)WinGetDrawWindow(), scr = GetF(154);
-    UInt16 a = SilkWin() ? 1 : 0;
-    UInt16 b = (WinGetBitmap((WinHandle)dw) != WinGetBitmap(WinGetDisplayWindow())) ? 1 : 0;
+    UInt16 a = SilkWinFlags() ? 1 : 0;   /* v15: a = 예전 판정, b = 지금 판정(SilkWin) */
+    UInt16 b = SilkWin() ? 1 : 0;
     UInt16 k = scr == 0 ? 2 : (dw == scr ? 1 : 0);
     UInt16 fw = (UInt16)FntCharWidth((Char)c), tw = CharW(f, c);
     Boolean pm = (const Int16 *)FntGetFontPtr() == f;
@@ -176,6 +187,10 @@ static inline void Diag(UInt8 c, const Int16 *f)
     FtrSet(kSyCr, 184, GetF(184) + 1);
     if (pm)
         FtrSet(kSyCr, 185, GetF(185) + 1);
+    if ((UInt16)FntCharHeight() != (UInt16)f[7]) {   /* v15: 글꼴 높이 f[7] → FntCharHeight 전환 가능성(#198 다름 수, #199 마지막) */
+        FtrSet(kSyCr, 198, GetF(198) + 1);
+        FtrSet(kSyCr, 199, ((UInt32)FntCharHeight() << 8) | (UInt8)f[7]);
+    }
     if (!pm || fw != tw || FntBaseLine() != f[9]) {
         FtrSet(kSyCr, 186, ((UInt32)FntGetFont() << 24) | ((UInt32)(f[7] & 0xFF) << 16) | ((UInt32)(fw & 0xFF) << 8) |
                            (tw & 0xFF));
@@ -221,7 +236,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
                 MakeTmpFont(tmp, f, kCell);
                 PutJamo(tmp, (const UInt8 *)GetF(kFtrJamo), Dubeol(c), f);
-                r.topLeft.x += ((Int16)CharW(f, c) - kCell) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤 */
+                r.topLeft.x += ((Int16)FntCharWidth((Char)c) - kCell) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤(v15: 공개 함수) */
                 r.extent.x = kCell / ratio;
                 res = ((BltFn)(b != 0 ? b : orig))(p1, &r, p3, &one, 1, tmp, p7);
                 MemPtrFree(tmp);
