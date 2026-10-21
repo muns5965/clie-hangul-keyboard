@@ -280,6 +280,19 @@ static void RedrawKeys(UInt16 hr, Boolean han)
         WinSetForeColor(bg);   /* 옛 글자 점만 바탕색으로 */
         HRWinPaintBitmap(hr, bmp, x + ox, y);
         nx = Glyph(bits, f, (const UInt8 *)pk, c, cw, han, fh);
+        if (drawn == 0) {   /* v37 진단: 첫 키 — #293 글자<<24 | 옛 x<<16 | 새 x<<8 | 새 글자 점 수, #294 글자색<<24 | 바탕<<16 | #297<<8 | 읽음 */
+            UInt32 dots = 0, t = 0;
+
+            for (row = 0; row < fh; row++)
+                for (k = 0; k < 32; k++)
+                    if (Bit(bits, row, k))
+                        dots++;
+            FtrGet(kSyCr, 297, &t);
+            FtrSet(kSyCr, 293, ((UInt32)c << 24) | ((UInt32)(UInt8)ox << 16) | ((UInt32)(UInt8)nx << 8) |
+                               (dots > 255 ? 255 : dots));
+            FtrSet(kSyCr, 294, ((UInt32)fg << 24) | ((UInt32)bg << 16) | ((t & 0xFF) << 8) |
+                               (gotF ? 2 : 0) | (gotB ? 1 : 0));
+        }
         if (nx != -1) {
             WinSetForeColor(fg);
             HRWinPaintBitmap(hr, bmp, x + nx, y);

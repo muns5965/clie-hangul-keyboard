@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v37(진단): v36 실측 — 한→A 때 자모는 깨끗이 지워지나 영문이 안 보임. 첫 키 값 기록(6줄 k = 글자·옛 x·새 x·점 수, c = 글자색·바탕·#297·읽음).
  * v36: v35 실측 — 한/A 다시 그리기가 키 테두리·옆 키 글자를 지우고 회색 글자·검은 덩어리. 옛 글자를 바탕색으로 덧그려 지우고 색은 화면에서 읽음.
  * v35: v34 실측 — 한/A 누르면 자판 바로 바뀜, 그러나 shift 판단이 켜짐으로 남음(첫 키를 자리로 못 찾음) → 첫 줄 글자 `·1(꺼짐)·~·!(켜짐)로.
  * v34: v33 실측 — ⇪가 켜진 채면 쌍자음·기본 자모가 거꾸로, 한/A 다시 그리기 rd 0(그림 줄 폭 상한 16워드가 너무 작음).
@@ -78,7 +79,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v36"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v37"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -665,7 +666,8 @@ static void DrawDebug(void)
 
         UInt32 q1 = GetF(248), q2 = GetF(249);
 
-        StrPrintF(s, "dup %lu rd%lx w%lx g%lu s%lu mk %d,%d", GetF(253), GetF(296), GetF(295), GetF(299), GetF(255), (Int16)(c >> 16), (Int16)c);
+        StrPrintF(s, "rd%lx w%lx k%08lx c%08lx", GetF(296), GetF(295), GetF(293), GetF(294));   /* v37 */
+        (void)c;
         (void)q1;
         (void)q2;
         (void)a;
