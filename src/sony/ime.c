@@ -128,6 +128,18 @@ void HgImGet(EventType *event, Int32 timeout)
                 FtrSet(kSyCr, 210, k + 1 > 2 ? 0 : k + 1);
             }
             if (kHanTab(event->screenX, event->screenY)) {   /* v20 진단: 한/영 단추 후보 — 시험 표시만 바꾸고 Sony에는 넘기지 않음 */
+                UInt32 now = TimGetTicks(), last = 0;
+
+                /* v29: 한 번 누름이 두 번 처리됨(v28 실측: 누름 하나에 t +2, 값이 제자리) → 마지막 전환 뒤 0.5초 안의 누름은 무시 */
+                FtrGet(kSyCr, 252, &last);
+                if (last != 0 && now - last < (UInt32)(SysTicksPerSecond() / 2)) {
+                    FtrGet(kSyCr, 253, &v);
+                    FtrSet(kSyCr, 253, v + 1);
+                    event->eType = nilEvent;
+                    return;
+                }
+                FtrSet(kSyCr, 252, now);
+                v = 0;
                 FtrGet(kSyCr, kFtrHanTab, &v);
                 FtrSet(kSyCr, kFtrHanTab, v ? 0 : 1);
                 v = 0;

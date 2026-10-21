@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v29(진단): 한/영 누름은 마지막 전환 뒤 0.5초 안이면 무시(v28 실측: 누름 하나에 t +2로 값이 제자리 — 바뀌지 않는 것처럼 보임, #253 = 무시 수).
+ *   키 글자 다시 그릴 때도 표시 자리를 바탕색으로 먼저 지움(v28 실측: shift 뒤 한·A 겹침).
  * v28(진단): v27 실측 — 고해상도 펜 점은 159,0으로 옴(넣기 포기), v23 문자열 기록이 #246·#247(표시 그림 주소)을 덮어씀(위험, 뺌).
  *   한/영을 누르면 가상 실크 창(#251)에 표시를 바로 다시 그림(바탕 = 왼쪽 점 색, 6줄 e = 그 색 번호). 키 글자는 다음 다시 그리기 때.
  * v27(진단): v26 실측 — 일시 쉬프트를 바꿔도 다시 그리지 않음(u0), 한/영 값은 바뀜(han 1). (1) 표시를 글자(아래 함수가 한글을 그려야 함)
@@ -64,7 +66,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v28"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v29"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -651,8 +653,9 @@ static void DrawDebug(void)
 
         UInt32 q1 = GetF(248), q2 = GetF(249);
 
-        StrPrintF(s, "e%lx after %d,%d %d,%d mk %d,%d", GetF(243), (Int16)(q1 >> 16), (Int16)q1, (Int16)(q2 >> 16),
-                  (Int16)q2, (Int16)(c >> 16), (Int16)c);
+        StrPrintF(s, "bg%lx dup %lu mk %d,%d", GetF(243), GetF(253), (Int16)(c >> 16), (Int16)c);
+        (void)q1;
+        (void)q2;
         (void)a;
         (void)b;
         Row(6, s);

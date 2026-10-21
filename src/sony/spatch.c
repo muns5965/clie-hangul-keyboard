@@ -232,7 +232,13 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 FtrSet(kSyCr, 242, ((UInt32)(UInt16)r.topLeft.x << 16) | (UInt16)r.topLeft.y);
                 FtrSet(kSyCr, 251, (UInt32)WinGetDrawWindow());   /* v28: 가상 실크 창(한/영 누를 때 바로 그리기용) */
                 if (GetF(246) != 0 && GetF(247) != 0) {   /* v27: 그림으로(아래 함수가 한글을 못 그려도 됨) */
+                    RectangleType    er;
+                    IndexedColorType ob = WinSetBackColor(WinGetPixel(139, 113));   /* v29: 탭 줄 바탕색으로 먼저 지움(겹침 방지) */
+
                     (void)m;
+                    RctSetRectangle(&er, r.topLeft.x, r.topLeft.y, 14, 18);
+                    WinEraseRectangle(&er, 0);
+                    WinSetBackColor(ob);
                     WinDrawBitmap((BitmapPtr)GetF(GetF(kFtrHanTab) != 0 ? 246 : 247), r.topLeft.x, r.topLeft.y);
                 } else if (GetF(kFtrHanTab) != 0) {
                     m[0] = 0xC7;
