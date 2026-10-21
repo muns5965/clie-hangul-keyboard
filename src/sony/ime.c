@@ -35,7 +35,7 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y);
 
 asm(".text\n.even\nImBase:\n"
     " .long HgImGet-ImBase, HgImBmp-ImBase\n"
-    "ImOrig:\n .long 0,0\nImBuf:\n .long 0\nImIcon:\n .long 0,0,0,0\n");
+    "ImOrig:\n .long 0,0\nImBuf:\n .long 0\nImIcon:\n .long 0,0,0,0,0,0\n");
 
 typedef void (*GetFn)(EventType *, Int32);
 typedef void (*BmpFn)(BitmapPtr, Coord, Coord);
@@ -129,21 +129,8 @@ void HgImGet(EventType *event, Int32 timeout)
                 v = 0;
                 FtrGet(kSyCr, 108, &v);
                 FtrSet(kSyCr, 215, v);
-                {   /* v21 진단: 화면에 바로 '한'/'A'를 그려 자리 확인(Sony가 다시 그리면 지워질 수 있음) */
-                    WinHandle     old = WinSetDrawWindow(WinGetDisplayWindow());
-                    RectangleType rr;
-                    Char          m[2];
-
-                    RctSetRectangle(&rr, 70, 213, 16, 11);
-                    WinEraseRectangle(&rr, 0);
-                    v = 0;
-                    FtrGet(kSyCr, kFtrHanTab, &v);
-                    m[0] = v ? (Char)0xC7 : 'A';
-                    m[1] = (Char)0xD1;
-                    WinDrawChars(m, v ? 2 : 1, 71, 213);
-                    WinSetDrawWindow(old);
-                }
-                event->eType = nilEvent;
+                event->screenX = 10;   /* v22 진단: abc 탭 누름으로 바꿔 넘김 — Sony가 자판을 다시 그리는지 */
+                event->screenY = 219;
                 return;
             }
         }
@@ -176,7 +163,8 @@ void HgImGet(EventType *event, Int32 timeout)
         return;
     }
     if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(event->screenX, event->screenY)) {
-        event->eType = nilEvent;                 /* v20 진단: 한/영 단추 후보 자리는 Sony에 넘기지 않음 */
+        event->screenX = 10;                     /* v22 진단: abc 탭 누름으로 바꿔 넘김(누름과 같은 자리) */
+        event->screenY = 219;
         return;
     }
     if (event->eType == penUpEvent) {            /* v39: ⇪ 자리를 눌렀는데 키 글자 다시 그리기가 없었으면 되돌림 */
@@ -256,6 +244,20 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
     const UInt32 *ic = Icons();
 
     BmpLog(bmp, x, y);   /* v21 진단 */
+    if (bmp != NULL && ic[4] != 0 && ic[5] != 0) {   /* v22: 자판 전체 그림(320×130) 직후 sym 오른쪽에 한/영 표시 */
+        WinHandle w = WinGetDrawWindow();
+        Coord     bw = 0, bh = 0;
+
+        BmpGetDimensions(bmp, &bw, &bh, NULL);
+        if (bw == 320 && bh == 130 && w != NULL && WinGetBitmap(w) != WinGetBitmap(WinGetDisplayWindow())) {
+            UInt32 v = 0;
+
+            OrigBmp()(bmp, x, y);
+            FtrGet(kSyCr, kFtrHanTab, &v);
+            OrigBmp()((BitmapPtr)ic[v ? 4 : 5], x + 136, y + 108);
+            return;
+        }
+    }
 
     if (bmp != NULL && ic[0] != 0 && ((UInt32)bmp == ic[0] || (UInt32)bmp == ic[1])) {
         UInt16 on = (UInt32)bmp == ic[1] ? 1 : 0;

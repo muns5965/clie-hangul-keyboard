@@ -7,6 +7,10 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v22(진단): v21 실측 — 가상 실크 그림은 자판 전체 320×130(@0,0, 탭 줄 포함 한 장)과 상태 표시줄 아이콘뿐, 키 글자만 글자로 그림.
+ *   그래서 자판 그림(320×130)을 그린 직후 그 위 sym 오른쪽(+136,+108, 고해상도)에 한/영 표시 그림(SyIc 2 '한'·3 'A', 투명 바탕,
+ *   tools/gen-tab-mark.py)을 그린다. 빈칸 누름은 버리는 대신 abc 탭(10,219) 누름으로 바꿔 넘겨 Sony가 자판을 다시 그리게 하는 시험.
+ *   v21의 화면 직접 그리기는 보이지 않았음(앱 화면 창 밖이라 잘린 것으로 추정) → 뺌.
  * v21(진단): v20 실측 sym 0(탭 글자가 BltDrawChars로 오지 않음), 빈칸 누름 t17·펜 73,219 80,223 → 탭 줄은 그림으로 추정.
  *   가상 실크 그림 그리기 최근 4개(주소·크기·위치)를 진단 3~6줄에, 빈칸을 누르면 화면에 바로 '한'/'A'를 그려 자리 확인.
  * v20(진단): 한/영 단추를 ⇪ 대신 sym 탭 오른쪽 빈칸으로 옮기는 시험 — 펜 위치 기록, sym 탭 옆 '한'/'A' 표시, 빈칸 누름 = 시험 표시만
@@ -47,7 +51,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v21"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v22"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -224,7 +228,7 @@ static UInt16 ImOn(void)
     UInt8    *code;
     UInt32   *buf;
     void     *o;
-    UInt32    a[4];
+    UInt32    a[6];
     UInt16    k;
     DmOpenRef sx;
 
@@ -245,7 +249,7 @@ static UInt16 ImOn(void)
     }
     DmWrite(code, 16, &buf, 4);
     /* ROM SilkExtn의 ⇪ 그림(Tbmp 2400 보통·2500 반전) 주소와 대신 그릴 '한A' 그림 */
-    a[0] = a[1] = a[2] = a[3] = 0;
+    a[0] = a[1] = a[2] = a[3] = a[4] = a[5] = 0;
     sx = DmOpenDatabaseByTypeCreator('extn', 'SeSi', dmModeReadOnly);
     if (sx != NULL) {
         for (k = 0; k < 2; k++) {
@@ -259,16 +263,16 @@ static UInt16 ImOn(void)
         }
         DmCloseDatabase(sx);
     }
-    for (k = 0; k < 2; k++) {
+    for (k = 0; k < 4; k++) {   /* v22: SyIc 2·3 = sym 탭 옆 한/영 표시(핸들 #11·#12) */
         MemHandle ih = DmGetResource(kIconRes, k);
 
-        FtrSet(kSyCr, kFtrIcH0 + k, (UInt32)ih);
+        FtrSet(kSyCr, k < 2 ? kFtrIcH0 + k : 9 + k, (UInt32)ih);
         if (ih != NULL)
             a[2 + k] = (UInt32)MemHandleLock(ih);
     }
     if (a[0] == 0 || a[1] == 0)
         a[0] = a[1] = 0;
-    DmWrite(code, 20, a, 16);
+    DmWrite(code, 20, a, 24);
     Protect(true);
     FtrSet(kSyCr, kFtrImH, (UInt32)h);
     FtrSet(kSyCr, kFtrImC, (UInt32)code);
@@ -360,14 +364,14 @@ static UInt16 ImOff(void)
             SysSetTrapAddress(trap, (void *)((UInt32 *)code)[2 + k]);
     }
     DmWrite(code, 16, &z, 4);
-    for (k = 0; k < 2; k++) {
-        MemHandle ih = (MemHandle)GetF(kFtrIcH0 + k);
+    for (k = 0; k < 4; k++) {   /* v22: + 한/영 표시 그림 */
+        MemHandle ih = (MemHandle)GetF(k < 2 ? kFtrIcH0 + k : 9 + k);
 
         if (ih != NULL) {
             MemHandleUnlock(ih);
             DmReleaseResource(ih);
         }
-        FtrSet(kSyCr, kFtrIcH0 + k, 0);
+        FtrSet(kSyCr, k < 2 ? kFtrIcH0 + k : 9 + k, 0);
     }
     if (buf != NULL)
         MemPtrFree(buf);

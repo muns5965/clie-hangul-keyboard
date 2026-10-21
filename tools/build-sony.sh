@@ -4,7 +4,7 @@
 #   1) 앱(src/sony/app.c): 켜기·끄기, 리셋 뒤 자동 시작, Update 리셋, 판정 기록 페이지.
 #   2) 키 글자 오버레이(src/sony/spatch.c) → 리소스 SyPt 0. BltDrawChars 패치. 오프셋 0 = 아래 함수 주소 칸, 4 = 진입점.
 #   3) 입력·'한A'(src/sony/ime.c) → 리소스 SyIm 0. EvtGetEvent·WinDrawBitmap. 오프셋 0·4 = 진입점 오프셋, 8·12 = 원래 주소.
-#   4) SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py, Galmuri11 OFL), SyJm 0 자모 그림(tools/gen-sony-jamo.py, Neo둥근모 기반 OFL).
+#   4) SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py, Galmuri11 OFL), SyIc 2·3 한/영 표시(tools/gen-tab-mark.py), SyJm 0 자모 그림(tools/gen-sony-jamo.py, Neo둥근모 기반 OFL).
 # 코드 리소스 검사(하나라도 어긋나면 실패): .data/.bss 0, 진입점 위치, %a5 참조 없음, 재배치 없음.
 set -euo pipefail
 
@@ -79,7 +79,7 @@ for fn in GetF PrefGet PrefPut AppDB Protect RomBlt PatchOn ImOn SonyOn NotifyRe
 done
 
 # 4) 데이터
-cp "$root/src/sony/data/SyIc0000.bin" "$root/src/sony/data/SyIc0001.bin" "$root/src/sony/data/SyJm0000.bin" .
+cp "$root/src/sony/data/SyIc0000.bin" "$root/src/sony/data/SyIc0001.bin" "$root/src/sony/data/SyIc0002.bin" "$root/src/sony/data/SyIc0003.bin" "$root/src/sony/data/SyJm0000.bin" .
 
-build-prc "$outbin/MnSonyKbd.prc" "MnSonyKbd" MnSy *.app.grc SyPt0000.bin SyIm0000.bin SyIc0000.bin SyIc0001.bin SyJm0000.bin
+build-prc "$outbin/MnSonyKbd.prc" "MnSonyKbd" MnSy *.app.grc SyPt0000.bin SyIm0000.bin SyIc0000.bin SyIc0001.bin SyIc0002.bin SyIc0003.bin SyJm0000.bin
 ls -l "$outbin/MnSonyKbd.prc"
