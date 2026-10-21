@@ -60,23 +60,31 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 
 ## 소개
 
+[한글 입력 방법](#한글-입력-방법)의 분류대로 그림을 나눈다(1번 화면 안 키보드는 이 저장소에서 만들지 않으므로 그림 없음).
+
+### 2. 화면 밖 실크스크린에 자체 키보드 — Mn 가상 키보드
+
 <table>
 <tr>
-<td><img src="docs/images/06-sony-keyboard.png" width="380" alt="Sony 가상 키보드로 한글 입력(MnSonyKbd, 한A 키, 리셋 없음)"></td>
-<td><img src="docs/images/01-overview.png" width="380" alt="메모장에서 한글 키보드를 쓰는 화면"></td>
-</tr>
-<tr>
+<td><img src="docs/images/01-overview.png" width="380" alt="메모장에서 Mn 가상 키보드로 한글 입력"></td>
 <td><img src="docs/images/02-hangul-layout.png" width="380" alt="단모음 한글 자판과 Shift 쌍자음"></td>
-<td><img src="docs/images/03-english-number.png" width="380" alt="영문 QWERTY와 숫자·기호 자판"></td>
 </tr>
 <tr>
+<td><img src="docs/images/03-english-number.png" width="380" alt="영문 QWERTY와 숫자·기호 자판"></td>
 <td><img src="docs/images/04-compose.png" width="380" alt="받침 넘김과 자모 단위 지우기"></td>
-<td><img src="docs/images/05-mnhangul.png" width="380" alt="CJKOS 없이 조합형 글꼴로 한글 표시(시험 중)"></td>
 </tr>
 </table>
 
-첫 그림(Sony 가상 키보드)은 CloudpilotEmu(NR70V) 실제 캡처(MnHangul v50 시절, 같은 코드가 지금의 MnSonyKbd)다. 다시 만들기: `python3 tools/gen-readme-sony.py docs/images/capture-sony-base.png docs/images/capture-sony-shift.png`
-나머지(Mn 가상 키보드·MnHangul 글꼴)는 실제 캡처가 아니라 같은 자판 배치·자모 선 그림·조합형 글꼴 데이터로 다시 그린 것이라 실제 화면과 조금 다를 수 있다
+### 3. 화면 밖 Sony 키보드를 한글 자판으로 — MnSonyKbd
+
+<img src="docs/images/06-sony-keyboard.png" width="380" alt="Sony 가상 키보드로 한글 입력(MnSonyKbd, 한A 키, 리셋 없음)">
+
+### 한글 표시 — MnHangul (입력 방법과 별개)
+
+<img src="docs/images/05-mnhangul.png" width="380" alt="CJKOS 없이 조합형 글꼴로 한글 표시(시험 중)">
+
+Sony 가상 키보드 그림은 CloudpilotEmu(NR70V) 실제 캡처(MnHangul v50 시절, 같은 코드가 지금의 MnSonyKbd)다. 다시 만들기: `python3 tools/gen-readme-sony.py docs/images/capture-sony-base.png docs/images/capture-sony-shift.png`
+Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판 배치·자모 선 그림·조합형 글꼴 데이터로 다시 그린 것이라 실제 화면과 조금 다를 수 있다
 (영문 글자는 Sony 글꼴 대신 픽셀 글꼴). 다시 만들기: `python3 tools/gen-readme-images.py <neodgm.ttf>`.
 
 ## 용어
