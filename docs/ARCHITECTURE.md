@@ -141,6 +141,7 @@ MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므
 
 **1.5단계: 제조사 공개 확장 API (Sony CLIÉ SDK에 원형 있음)**
 - Sony HR 라이브러리 `HRWinScreenMode`(sysLibTrapCustom + 48): 앱 화면 고해상도. Sony SDK 헤더는 저작권 문제로 커밋하지 않아 필요한 트랩만 직접 선언
+- Sony SysInfo(`FtrGet('SoNy', 1)` → Sony SDK `SonySystemFtr.h` 구조, +4 `extn` 비트 0x10 = 소프트웨어 실크): MnSonyKbd v17 켜기 전 기종 확인. 구조 칸 위치만 직접 적음
 
 **2단계: 비공개 함수 (존재하지만 문서·원형 없음, 역분석)**
 

@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v17: 켜기 전 기종 확인 — Sony SysInfo(FtrGet('SoNy', 1), Sony SDK SonySystemFtr.h)의 소프트웨어 실크 비트가 없으면
+ *   켜지 않음('no Sony virtual silk', 결과 0xEE). ClieDiag v25 실측: NR70V extn 0x7F(실크 0x10 있음).
  * v16: 글꼴 높이도 FntCharHeight(v15 실측 일치). 예전 방식 비교 진단(v8 창·글꼴, SilkWareLib GetScrWindow)은 할 일을 마쳐 뺌 —
  *   동작 경로에서 글꼴 구조를 읽는 곳은 임시 글꼴 만들기(MakeTmpFont)만 남음.
  * v15: 창·글꼴 공개 함수 전환(spatch.c) — 화면 밖 창 = WinGetBitmap 비교, 자모 가운데 = FntCharWidth, 세로 위치 = FntBaseLine
@@ -34,7 +36,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v16"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v17"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -244,9 +246,27 @@ static UInt16 ImOn(void)
 }
 
 /* 모두 켜기. 결과 = 패치<<4 | 입력 */
+/* v17: Sony 가상 실크가 있는 기종인가. Sony SysInfo(구조 +4 extn, 비트 0x10 = 소프트웨어 실크).
+ *   Sony SDK 헤더는 저장소에 넣지 않아 칸 위치만 적는다. 리셋 알림에서도 부르므로 전역 없음 */
+#define kSonySilkBit 0x10UL
+static Boolean SilkOk(void)
+{
+    UInt32 v = 0;
+
+    if (FtrGet('SoNy', 1, &v) != errNone || v == 0)
+        return false;
+    return (*(const UInt32 *)((const UInt8 *)v + 4) & kSonySilkBit) != 0;
+}
+
+#define kOnNoSilk 0xEE   /* SonyOn 결과: Sony 가상 실크 없음(아무것도 바꾸지 않음) */
+
 static UInt16 SonyOn(void)
 {
-    UInt16 p = PatchOn();
+    UInt16 p;
+
+    if (!SilkOk())
+        return kOnNoSilk;
+    p = PatchOn();
 
     return (UInt16)(p << 4) | ImOn();
 }
@@ -576,7 +596,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 if (Status() == 0) {
                     UInt16 rr = SonyOn();
 
-                    StrPrintF(gMsg, rr == 0 || rr == 0x11 ? "ON" : "ON: result %x", rr);
+                    if (rr == kOnNoSilk)
+                        StrCopy(gMsg, "no Sony virtual silk");   /* v17 */
+                    else
+                        StrPrintF(gMsg, rr == 0 || rr == 0x11 ? "ON" : "ON: result %x", rr);
                 } else {   /* v3: 빠진 연결 다시 잇기 */
                     UInt16 n = (SyBltHeal() ? 1 : 0) + SyImHeal();
 
