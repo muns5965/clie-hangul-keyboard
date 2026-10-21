@@ -123,7 +123,8 @@ static inline void RdWhy(UInt32 w)
     FtrSet(kSyCr, 295, w);
 }
 /* 글자 하나를 1비트 그림 줄(32 × fh, 줄마다 2워드)에. han = 자모(SyJm, spatch.c PutJamo와 같은 자리), 아니면 Sony 글꼴 영문.
- *   돌려주는 값: 그림 왼쪽 x(키 글자 기록 x 기준), 못 만들면 -1 */
+ *   돌려주는 값: 그림 왼쪽 x(키 글자 기록 x 기준), 못 만들면 kNoGlyph(v43: -1이던 것 — 'm'은 폭 16이라 자모 x가 (16-18)/2 = -1로 실패와 같아짐) */
+#define kNoGlyph (-999)
 static Int16 Glyph(UInt16 *bits, const Int16 *f, const UInt8 *p, UInt8 c, UInt8 cw, UInt8 mode, UInt16 fh)
 {
     UInt16 row;
@@ -136,7 +137,7 @@ static Int16 Glyph(UInt16 *bits, const Int16 *f, const UInt8 *p, UInt8 c, UInt8 
         const UInt8 *j;
 
         if (t == 0)
-            return -1;
+            return kNoGlyph;
         j = p + (((UInt16)p[124] << 8) | p[125]) + (UInt16)(t - 0xA1) * H * w;
         if (top > (Int16)fh - (Int16)H)
             top = (Int16)fh - (Int16)H;
@@ -157,11 +158,11 @@ static Int16 Glyph(UInt16 *bits, const Int16 *f, const UInt8 *p, UInt8 c, UInt8 
         const UInt16 *img = (const UInt16 *)(f + 13), *loc = img + rw * fh;
 
         if (c < (UInt16)f[1] || c > (UInt16)f[2])
-            return -1;
+            return kNoGlyph;
         x0 = loc[c - f[1]];
         x1 = loc[c - f[1] + 1];
         if (x1 <= x0 || x1 - x0 > 32)
-            return -1;
+            return kNoGlyph;
         for (row = 0; row < fh; row++)
             for (k = 0; k < x1 - x0; k++) {
                 UInt16 b = x0 + k;
@@ -298,7 +299,7 @@ static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
         x = (Coord)(xy >> 16);
         y = (Coord)xy;
         ox = Glyph(g, f, (const UInt8 *)pk, c, cw, om8, fh);
-        if (ox == -1) {
+        if (ox == kNoGlyph) {
             Skip(i, 4, &skip);
             continue;
         }
@@ -377,7 +378,7 @@ static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
             FtrGet(kSyCr, 300 + 2 * i, &xy);
             FtrGet(kSyCr, 301 + 2 * i, &inf);
             nx = Glyph(g, f, (const UInt8 *)pk, (UInt8)(inf >> 16), (UInt8)(inf >> 8), nm, fh);
-            if (nx != -1) {
+            if (nx != kNoGlyph) {
                 Expand(px, g, fh, fi, ti);
                 SetTransp(bmp, ti);
                 HRWinDrawBitmap(hr, bmp, (Coord)(xy >> 16) + nx, (Coord)xy);

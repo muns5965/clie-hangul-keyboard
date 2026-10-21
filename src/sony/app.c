@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v43: v42 실측 — s0(shift 판단 정상), m 건너뜀 까닭 4(글자 모양 없음): m 폭 16 → 자모 x (16-18)/2 = -1이 실패 값(-1)과 같았음 → 실패 값 kNoGlyph.
  * v42: v41 실측 — shift 없이 쌍자음(바로잡기 0 → shift 판단값 자체가 1), A에서 m만 빠짐(25키). 첫 줄 글자 그리기 기록(3~6줄),
  *   자리 기록은 세대에서 처음 값만, 건너뛴 키·까닭(6줄 sk). 
  * v41: v40 실측 — 다시 그리기 정상(흰 글자), 그러나 shift 없이 쌍자음 자판, A에서 m 자리 ㅡ 남음.
@@ -87,7 +88,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v42"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v43"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
