@@ -1,10 +1,11 @@
 /*
- * KbdScan v1 — 다른 기종의 화면 키보드 진단 (크리에이터 'MnKd', NR70V 외 기종 시험용)
+ * KbdScan v2 — 다른 기종의 화면 키보드 진단 (크리에이터 'MnKd', NR70V 외 기종 시험용)
  *
  * 목적: N700C(일본어 OS 3.5) 등에서 (1) 한글 표시·입력에 필요한 시스템 기능이 있는지, (2) 화면 키보드가 키 글자를
  *   그림 한 장으로 그리는지 글자로 그리는지, (3) 누른 키가 키 이벤트(EvtGetEvent)로 지나가는지 입력칸에 바로 들어가는지를 본다.
  * 안전: 시작 때는 Feature 값만 읽는다(공개 함수). 시스템 함수 기록(KdHk 0, src/kdiag/hook.c)은 [Hook ON]을 눌렀을 때만 걸고,
  *   기종에 없는 함수(SysUnimplemented)는 걸지 않는다. 고해상도·Sony 라이브러리·Intl 함수는 쓰지 않는다(OS 3.5에서도 돌게).
+ * v2: 숫자를 앞의 0 없이(Palm StrPrintF %lx는 8자리로 채워 줄이 화면 밖으로 넘쳤음, N700C 실측). 고해상도는 일부러 쓰지 않는다.
  * 화면: 제목 탭 = 페이지 전환(1 상태·횟수·그림, 2 글자·키·입력). [Hook ON] [Hook OFF] [Clear].
  * 기록(feature 'MnKd'): #1 버퍼, #2 코드, #3 핸들, #4 건 함수 비트.
  */
@@ -21,6 +22,7 @@
 #define kRowBtn   2
 
 static Char   gMsg[40] = "tap title: next page";
+static void   Hx(Char *o, UInt32 v);
 static UInt16 gPage = 0;
 
 static UInt16 HookTrap(UInt16 i)
@@ -105,7 +107,8 @@ static void HookOn(void)
     for (i = 0; i < kHookN; i++)
         if (mask & (1UL << i))
             SysSetTrapAddress(HookTrap(i), code + ((UInt32 *)code)[i]);
-    StrPrintF(gMsg, "hook ON mask %lx", mask);
+    StrCopy(gMsg, "hook ON mask ");
+    Hx(gMsg + StrLen(gMsg), mask);
 }
 
 static void HookOff(void)
@@ -158,6 +161,23 @@ static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
     WinDrawRectangleFrame(roundFrame, &r);
 }
 
+/* v2: 앞의 0 없는 16진수 */
+static void Hx(Char *o, UInt32 v)
+{
+    Char   t[9];
+    UInt16 n = 0;
+
+    do {
+        UInt16 d = (UInt16)(v & 15);
+
+        t[n++] = (Char)(d < 10 ? '0' + d : 'a' + d - 10);
+        v >>= 4;
+    } while (v != 0);
+    while (n > 0)
+        *o++ = t[--n];
+    *o = 0;
+}
+
 /* 시스템 Feature 값(없으면 '!') */
 static void Sys(Char *o, UInt16 n)
 {
@@ -166,7 +186,7 @@ static void Sys(Char *o, UInt16 n)
     if (FtrGet(sysFtrCreator, n, &v) != errNone)
         StrCopy(o, "!");
     else
-        StrPrintF(o, "%lx", v);
+        Hx(o, v);
 }
 
 static void Cr4(Char *o, UInt16 n)
@@ -197,8 +217,8 @@ static void DrawPage0(const UInt32 *b)
     Cr4(e, sysFtrNumOEMDeviceID);
     StrPrintF(s, "intl %s ntf %s oem %s %s", a, c, d, e);
     Row(4, s);
-    StrPrintF(s, "blt %s paint %s  hooked %lx", Impl(0xA378) ? "yes" : "no", Impl(sysTrapWinPaintChars) ? "yes" : "no",
-              GetF(4));
+    Hx(a, GetF(4));
+    StrPrintF(s, "blt %s paint %s  hooked %s", Impl(0xA378) ? "yes" : "no", Impl(sysTrapWinPaintChars) ? "yes" : "no", a);
     Row(5, s);
     if (b == NULL) {
         Row(7, "Hook ON, open keyboard in Memo,");
@@ -248,8 +268,11 @@ static void DrawPage1(const UInt32 *b)
     Row(7, "keyDown chr.mod (oldest first)");
     for (k = 0; k < 8; k++) {
         UInt32 v = b[45 + ((b[44] + k) & 7)];
+        Char   x[10], y[10];
 
-        StrPrintF(s, "%x.%x", (UInt16)(v >> 16), (UInt16)v);
+        Hx(x, v >> 16);
+        Hx(y, v & 0xFFFF);
+        StrPrintF(s, "%s.%s", x, y);
         WinDrawChars(s, StrLen(s), 2 + (k % 4) * 40, (9 + k / 4) * kLineH);
     }
     Row(10, "FldInsert len:bytes / Enqueue");
@@ -259,8 +282,14 @@ static void DrawPage1(const UInt32 *b)
         StrPrintF(s, "%lu:%08lx", b[55 + 2 * j], b[56 + 2 * j]);
         WinDrawChars(s, StrLen(s), 2 + (k % 2) * 80, (12 + k / 2) * kLineH);
     }
-    StrPrintF(s, "enq %x %x %x %x", (UInt16)(b[65 + (b[64] & 3)] >> 16), (UInt16)(b[65 + ((b[64] + 1) & 3)] >> 16),
-              (UInt16)(b[65 + ((b[64] + 2) & 3)] >> 16), (UInt16)(b[65 + ((b[64] + 3) & 3)] >> 16));
+    StrCopy(s, "enq");
+    for (k = 0; k < 4; k++) {
+        Char x[10];
+
+        Hx(x, b[65 + ((b[64] + k) & 3)] >> 16);
+        StrCat(s, " ");
+        StrCat(s, x);
+    }
     Row(13, s);
 }
 
@@ -271,8 +300,8 @@ static void Draw(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars(gPage == 0 ? "KbdScan v1 [1/2: system]" : "KbdScan v1 [2/2: input]",
-                         StrLen(gPage == 0 ? "KbdScan v1 [1/2: system]" : "KbdScan v1 [2/2: input]"), 0, 0);
+    WinDrawInvertedChars(gPage == 0 ? "KbdScan v2 [1/2: system]" : "KbdScan v2 [2/2: input]",
+                         StrLen(gPage == 0 ? "KbdScan v2 [1/2: system]" : "KbdScan v2 [2/2: input]"), 0, 0);
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, kLineH);
     ButtonAt(2, kRowBtn, "Hook ON");
     ButtonAt(52, kRowBtn, "Hook OFF");
