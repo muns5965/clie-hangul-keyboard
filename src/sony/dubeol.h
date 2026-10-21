@@ -81,7 +81,9 @@ static inline UInt8 ShiftCase(UInt8 c, UInt16 n)
     if (!IsLetter(c))
         return c;
     FtrGet(kSyCr, n, &dbl);
-    return dbl ? (UInt8)(c & ~0x20) : (UInt8)(c | 0x20);
+    /* v44: Dubeol()(dubeol_map.h)은 옛 ⇪ 규칙 — 대문자 = 기본 자모, 소문자 = 쌍자음. v32~v43은 반대로 넘겨
+     *   shift 없이 쌍자음이 나왔음(MnKbdHan은 대·소문자를 뒤집어 넘김) */
+    return dbl ? (UInt8)(c | 0x20) : (UInt8)(c & ~0x20);
 }
 
 #define HanLabelKey(c) ShiftCase((c), kFtrShift)

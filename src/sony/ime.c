@@ -131,7 +131,7 @@ static Int16 Glyph(UInt16 *bits, const Int16 *f, const UInt8 *p, UInt8 c, UInt8 
 
     MemSet(bits, fh * 4, 0);
     if (mode != 0) {   /* v41: mode 0 = 영문, 1 = 기본 자모, 2 = 쌍자음 */
-        UInt8        t = IsLetter(c) ? Dubeol(mode == 2 ? (UInt8)(c & ~0x20) : (UInt8)(c | 0x20)) : 0;
+        UInt8        t = IsLetter(c) ? Dubeol(mode == 2 ? (UInt8)(c | 0x20) : (UInt8)(c & ~0x20))   /* v44: Dubeol 소문자 = 쌍자음 */ : 0;
         UInt16       H = p[3], w = p[2] >= 2 ? 4 : 2;
         Int16        top = f[9] - 15;
         const UInt8 *j;
