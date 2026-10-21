@@ -7,6 +7,9 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v27(진단): v26 실측 — 일시 쉬프트를 바꿔도 다시 그리지 않음(u0), 한/영 값은 바뀜(han 1). (1) 표시를 글자(아래 함수가 한글을 그려야 함)
+ *   대신 그림(SyIc 2·3, #246·#247)으로. (2) shift 펜 점을 고해상도 좌표(12,392)로 넣어 봄(v25의 6,196은 고해상도로 읽히면 앱 화면
+ *   3,98이라 실크에 안 옴). 누른 뒤 첫 펜 누름 2개를 위치 상관없이 7줄 끝에 기록.
  * v26(진단): 다시 그리기 유도를 Graffiti 일시 쉬프트 바꾸기(누를 때 반대로, 뗄 때 원래대로)로. v25 실측: shift 펜 점은 넣기 결과 0인데
  *   이벤트가 오지 않음, 다시 그리기 없음(d1). 6줄 끝 u = 뗄 때까지 다시 그린 글자 수, 7줄 d = 지금까지.
  * v25(진단): 표시를 고정 자리(143,105)에 맨 아래 키 줄 글자를 그릴 때마다(자판 종류 무관). 한/영 누름은 버리고 shift 키를
@@ -59,7 +62,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v26"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v27"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -281,6 +284,8 @@ static UInt16 ImOn(void)
     if (a[0] == 0 || a[1] == 0)
         a[0] = a[1] = 0;
     DmWrite(code, 20, a, 24);
+    FtrSet(kSyCr, 246, a[4]);   /* v27: 한/영 표시 그림 주소(키 글자 패치가 WinDrawBitmap으로 그림) */
+    FtrSet(kSyCr, 247, a[5]);
     Protect(true);
     FtrSet(kSyCr, kFtrImH, (UInt32)h);
     FtrSet(kSyCr, kFtrImC, (UInt32)code);
@@ -381,6 +386,8 @@ static UInt16 ImOff(void)
         }
         FtrSet(kSyCr, k < 2 ? kFtrIcH0 + k : 9 + k, 0);
     }
+    FtrSet(kSyCr, 246, 0);   /* v27 */
+    FtrSet(kSyCr, 247, 0);
     if (buf != NULL)
         MemPtrFree(buf);
     MemHandleUnlock((MemHandle)GetF(kFtrImH));
@@ -640,8 +647,12 @@ static void DrawDebug(void)
     {   /* v24 진단: '`' '=' 키 글자 위치, 한/영 표시 위치(고해상도, 실크 화면 밖 창 기준) */
         UInt32 a = GetF(240), b = GetF(241), c = GetF(242);
 
-        StrPrintF(s, "` %d,%d = %d,%d mk %d,%d u%ld", (Int16)(a >> 16), (Int16)a, (Int16)(b >> 16), (Int16)b,
-                  (Int16)(c >> 16), (Int16)c, GetF(243) ? (Int32)(GetF(243) - GetF(215)) : -1L);
+        UInt32 q1 = GetF(248), q2 = GetF(249);
+
+        StrPrintF(s, "e%lx after %d,%d %d,%d mk %d,%d", GetF(243), (Int16)(q1 >> 16), (Int16)q1, (Int16)(q2 >> 16),
+                  (Int16)q2, (Int16)(c >> 16), (Int16)c);
+        (void)a;
+        (void)b;
         Row(6, s);
     }
     {   /* v16: 8·10줄의 v8 비교 진단은 뺌(창·글꼴은 공개 함수로 바꿈, KOREAN_SUPPORT v8·v15 실측) */

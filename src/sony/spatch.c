@@ -241,7 +241,10 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
                 RctSetRectangle(&r, 143, 105, 30, rc[3]);
                 FtrSet(kSyCr, 242, ((UInt32)(UInt16)r.topLeft.x << 16) | (UInt16)r.topLeft.y);
-                if (GetF(kFtrHanTab) != 0) {
+                if (GetF(246) != 0 && GetF(247) != 0) {   /* v27: 그림으로(아래 함수가 한글을 못 그려도 됨) */
+                    (void)m;
+                    WinDrawBitmap((BitmapPtr)GetF(GetF(kFtrHanTab) != 0 ? 246 : 247), r.topLeft.x, r.topLeft.y);
+                } else if (GetF(kFtrHanTab) != 0) {
                     m[0] = 0xC7;
                     m[1] = 0xD1;
                     ((BltFn)orig)(p1, &r, p3, m, 2, p6, p7);
