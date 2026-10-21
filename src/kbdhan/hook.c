@@ -8,6 +8,8 @@
  *   v3 실측(T600C): Palm 키보드는 cap이 켜진 채 shift를 누르면 cap이 꺼져 "cap+shift = 쌍자음"(MnSonyKbd 규칙)을 쓸 수 없음.
  *   전환 직후 키보드가 키 글자를 다시 그리게 할 공개 방법이 없어, 이번 화면에서 그린 키 글자 위치(표 [16]~)를 기억해 두었다가
  *   그 자리를 지우고 우리가 다시 그린다. 빈칸 누름은 nilEvent로 바꿔 키보드에 넘기지 않는다.
+ * v7: 키 글자만 바꾼다 — 그리는 창이 키보드 화면(지금 폼) 창이고 y가 키 세 줄(60~100) 안일 때만.
+ *   v6 실측: 키보드 화면이 열린 동안 메뉴의 명령 글자(/U /X …)와 입력칸의 한 글자 줄까지 자모로 그려짐.
  * v6: 한/영 표시 자리 지우기를 y 123부터(v5 실측: y 121부터 지워 space 키 아래 테두리가 끊김).
  * v5: 한/영 표시를 키 글자가 그려진 뒤(표 [14] > 0)에 그림 — v4는 열린 직후 첫 이벤트에 그려 키보드 화면 그리기에 덮임(실측).
  * v2·v3: 펜이 cap 키를 누르면 한글 모드(v1 실측: 그리는 순간의 Graffiti caps가 한 박자 늦음). v3에서 좌표를 창 기준으로 고침.
@@ -44,6 +46,7 @@ typedef void (*GetFn)(EventType *, Int32);
 #define kMarkX   113
 #define kMarkY   126
 #define kTabN    40
+#define kKeyRows(y)  ((y) >= 60 && (y) <= 100)   /* v7: q~p, a~l, z~m 줄 글자 y(실측 z~m 95) */
 
 static inline UInt32 *Buf(void)
 {
@@ -166,7 +169,8 @@ void KhDraw(const Char *s, Int16 len, Coord x, Coord y)
 {
     UInt32 *b = Buf();
 
-    if (b != NULL && b[0] != 0 && len == 1 && s != NULL && Letter((UInt8)s[0])) {
+    if (b != NULL && b[0] != 0 && len == 1 && s != NULL && Letter((UInt8)s[0]) && kKeyRows(y) &&
+        FrmGetActiveForm() != NULL && WinGetDrawWindow() == FrmGetWindowHandle(FrmGetActiveForm())) {
         Remember(b, (UInt8)s[0], x, y);
         DrawKey(b, (UInt8)s[0], x, y);
         return;
