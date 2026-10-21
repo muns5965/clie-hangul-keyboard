@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v19: 지우기를 거부했을 때 맨 위 패치가 누구인지 기록(#204, src/common/top_who.h)하고, 다음에 앱을 열면 첫 화면 메시지로
+ *   'can't delete: MnHangul on top' 등(#205 = 아직 안 보여 준 거부). 진단 10줄 off 뒤에 누구(H/S/C/?).
  * v18: 런처 지우기 때 자동 끄기(MnHangul v66과 같은 방식) — 켤 때 '-pdb'(sysNotifyDeleteProtectedEvent) 등록,
  *   크리에이터 MnSy DB를 지우려 하면 입력·키 글자 둘 다 맨 위(또는 이미 빠짐)인지 먼저 확인하고 둘 다 끈다. 하나라도 위에
  *   다른 패치가 있으면 아무것도 끄지 않음(지우기 거부). 등록 해제는 OFF 때, 그리고 앱 지우기 직전 'gbye' 알림 때.
@@ -40,7 +42,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v18"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v19"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -383,27 +385,38 @@ static UInt16 SelfOff(void)
 
 /* v18: 지우기 알림에서 끄기(전역 없음). 먼저 입력·키 글자 모두 풀 수 있는지(맨 위 또는 이미 빠짐) 확인하고, 하나라도
  *   위에 다른 패치가 있으면 아무것도 끄지 않는다. 결과(#202): 1 끔, 2 위에 다른 패치(남김), 4 켜진 것 없음 */
-static UInt16 NotifyOffCheck(void)
+#define kFtrNtWho 204   /* v19: 거부 때 맨 위 패치(top_who.h kWho*) */
+#define kFtrNtNew 205   /* v19: 아직 화면에 안 보여 준 거부 */
+#include "../common/top_who.h"
+/* *topP = 거부(2)일 때 맨 위 주소 */
+static UInt16 NotifyOffCheck(UInt32 *topP)
 {
     UInt8  *code = (UInt8 *)GetF(kFtrImC);
-    UInt32  e = GetF(kFtrEntry);
+    UInt32  e = GetF(kFtrEntry), t;
     UInt16  k;
 
     if (code == NULL && e == 0)
         return 4;
-    if (e != 0 && (UInt32)SysGetTrapAddress(kTrapBlt) != e && SyBltLinked(e) != 0)
+    if (e != 0 && (t = (UInt32)SysGetTrapAddress(kTrapBlt)) != e && SyBltLinked(e) != 0) {
+        *topP = t;
         return 2;
+    }
     if (code != NULL)
-        for (k = 0; k < 2; k++)
-            if (SyImLinked(k == 0 ? sysTrapEvtGetEvent : sysTrapWinDrawBitmap,
-                           (UInt32)(code + ((UInt32 *)code)[k])) == 2)
+        for (k = 0; k < 2; k++) {
+            UInt16 trap = k == 0 ? sysTrapEvtGetEvent : sysTrapWinDrawBitmap;
+
+            if (SyImLinked(trap, (UInt32)(code + ((UInt32 *)code)[k])) == 2) {
+                *topP = (UInt32)SysGetTrapAddress(trap);
                 return 2;
+            }
+        }
     return 0;
 }
 
 static void NotifyOff(void)
 {
-    UInt16 r = NotifyOffCheck();
+    UInt32 top = 0;
+    UInt16 r = NotifyOffCheck(&top);
 
     if (r == 0) {
         ImOff();
@@ -413,6 +426,10 @@ static void NotifyOff(void)
     if (r == 4 && GetF(kFtrNtOff) == 1)   /* 이미 끈 뒤의 알림이 결과를 덮지 않게 */
         return;
     FtrSet(kSyCr, kFtrNtOff, r);
+    if (r == 2) {   /* v19 */
+        FtrSet(kSyCr, kFtrNtWho, TopWho(top, kSyCr));
+        FtrSet(kSyCr, kFtrNtNew, 1);
+    }
 }
 
 /* 알림 처리(전역 없음) */
@@ -632,7 +649,9 @@ static void DrawDebug(void)
                 StrCopy(b, "ok");
             else
                 StrPrintF(b, "%lx", rg);
-            StrPrintF(s, "ntf %s -pdb %lu %s off%lu", b, GetF(kFtrNtPdb), a, GetF(kFtrNtOff));
+            StrPrintF(s, "ntf %s -pdb %lu %s off%lu%s", b, GetF(kFtrNtPdb), a, GetF(kFtrNtOff),
+                      GetF(kFtrNtOff) == 2 ? (GetF(kFtrNtWho) == kWhoHg ? "H" : GetF(kFtrNtWho) == kWhoSy ? "S" :
+                                              GetF(kFtrNtWho) == kWhoCjk ? "C" : "?") : "");
             Row(10, s);
         }
     }
@@ -672,6 +691,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         return 0;
 
     FtrSet(kSyCr, kFtrRun, 1);
+    if (GetF(kFtrNtNew) != 0) {   /* v19: 지우기 거부 안내(한 번) */
+        WhoMsg(gMsg, (UInt16)GetF(kFtrNtWho));
+        FtrSet(kSyCr, kFtrNtNew, 0);
+    }
     StartHires();
     Draw();
     do {

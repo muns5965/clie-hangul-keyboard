@@ -70,9 +70,11 @@ m68k-palmos-obj-res app
 m68k-palmos-objdump -d app > app.dis
 # 리셋 알림(앱 전역변수 없음)에서 부르는 함수는 %a5(전역) 참조가 없어야 한다
 # v18: + 지우기 알림(sysAppLaunchCmdNotify, 전역 없음)에서 부르는 함수
-for fn in GetF PrefGet PrefPut AppDB Protect RomBlt PatchOn ImOn SonyOn NotifyReg NotifyLog NotifyOff NotifyOffCheck PatchOff ImOff; do
+for fn in GetF PrefGet PrefPut AppDB Protect RomBlt PatchOn ImOn SonyOn NotifyReg NotifyLog NotifyOff NotifyOffCheck PatchOff ImOff WhoIn TopWho; do
   grep -q "<$fn>:" app.dis || { echo "error: $fn not found" >&2; exit 1; }
-  n=$(awk -v f="<$fn>:" '$2==f {on=1; next} /^[0-9a-f]+ </ {on=0} on && /%a5/' app.dis | wc -l)
+  # 함수의 마지막 rts 뒤(다음 함수의 문자열 상수가 이어 붙는 자리)는 코드가 아니므로 뺀다(v19)
+  n=$(awk -v f="<$fn>:" '$2==f {on=1; next} /^[0-9a-f]+ </ {on=0} on {l[++k]=$0; if ($0 ~ /\trts/) last=k}
+      END {if (last == 0) last = k; c=0; for (i=1; i<=last; i++) if (l[i] ~ /%a5/) c++; print c}' app.dis)
   [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
 done
 

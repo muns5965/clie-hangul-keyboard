@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v67: 지우기를 거부했을 때 맨 위 패치가 누구인지 기록(#165, src/common/top_who.h)하고, 다음에 앱을 열면 첫 화면 메시지로
+ *   'can't delete: MnSonyKbd on top' 등(#166 = 아직 안 보여 준 거부). 진단 11줄 off 뒤에 누구(H/S/C/?).
  * v66: 런처 지우기 때 자동 끄기 — '-pdb' 알림이 MnHangul DB(크리에이터 MnHg: 앱, 24 글꼴)에 대해 오면 모두 끈다
  *   (All OFF와 같은 순서, 전역 없는 Uninst* 함수). 하나라도 다른 패치가 위에 있거나 호출 조사(Count)가 켜져 있으면
  *   아무것도 끄지 않는다(지우기는 거부됨, 반쯤 꺼진 상태를 만들지 않음). 결과 #164(1 끔, 2 위에 다른 패치, 3 Count 켜짐,
@@ -127,7 +129,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v66"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v67"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -779,36 +781,50 @@ static UInt16 SelfOff(void)
 /* v66: 지우기 알림('-pdb')에서 모두 끄기(전역 없음). 먼저 모두 맨 위인지 확인하고, 하나라도 아니면 아무것도 끄지 않는다.
  *   결과(#164): 1 끔, 2 위에 다른 패치(남김), 3 Count 켜짐(전역 표가 필요해 여기서 못 끔), 4 켜진 것 없음 */
 #define kFtrNtOff 164
+#define kFtrNtWho 165   /* v67: 거부 때 맨 위 패치(top_who.h kWho*) */
+#define kFtrNtNew 166   /* v67: 아직 화면에 안 보여 준 거부 */
+#include "../common/top_who.h"
 static UInt16 UninstPatch(UInt32 *origP, Boolean unreg);
-static UInt16 NotifyOffCheck(void)
+/* *topP = 거부(2)일 때 우리 위에 있는 맨 위 주소 */
+static UInt16 NotifyOffCheck(UInt32 *topP)
 {
     UInt8  *code;
+    UInt32  t;
     UInt16  i;
 
     if (GetF(kFtrCountC) != 0)
         return 3;
     if (ProtectCount() == 0)
         return 4;
-    if (GetF(kFtrEntry) != 0 && (UInt32)SysGetTrapAddress(kTrapBlt) != GetF(kFtrEntry))
+    if (GetF(kFtrEntry) != 0 && (t = (UInt32)SysGetTrapAddress(kTrapBlt)) != GetF(kFtrEntry)) {
+        *topP = t;
         return 2;
+    }
     if ((code = (UInt8 *)GetF(kFtrWidthC)) != NULL)
         for (i = 0; i < kWidthN; i++)
-            if ((UInt8 *)SysGetTrapAddress(WidthTrap(i)) != code + ((UInt32 *)code)[i])
+            if ((t = (UInt32)SysGetTrapAddress(WidthTrap(i))) != (UInt32)(code + ((UInt32 *)code)[i])) {
+                *topP = t;
                 return 2;
+            }
     if ((code = (UInt8 *)GetF(kFtrIntlC)) != NULL)
         for (i = 0; i < kIntlN; i++)
-            if ((UInt8 *)IntlGetRoutineAddress(IntlSel(i)) != code + ((UInt32 *)code)[i])
+            if ((t = (UInt32)IntlGetRoutineAddress(IntlSel(i))) != (UInt32)(code + ((UInt32 *)code)[i])) {
+                *topP = t;
                 return 2;
+            }
     if ((code = (UInt8 *)GetF(kFtrKbdC)) != NULL)
         for (i = 0; i < kKbdN; i++)
-            if ((UInt8 *)SysGetTrapAddress(KbdTrap(i)) != code + ((UInt32 *)code)[i])
+            if ((t = (UInt32)SysGetTrapAddress(KbdTrap(i))) != (UInt32)(code + ((UInt32 *)code)[i])) {
+                *topP = t;
                 return 2;
+            }
     return 0;
 }
 
 static void NotifyOff(void)
 {
-    UInt16 r = NotifyOffCheck();
+    UInt32 top = 0;
+    UInt16 r = NotifyOffCheck(&top);
     UInt32 orig;
 
     if (r == 0) {   /* 모두 맨 위 확인됨 → All OFF와 같은 순서 */
@@ -818,9 +834,13 @@ static void NotifyOff(void)
         UninstPatch(&orig, false);   /* 글꼴 잠금·24 글꼴 보호도 풂 */
         r = 1;
     }
-    if (r == 4 && GetF(kFtrNtOff) == 1)   /* 지우기 한 번에 알림이 2번 옴(v65 실측): 두 번째(이미 꺼짐)가 결과를 덮지 않게 */
+    if (r == 4 && GetF(kFtrNtOff) == 1)   /* 앱 다음 24 글꼴 알림(이미 꺼짐)이 결과를 덮지 않게 */
         return;
     FtrSet(kHgCreator, kFtrNtOff, r);
+    if (r == 2) {   /* v67 */
+        FtrSet(kHgCreator, kFtrNtWho, TopWho(top, kHgCreator));
+        FtrSet(kHgCreator, kFtrNtNew, 1);
+    }
 }
 
 /* v11 폭 진단 */
@@ -1541,7 +1561,9 @@ static void Draw(void)
             StrCopy(b, "ok");
         else
             StrPrintF(b, "%lx", rg);
-        StrPrintF(s, "ntf %s -pdb %lu %s off%lu hots %lu", b, GetF(kFtrNtPdb), a, GetF(kFtrNtOff), GetF(kFtrNtHots));
+        StrPrintF(s, "ntf %s -pdb %lu %s off%lu%s hots %lu", b, GetF(kFtrNtPdb), a, GetF(kFtrNtOff),
+                  GetF(kFtrNtOff) == 2 ? (GetF(kFtrNtWho) == kWhoHg ? "H" : GetF(kFtrNtWho) == kWhoSy ? "S" :
+                                          GetF(kFtrNtWho) == kWhoCjk ? "C" : "?") : "", GetF(kFtrNtHots));
     }
     Row(10, s);
     XY(a, GetF(12));
@@ -1822,6 +1844,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         return 0;
 
     FtrSet(kHgCreator, 106, 1);   /* v29: MnHangul 실행 중 — 다른 창 글자 기록 제외 */
+    if (GetF(kFtrNtNew) != 0) {   /* v67: 지우기 거부 안내(한 번) */
+        WhoMsg(gMsg, (UInt16)GetF(kFtrNtWho));
+        FtrSet(kHgCreator, kFtrNtNew, 0);
+    }
     StartHires();
     Draw();
     do {
