@@ -109,8 +109,30 @@ void HgImGet(EventType *event, Int32 timeout)
     if (event->eType == penDownEvent) {          /* 앱 영역을 누르면 커서가 옮겨질 수 있어 조합 끝 */
         UInt32 v = 0;
 
-        if (event->screenY >= 160)
+        if (event->screenY >= 160) {
             SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
+            {   /* v20 진단: 가상 실크 펜 누름 3개 */
+                UInt32 k = 0;
+
+                FtrGet(kSyCr, 210, &k);
+                if (k > 2)
+                    k = 0;
+                FtrSet(kSyCr, 211 + (UInt16)k, ((UInt32)(UInt16)event->screenX << 16) | (UInt16)event->screenY);
+                FtrSet(kSyCr, 210, k + 1 > 2 ? 0 : k + 1);
+            }
+            if (kHanTab(event->screenX, event->screenY)) {   /* v20 진단: 한/영 단추 후보 — 시험 표시만 바꾸고 Sony에는 넘기지 않음 */
+                FtrGet(kSyCr, kFtrHanTab, &v);
+                FtrSet(kSyCr, kFtrHanTab, v ? 0 : 1);
+                v = 0;
+                FtrGet(kSyCr, 219, &v);
+                FtrSet(kSyCr, 219, v + 1);
+                v = 0;
+                FtrGet(kSyCr, 108, &v);
+                FtrSet(kSyCr, 215, v);
+                event->eType = nilEvent;
+                return;
+            }
+        }
         if (event->screenY < 160) {
             st[0] = 0;
             CtUnknown(kSyCr, kSyFtrFld);     /* v10: 앱 화면 누름은 커서를 옮길 수 있음(조합은 이미 끝) */
@@ -137,6 +159,10 @@ void HgImGet(EventType *event, Int32 timeout)
         } else   /* v48: 가상 키보드 일반 키 = 3(키 누름 중 순간 상태로 영문 내림 안 함)
                   * v50: 키 영역(y < 213)만 3. 아래 탭·상태 표시줄(키보드 띄우는 버튼 등)은 0 */
             FtrSet(kSyCr, kFtrPenCaps, event->screenY < kKeyAreaEnd ? 3 : 0);
+        return;
+    }
+    if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(event->screenX, event->screenY)) {
+        event->eType = nilEvent;                 /* v20 진단: 한/영 단추 후보 자리는 Sony에 넘기지 않음 */
         return;
     }
     if (event->eType == penUpEvent) {            /* v39: ⇪ 자리를 눌렀는데 키 글자 다시 그리기가 없었으면 되돌림 */

@@ -153,6 +153,26 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
     if (orig == 0)
         return 0;
+    if (p2 != NULL && len == 3 && chars != NULL && chars[0] == 's' && chars[1] == 'y' && chars[2] == 'm' && SilkWin() &&
+        GetF(106) == 0) {   /* v20 진단: 가상 키보드 'sym' 탭 글자 — 그린 뒤 오른쪽에 한/영 표시('한' C7D1 또는 'A') */
+        RectangleType r = *(const RectangleType *)p2;
+        UInt8         m[2];
+        UInt32        res = ((BltFn)orig)(p1, p2, p3, chars, len, p6, p7);
+
+        FtrSet(kSyCr, 216, GetF(216) + 1);
+        FtrSet(kSyCr, 217, ((UInt32)(UInt16)r.topLeft.x << 16) | (UInt16)r.topLeft.y);
+        FtrSet(kSyCr, 218, ((UInt32)(UInt16)r.extent.x << 16) | (UInt16)r.extent.y);
+        r.topLeft.x += r.extent.x + r.extent.y / 2;
+        if (GetF(kFtrHanTab) != 0) {
+            m[0] = 0xC7;
+            m[1] = 0xD1;
+            ((BltFn)orig)(p1, &r, p3, m, 2, p6, p7);
+        } else {
+            m[0] = 'A';
+            ((BltFn)orig)(p1, &r, p3, m, 1, p6, p7);
+        }
+        return res;
+    }
     if (p2 != NULL && (void *)WinGetDrawWindow() != (void *)WinGetActiveWindow() && GetF(106) == 0) {
         UInt8 c = (len == 1 && chars != NULL) ? chars[0] : 0;
 

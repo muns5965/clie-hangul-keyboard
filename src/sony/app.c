@@ -7,6 +7,9 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v20(진단): 한/영 단추를 ⇪ 대신 sym 탭 오른쪽 빈칸으로 옮기는 시험 — 펜 위치 기록, sym 탭 옆 '한'/'A' 표시, 빈칸 누름 = 시험 표시만
+ *   전환(입력은 아직 ⇪ 그대로). 진단 화면 7·8줄. dubeol.h kHanTab 참고. 동기: 시스템 키보드(MnKbdHan)와 같이 띄우면
+ *   시스템 cap이 Graffiti ⇪를 바꿔 Sony 쪽 한글 판정이 어긋남(실측 2026-10-21).
  * v19: 지우기를 거부했을 때 맨 위 패치가 누구인지 기록(#204, src/common/top_who.h)하고, 다음에 앱을 열면 첫 화면 메시지로
  *   'can't delete: MnHangul on top' 등(#205 = 아직 안 보여 준 거부). 진단 10줄 off 뒤에 누구(H/S/C/?).
  * v18: 런처 지우기 때 자동 끄기(MnHangul v66과 같은 방식) — 켤 때 '-pdb'(sysNotifyDeleteProtectedEvent) 등록,
@@ -42,7 +45,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v19"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v20"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -624,11 +627,28 @@ static void DrawDebug(void)
         m++;
     }
     {   /* v16: 8·10줄의 v8 비교 진단은 뺌(창·글꼴은 공개 함수로 바꿈, KOREAN_SUPPORT v8·v15 실측) */
-        StrPrintF(s, "win/font: public API, overlay %lu", GetF(127));
-        Row(8, s);
-        StrPrintF(s, "get %lu ev %lx/%lx", GetF(188), GetF(189),
-                  GetF(kFtrImC) ? *(const UInt32 *)(GetF(kFtrImC) + 8) : 0UL);   /* v9: 입력 불린 수, 맨 위/아래 */
-        Row(7, s);
+        {   /* v20 진단: sym 탭·한/영 빈칸 */
+            UInt32 xy = GetF(217), wh = GetF(218);
+
+            StrPrintF(s, "sym %lu @%d,%d %ux%u han %lu t%lu", GetF(216), (Int16)(xy >> 16), (Int16)xy,
+                      (UInt16)(wh >> 16), (UInt16)wh, GetF(214), GetF(219));   /* #214 = dubeol.h kFtrHanTab */
+            Row(8, s);
+        }
+        {   /* v20 진단: 가상 실크 펜 누름 3개(오래된 것부터), 빈칸 누른 뒤 다른 창 글자 그리기 수 차이 */
+            UInt16 k;
+            Char   t[16];
+
+            StrCopy(s, "pen");
+            for (k = 0; k < 3; k++) {
+                UInt32 v = GetF(211 + (UInt16)((GetF(210) + k) % 3));
+
+                StrPrintF(t, " %d,%d", (Int16)(v >> 16), (Int16)v);
+                StrCat(s, t);
+            }
+            StrPrintF(t, " d%ld", (Int32)(GetF(108) - GetF(215)));
+            StrCat(s, t);
+            Row(7, s);
+        }
         {   /* v10: 조합 중 커서 이동 감지 — 비교 수, 다름 수, 마지막 기대/실제 위치, X 다름, C 조합 중 (v9의 blt top 줄 자리) */
             UInt32 fl = GetF(194), la = GetF(193);
 
