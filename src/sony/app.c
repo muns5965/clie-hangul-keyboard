@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v23(진단): v22 실측 — 320×130 그림은 자판이 아니라 Graffiti 판(표시가 Graffiti 영역에 나옴) → 그 표시는 끔.
+ *   자판은 그림 기록에 없음. 가상 실크에 그리는 여러 글자 문자열(space 등)을 기록해 탭 줄 위치를 잡을 기준으로 삼는다(진단 3~6줄).
  * v22(진단): v21 실측 — 가상 실크 그림은 자판 전체 320×130(@0,0, 탭 줄 포함 한 장)과 상태 표시줄 아이콘뿐, 키 글자만 글자로 그림.
  *   그래서 자판 그림(320×130)을 그린 직후 그 위 sym 오른쪽(+136,+108, 고해상도)에 한/영 표시 그림(SyIc 2 '한'·3 'A', 투명 바탕,
  *   tools/gen-tab-mark.py)을 그린다. 빈칸 누름은 버리는 대신 abc 탭(10,219) 누름으로 바꿔 넘겨 Sony가 자판을 다시 그리게 하는 시험.
@@ -51,7 +53,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v22"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v23"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -613,12 +615,20 @@ static void DrawDebug(void)
     Row(0, s);
     StrPrintF(s, "draw %lu ovl %lu heal %lx b%lx", GetF(108), GetF(127), GetF(kSyFtrHeal), GetF(kFtrBoot) >> 28);
     Row(1, s);
-    /* v21 진단: 3~6줄 = 가상 실크(화면 밖 창) 그림 그리기 최근 4개(오래된 것부터). v46 판정 기록 표시는 잠시 뺌(기록은 계속) */
+    /* v23 진단: 3~6줄 = 가상 실크(화면 밖 창)에 그린 여러 글자 문자열 최근 4개(앞 4바이트, 사각형). v46 판정 기록 표시는 잠시 뺌 */
     for (m = 0; m < 4; m++) {
-        UInt16 k = (UInt16)((GetF(220) + m) & 3);
-        UInt32 a = GetF(221 + 3 * k), wh = GetF(222 + 3 * k), xy = GetF(223 + 3 * k);
+        UInt16 k = (UInt16)((GetF(234) + m) & 3);
+        UInt32 t = GetF(235 + 3 * k), xy = GetF(236 + 3 * k), wh = GetF(237 + 3 * k);
+        Char   c4[5];
+        UInt16 i;
 
-        StrPrintF(s, "bmp %lx %ux%u @%d,%d", a, (UInt16)(wh >> 16), (UInt16)wh, (Int16)(xy >> 16), (Int16)xy);
+        for (i = 0; i < 4; i++) {
+            c4[i] = (Char)(t >> (24 - 8 * i));
+            if ((UInt8)c4[i] < 0x20 || (UInt8)c4[i] > 0x7E)
+                c4[i] = c4[i] ? '?' : ' ';
+        }
+        c4[4] = 0;
+        StrPrintF(s, "str '%s' @%d,%d %ux%u", c4, (Int16)(xy >> 16), (Int16)xy, (UInt16)(wh >> 16), (UInt16)wh);
         Row(2 + m, s);
     }
     StrPrintF(s, "silk bmps %lu", GetF(233));

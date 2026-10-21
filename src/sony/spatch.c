@@ -153,6 +153,18 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
     if (orig == 0)
         return 0;
+    if (p2 != NULL && len >= 2 && chars != NULL && SilkWin() && GetF(106) == 0) {   /* v23 진단: 가상 실크 여러 글자 그리기 최근 4개 */
+        UInt32 k = GetF(234) & 3, v = 0;
+        UInt16 i;
+        const Int16 *rc = (const Int16 *)p2;
+
+        for (i = 0; i < 4; i++)
+            v = (v << 8) | (i < len ? chars[i] : 0);
+        FtrSet(kSyCr, 235 + 3 * (UInt16)k, v);
+        FtrSet(kSyCr, 236 + 3 * (UInt16)k, ((UInt32)(UInt16)rc[0] << 16) | (UInt16)rc[1]);
+        FtrSet(kSyCr, 237 + 3 * (UInt16)k, ((UInt32)(UInt16)rc[2] << 16) | (UInt16)rc[3]);
+        FtrSet(kSyCr, 234, (k + 1) & 3);
+    }
     if (p2 != NULL && len == 3 && chars != NULL && chars[0] == 's' && chars[1] == 'y' && chars[2] == 'm' && SilkWin() &&
         GetF(106) == 0) {   /* v20 진단: 가상 키보드 'sym' 탭 글자 — 그린 뒤 오른쪽에 한/영 표시('한' C7D1 또는 'A') */
         RectangleType r = *(const RectangleType *)p2;

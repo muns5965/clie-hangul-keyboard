@@ -244,7 +244,7 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
     const UInt32 *ic = Icons();
 
     BmpLog(bmp, x, y);   /* v21 진단 */
-    if (bmp != NULL && ic[4] != 0 && ic[5] != 0) {   /* v22: 자판 전체 그림(320×130) 직후 sym 오른쪽에 한/영 표시 */
+    if (0 && bmp != NULL && ic[4] != 0 && ic[5] != 0) {   /* v22: 320×130은 자판이 아니라 Graffiti 판 그림이었음(v22 실측) → 끔 */
         WinHandle w = WinGetDrawWindow();
         Coord     bw = 0, bh = 0;
 
