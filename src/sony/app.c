@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v21(진단): v20 실측 sym 0(탭 글자가 BltDrawChars로 오지 않음), 빈칸 누름 t17·펜 73,219 80,223 → 탭 줄은 그림으로 추정.
+ *   가상 실크 그림 그리기 최근 4개(주소·크기·위치)를 진단 3~6줄에, 빈칸을 누르면 화면에 바로 '한'/'A'를 그려 자리 확인.
  * v20(진단): 한/영 단추를 ⇪ 대신 sym 탭 오른쪽 빈칸으로 옮기는 시험 — 펜 위치 기록, sym 탭 옆 '한'/'A' 표시, 빈칸 누름 = 시험 표시만
  *   전환(입력은 아직 ⇪ 그대로). 진단 화면 7·8줄. dubeol.h kHanTab 참고. 동기: 시스템 키보드(MnKbdHan)와 같이 띄우면
  *   시스템 cap이 Graffiti ⇪를 바꿔 Sony 쪽 한글 판정이 어긋남(실측 2026-10-21).
@@ -45,7 +47,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v20"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v21"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -596,9 +598,8 @@ static void DrawDebug(void)
 {
     RectangleType r;
     Char          s[48];
-    UInt32        k16 = GetF(176), w = GetF(128);
-    Int16         j;
-    UInt16        m = 0;
+    UInt32        w = GetF(128);
+    UInt16        m;
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
@@ -608,24 +609,16 @@ static void DrawDebug(void)
     Row(0, s);
     StrPrintF(s, "draw %lu ovl %lu heal %lx b%lx", GetF(108), GetF(127), GetF(kSyFtrHeal), GetF(kFtrBoot) >> 28);
     Row(1, s);
-    for (j = 9; j >= 0; j--) {   /* 최근 10개(v8: 진단 줄 자리로 16 → 10), 오래된 것부터 한 줄에 2개 */
-        UInt32 v;
-        Char   ch[2];
+    /* v21 진단: 3~6줄 = 가상 실크(화면 밖 창) 그림 그리기 최근 4개(오래된 것부터). v46 판정 기록 표시는 잠시 뺌(기록은 계속) */
+    for (m = 0; m < 4; m++) {
+        UInt16 k = (UInt16)((GetF(220) + m) & 3);
+        UInt32 a = GetF(221 + 3 * k), wh = GetF(222 + 3 * k), xy = GetF(223 + 3 * k);
 
-        if ((UInt32)j >= k16)
-            continue;
-        v = GetF(160 + (UInt16)((k16 - 1 - (UInt32)j) & 15));
-        if ((v >> 30) == 1) {
-            ch[0] = (Char)((v >> 10) & 0xFF);
-            ch[1] = 0;
-            StrPrintF(s, "L%s%u H%up%uc%ut%u", ch, (UInt16)((v >> 18) & 0xFFF), (UInt16)((v >> 9) & 1),
-                      (UInt16)((v >> 7) & 3), (UInt16)((v >> 6) & 1), (UInt16)((v >> 2) & 0xF));
-        } else
-            StrPrintF(s, "I%u o%ua%up%u", (UInt16)((v >> 18) & 0xFFF), (UInt16)(v & 1), (UInt16)((v >> 1) & 1),
-                      (UInt16)((v >> 7) & 3));
-        WinDrawChars(s, StrLen(s), 2 + (m % 2) * 80, (3 + m / 2) * kLineH);
-        m++;
+        StrPrintF(s, "bmp %lx %ux%u @%d,%d", a, (UInt16)(wh >> 16), (UInt16)wh, (Int16)(xy >> 16), (Int16)xy);
+        Row(2 + m, s);
     }
+    StrPrintF(s, "silk bmps %lu", GetF(233));
+    Row(6, s);
     {   /* v16: 8·10줄의 v8 비교 진단은 뺌(창·글꼴은 공개 함수로 바꿈, KOREAN_SUPPORT v8·v15 실측) */
         {   /* v20 진단: sym 탭·한/영 빈칸 */
             UInt32 xy = GetF(217), wh = GetF(218);

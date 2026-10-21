@@ -129,6 +129,20 @@ void HgImGet(EventType *event, Int32 timeout)
                 v = 0;
                 FtrGet(kSyCr, 108, &v);
                 FtrSet(kSyCr, 215, v);
+                {   /* v21 진단: 화면에 바로 '한'/'A'를 그려 자리 확인(Sony가 다시 그리면 지워질 수 있음) */
+                    WinHandle     old = WinSetDrawWindow(WinGetDisplayWindow());
+                    RectangleType rr;
+                    Char          m[2];
+
+                    RctSetRectangle(&rr, 70, 213, 16, 11);
+                    WinEraseRectangle(&rr, 0);
+                    v = 0;
+                    FtrGet(kSyCr, kFtrHanTab, &v);
+                    m[0] = v ? (Char)0xC7 : 'A';
+                    m[1] = (Char)0xD1;
+                    WinDrawChars(m, v ? 2 : 1, 71, 213);
+                    WinSetDrawWindow(old);
+                }
                 event->eType = nilEvent;
                 return;
             }
@@ -214,9 +228,34 @@ void HgImGet(EventType *event, Int32 timeout)
 }
 
 /* v43: ⇪ 키 그림 → 한글 모드 판정 + '한A' 그림 */
+/* v21 진단: 가상 실크(화면 밖 창) 그림 기록 — 탭 줄(abc·int'l·sym)이 그림인지, 어디에 그리는지 */
+static void BmpLog(BitmapPtr bmp, Coord x, Coord y)
+{
+    if (bmp != NULL) {
+        WinHandle w = WinGetDrawWindow();
+
+        if (w != NULL && WinGetBitmap(w) != WinGetBitmap(WinGetDisplayWindow())) {
+            UInt32 k = 0, n = 0;
+            Coord  bw = 0, bh = 0;
+
+            BmpGetDimensions(bmp, &bw, &bh, NULL);
+            FtrGet(kSyCr, 220, &k);
+            k &= 3;
+            FtrSet(kSyCr, 221 + 3 * (UInt16)k, (UInt32)bmp);
+            FtrSet(kSyCr, 222 + 3 * (UInt16)k, ((UInt32)(UInt16)bw << 16) | (UInt16)bh);
+            FtrSet(kSyCr, 223 + 3 * (UInt16)k, ((UInt32)(UInt16)x << 16) | (UInt16)y);
+            FtrSet(kSyCr, 220, (k + 1) & 3);
+            FtrGet(kSyCr, 233, &n);
+            FtrSet(kSyCr, 233, n + 1);
+        }
+    }
+}
+
 void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
 {
     const UInt32 *ic = Icons();
+
+    BmpLog(bmp, x, y);   /* v21 진단 */
 
     if (bmp != NULL && ic[0] != 0 && ((UInt32)bmp == ic[0] || (UInt32)bmp == ic[1])) {
         UInt16 on = (UInt32)bmp == ic[1] ? 1 : 0;
