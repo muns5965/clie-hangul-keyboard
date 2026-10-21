@@ -118,6 +118,7 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. 키 글자 v3~, 입력 v9~ (CloudpilotEmu 실측) |
 | 조합 중 커서 이동 감지 | Mn 가상 키보드 build 17~, MnSonyKbd v10~ (메모장 실측) |
 | 리셋 없는 업데이트 `All OFF`(두 모듈 순서대로 끄기) | MnHangul v64~·MnSonyKbd v14~ (CloudpilotEmu 실측) |
+| MnHangul: 런처 지우기 때 자동 끄기(위에 다른 패치가 있으면 거부) | v66~ (CloudpilotEmu 실측). 업데이트 설치는 에뮬레이터가 알림 없이 거부하므로 `All OFF` 그대로 |
 | 한글 표시(MnHangul): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `Hangul ON`, 리셋 뒤 자동 시작 |
 | MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정, v62에서 예전 방식 뺌) |
 
@@ -231,6 +232,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 | 처음 설치 | 설치 → MnHangul `Hangul ON` / MnSonyKbd `ON` | 없음 |
 | 업데이트 | 아무 앱에서나 `All OFF`(MnHangul `All OFF (for install)`, MnSonyKbd `All OFF`) → `all off: ready to install`이면 필요한 PRC 설치 → 각 앱 `Hangul ON` / `ON` | 없음 |
 | 업데이트(`All OFF`가 `kept`일 때) | 아무 앱에서나 `Update (hold 3s)` → 설치 → 각 앱 `Hangul ON` / `ON` | 1번 (`Update`가 함) |
+| 지우기(MnHangul) | 런처 Delete에서 MnHangul — 켜져 있어도 스스로 끄고 지워짐. **24 글꼴 `MnHgFont24`도 함께 지워진다**(크리에이터가 같음). MnSonyKbd가 위에 있으면 거부(`Unable to delete`) → `All OFF` 뒤 지우기 | 없음 |
 | 리셋 뒤 자동 시작 | 각 앱 `Start at reset: ON`(기본) | — |
 | 비상 탈출 | 위 버튼을 누른 채 리셋(CloudpilotEmu: Reset → No extensions). 리셋 알림이 오지 않아 아무것도 켜지 않는다. 이 리셋은 Sony 가상 실크·상태 표시줄도 불러오지 않으므로 끝나면 일반 리셋을 한 번 한다 | — |
 
