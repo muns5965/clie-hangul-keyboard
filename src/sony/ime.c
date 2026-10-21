@@ -44,6 +44,7 @@ void HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLi
 void HRWinEraseRectangle(UInt16 ref, const RectangleType *r, UInt16 corner) SYS_TRAP(sysLibTrapCustom + 21);
 IndexedColorType HRWinGetPixel(UInt16 ref, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 28);
 void HRWinPaintBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 37);
+Err HRWinGetPixelRGB(UInt16 ref, Coord x, Coord y, RGBColorType *rgb) SYS_TRAP(sysLibTrapCustom + 60);   /* v38 */
 typedef void (*BmpFn)(BitmapPtr, Coord, Coord);
 
 static inline const UInt32 *Icons(void)
@@ -180,7 +181,7 @@ static void RedrawKeys(UInt16 hr, Boolean han)
     BitmapPtr     bmp;
     UInt16       *bits, fh, rb = 0, i, drawn = 0;
     Err           e = 0;
-    IndexedColorType of, ob, lastF = 0, lastB = 0;
+    RGBColorType  of, ob, lastF, lastB;   /* v38: 16비트 화면이라 색 번호 대신 RGB(v37 실측: 흰 글자가 번호 0C로 읽힘) */
     Boolean       haveF = false, haveB = false;
     WinDrawOperation om;
 
@@ -215,8 +216,10 @@ static void RedrawKeys(UInt16 hr, Boolean han)
         return;
     }
     RdWhy(0);
-    of = WinSetForeColor(0);
-    ob = WinSetBackColor(0);
+    WinSetForeColorRGB(NULL, &of);
+    WinSetBackColorRGB(NULL, &ob);
+    lastF = of;
+    lastB = ob;
     om = WinSetDrawMode(winOverlay);
     for (i = 0; i < 26; i++) {
         UInt32           xy = 0, inf = 0;
@@ -225,7 +228,7 @@ static void RedrawKeys(UInt16 hr, Boolean han)
         UInt8            c, cw;
         UInt16           row, k;
         Boolean          gotF = false, gotB = false;
-        IndexedColorType fg = 0, bg = 0;
+        RGBColorType     fg, bg;
 
         FtrGet(kSyCr, 300 + 2 * i, &xy);
         FtrGet(kSyCr, 301 + 2 * i, &inf);
@@ -250,15 +253,11 @@ static void RedrawKeys(UInt16 hr, Boolean han)
                 }
             if (lo < 0)
                 continue;
-            if (!gotF) {
-                fg = HRWinGetPixel(hr, x + ox + lo, y + (Coord)row);
-                gotF = true;
-            }
+            if (!gotF)
+                gotF = HRWinGetPixelRGB(hr, x + ox + lo, y + (Coord)row, &fg) == errNone;
             for (k = (UInt16)lo + 1; k < (UInt16)hi && !gotB; k++)   /* 같은 줄 글자 점 사이 빈 자리 = 키 안쪽 */
-                if (!Bit(bits, row, k)) {
-                    bg = HRWinGetPixel(hr, x + ox + (Coord)k, y + (Coord)row);
-                    gotB = true;
-                }
+                if (!Bit(bits, row, k))
+                    gotB = HRWinGetPixelRGB(hr, x + ox + (Coord)k, y + (Coord)row, &bg) == errNone;
         }
         /* 'ㅣ'·'l'처럼 한 줄 안에 빈 자리가 없는 글자는 앞 키에서 읽은 색(모든 키 같은 색, a부터 차례) */
         if (gotF) {
@@ -275,33 +274,32 @@ static void RedrawKeys(UInt16 hr, Boolean han)
             bg = lastB;
         else
             continue;
-        if (fg == bg)
+        if (fg.r == bg.r && fg.g == bg.g && fg.b == bg.b)
             continue;
-        WinSetForeColor(bg);   /* 옛 글자 점만 바탕색으로 */
+        WinSetForeColorRGB(&bg, NULL);   /* 옛 글자 점만 바탕색으로 */
         HRWinPaintBitmap(hr, bmp, x + ox, y);
         nx = Glyph(bits, f, (const UInt8 *)pk, c, cw, han, fh);
         if (drawn == 0) {   /* v37 진단: 첫 키 — #293 글자<<24 | 옛 x<<16 | 새 x<<8 | 새 글자 점 수, #294 글자색<<24 | 바탕<<16 | #297<<8 | 읽음 */
-            UInt32 dots = 0, t = 0;
+            UInt32 dots = 0;
 
             for (row = 0; row < fh; row++)
                 for (k = 0; k < 32; k++)
                     if (Bit(bits, row, k))
                         dots++;
-            FtrGet(kSyCr, 297, &t);
             FtrSet(kSyCr, 293, ((UInt32)c << 24) | ((UInt32)(UInt8)ox << 16) | ((UInt32)(UInt8)nx << 8) |
                                (dots > 255 ? 255 : dots));
-            FtrSet(kSyCr, 294, ((UInt32)fg << 24) | ((UInt32)bg << 16) | ((t & 0xFF) << 8) |
-                               (gotF ? 2 : 0) | (gotB ? 1 : 0));
+            FtrSet(kSyCr, 294, ((UInt32)(gotF ? 2 : 0) << 24) | ((UInt32)fg.r << 16) | ((UInt32)fg.g << 8) | fg.b);
+            FtrSet(kSyCr, 292, ((UInt32)(gotB ? 1 : 0) << 24) | ((UInt32)bg.r << 16) | ((UInt32)bg.g << 8) | bg.b);
         }
         if (nx != -1) {
-            WinSetForeColor(fg);
+            WinSetForeColorRGB(&fg, NULL);
             HRWinPaintBitmap(hr, bmp, x + nx, y);
         }
         drawn++;
     }
     WinSetDrawMode(om);
-    WinSetBackColor(ob);
-    WinSetForeColor(of);
+    WinSetBackColorRGB(&ob, NULL);
+    WinSetForeColorRGB(&of, NULL);
     BmpDelete(bmp);
     FtrGet(kSyCr, 296, &n);
     FtrSet(kSyCr, 296, (((n >> 16) + 1) << 16) | drawn);
@@ -401,16 +399,19 @@ void HgImGet(EventType *event, Int32 timeout)
                     if (sw != NULL && a != 0 && hr != 0) {   /* v30: 고해상도 좌표로 그림(v29 실측: 일반 함수는 실크 창 밖) */
                         WinHandle     old = WinSetDrawWindow(sw);
                         RectangleType rr;
-                        IndexedColorType bg = HRWinGetPixel((UInt16)hr, 139, 113), ob;
+                        RGBColorType  bg, ob;   /* v38: RGB로(16비트 화면) */
 
-                        ob = WinSetBackColor(bg);
-                        RctSetRectangle(&rr, kMarkX, kMarkY, 14, 18);
-                        HRWinEraseRectangle((UInt16)hr, &rr, 0);
-                        WinSetBackColor(ob);
+                        WinSetBackColorRGB(NULL, &ob);
+                        if (HRWinGetPixelRGB((UInt16)hr, 139, 113, &bg) == errNone) {
+                            WinSetBackColorRGB(&bg, NULL);
+                            RctSetRectangle(&rr, kMarkX, kMarkY, 14, 18);
+                            HRWinEraseRectangle((UInt16)hr, &rr, 0);
+                            WinSetBackColorRGB(&ob, NULL);
+                        }
                         HRWinDrawBitmap((UInt16)hr, (BitmapPtr)a, kMarkX, kMarkY);
                         RedrawKeys((UInt16)hr, h != 0);   /* v33: 자판 영문 글자 키도 바로 자모↔영문 */
                         WinSetDrawWindow(old);
-                        FtrSet(kSyCr, 243, bg);
+                        FtrSet(kSyCr, 243, ((UInt32)bg.r << 16) | ((UInt32)bg.g << 8) | bg.b);
                     }
                 }
                 return;
