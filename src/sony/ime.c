@@ -38,6 +38,11 @@ asm(".text\n.even\nImBase:\n"
     "ImOrig:\n .long 0,0\nImBuf:\n .long 0\nImIcon:\n .long 0,0,0,0,0,0\n");
 
 typedef void (*GetFn)(EventType *, Int32);
+
+/* v30: Sony HR 라이브러리(소니 헤더 없이 순번만 선언, sysLibTrapCustom + 순번) — 앱 쪽 Win 함수는 저해상도 좌표(2배)라서 */
+void HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 7);
+void HRWinEraseRectangle(UInt16 ref, const RectangleType *r, UInt16 corner) SYS_TRAP(sysLibTrapCustom + 21);
+IndexedColorType HRWinGetPixel(UInt16 ref, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 28);
 typedef void (*BmpFn)(BitmapPtr, Coord, Coord);
 
 static inline const UInt32 *Icons(void)
@@ -156,19 +161,22 @@ void HgImGet(EventType *event, Int32 timeout)
                     WinHandle sw = (WinHandle)0;
                     UInt32    a = 0, h = 0;
 
+                    UInt32    hr = 0;
+
                     FtrGet(kSyCr, 251, (UInt32 *)&sw);
                     FtrGet(kSyCr, kFtrHanTab, &h);
                     FtrGet(kSyCr, h ? 246 : 247, &a);
-                    if (sw != NULL && a != 0) {
+                    FtrGet(kSyCr, 254, &hr);
+                    if (sw != NULL && a != 0 && hr != 0) {   /* v30: 고해상도 좌표로 그림(v29 실측: 일반 함수는 실크 창 밖) */
                         WinHandle     old = WinSetDrawWindow(sw);
                         RectangleType rr;
-                        IndexedColorType bg = WinGetPixel(139, 113), ob;
+                        IndexedColorType bg = HRWinGetPixel((UInt16)hr, 139, 113), ob;
 
                         ob = WinSetBackColor(bg);
                         RctSetRectangle(&rr, 143, 105, 14, 18);
-                        WinEraseRectangle(&rr, 0);
+                        HRWinEraseRectangle((UInt16)hr, &rr, 0);
                         WinSetBackColor(ob);
-                        WinDrawBitmap((BitmapPtr)a, 143, 105);
+                        HRWinDrawBitmap((UInt16)hr, (BitmapPtr)a, 143, 105);
                         WinSetDrawWindow(old);
                         FtrSet(kSyCr, 243, bg);
                     }

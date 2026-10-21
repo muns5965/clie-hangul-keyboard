@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v30(진단): v29 실측 — 누를 때 바로 그린 표시가 안 보임(bg 0). 앱 쪽 Win 함수는 저해상도 좌표(2배)라 (143,105)가 실크 창 밖.
+ *   → 누를 때는 Sony HR 라이브러리 함수로 그림(참조 번호는 ImOn이 SysLibFind로 찾아 #254 = 0x10000 | 번호).
  * v29(진단): 한/영 누름은 마지막 전환 뒤 0.5초 안이면 무시(v28 실측: 누름 하나에 t +2로 값이 제자리 — 바뀌지 않는 것처럼 보임, #253 = 무시 수).
  *   키 글자 다시 그릴 때도 표시 자리를 바탕색으로 먼저 지움(v28 실측: shift 뒤 한·A 겹침).
  * v28(진단): v27 실측 — 고해상도 펜 점은 159,0으로 옴(넣기 포기), v23 문자열 기록이 #246·#247(표시 그림 주소)을 덮어씀(위험, 뺌).
@@ -66,7 +68,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v29"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v30"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -290,6 +292,11 @@ static UInt16 ImOn(void)
     DmWrite(code, 20, a, 24);
     FtrSet(kSyCr, 246, a[4]);   /* v27: 한/영 표시 그림 주소(키 글자 패치가 WinDrawBitmap으로 그림) */
     FtrSet(kSyCr, 247, a[5]);
+    {   /* v30: 누를 때 표시를 고해상도로 그리려고 HR 라이브러리 참조 번호(Sony가 부팅 때 열어 둠, 여기서 열지 않음) */
+        UInt16 hr = 0;
+
+        FtrSet(kSyCr, 254, SysLibFind("Sony HR Library", &hr) == errNone ? 0x10000UL | hr : 0);
+    }
     Protect(true);
     FtrSet(kSyCr, kFtrImH, (UInt32)h);
     FtrSet(kSyCr, kFtrImC, (UInt32)code);
@@ -392,6 +399,7 @@ static UInt16 ImOff(void)
     }
     FtrSet(kSyCr, 246, 0);   /* v27 */
     FtrSet(kSyCr, 247, 0);
+    FtrSet(kSyCr, 254, 0);   /* v30 */
     if (buf != NULL)
         MemPtrFree(buf);
     MemHandleUnlock((MemHandle)GetF(kFtrImH));
@@ -653,7 +661,7 @@ static void DrawDebug(void)
 
         UInt32 q1 = GetF(248), q2 = GetF(249);
 
-        StrPrintF(s, "bg%lx dup %lu mk %d,%d", GetF(243), GetF(253), (Int16)(c >> 16), (Int16)c);
+        StrPrintF(s, "bg%lx dup %lu hr%lx mk %d,%d", GetF(243), GetF(253), GetF(254), (Int16)(c >> 16), (Int16)c);
         (void)q1;
         (void)q2;
         (void)a;
