@@ -6,8 +6,10 @@
 > in the device's virtual silkscreen area through Sony's undocumented `SkWr` plug-in interface,
 > reverse-engineered from the ROM's `SilkExtn` module. (2) *MnSonyKbd* turns Sony's built-in virtual keyboard into a
 > two-set (Dubeolsik) Hangul keyboard by intercepting system traps (`BltDrawChars`, `EvtGetEvent`,
-> `WinDrawBitmap`): key labels are redrawn as Hangul jamo, the caps-lock key becomes a Hangul/English toggle,
-> and keystrokes are composed into KS X 1001 (EUC-KR) syllables. (3) *MnHangul* is an experimental replacement for
+> `WinDrawBitmap`): key labels are redrawn as Hangul jamo, a Hangul/English button is drawn next to the
+> `sym` tab, and keystrokes are composed into KS X 1001 (EUC-KR) syllables with the PC two-set rule
+> (Shift = double consonants). An experimental fourth module, *MnKbdHan*, does the same for the system
+> keyboard dialog on Palm OS 4 devices without a virtual silkscreen. (3) *MnHangul* is an experimental replacement for
 > the commercial CJKOS system that renders double-byte Hangul from compact Johab-style glyph packs and
 > patches the text-width and character-boundary routines. All runtime code is position-independent and
 > installed as RAM trap patches without ROM modification. The two patch-based modules need no reset and
@@ -15,19 +17,21 @@
 > while MnHangul detects CJKOS and stays off.
 > **Test environment.** All development and verification were done in the CloudpilotEmu web emulator
 > running a PEG-NR70V (Palm OS 4.1S) ROM image, mainly in Memo Pad, with and without CJKOS installed.
+> The screenshots in this README are real emulator captures, taken by driving the emulator
+> (`cloudpilot-emu-embedded` in headless Chromium) with scripted pen taps.
 > **No testing has been performed on a physical device**, and applications other than Memo Pad remain untested.
 
 Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 한글 **표시**와 한글 **키보드**를 따로 골라 조합한다.
 
 ### 한글 입력 방법
 
-키보드가 어디에 뜨는지에 따라 세 가지가 있다. 이 저장소는 2·3번을 만든다.
+키보드가 어디에 뜨는지에 따라 세 가지가 있다.
 
 | 방법 | 키보드 위치 | 앱 화면 | 이 저장소 모듈 | 상태 |
 | --- | --- | --- | --- | --- |
-| 1. 화면 안 키보드 | 앱 화면 위에 팝업(시스템 화면 키보드, CJKOS 한글 키보드 등) | **가려져 좁아짐** | 없음(CJKOS 등 다른 프로그램) | 이 저장소에서는 만들지 않음 |
+| 1. 화면 안 키보드 | 앱 화면 위에 팝업(시스템 키보드 화면, CJKOS 한글 키보드 등) | **가려져 좁아짐** | MnKbdHan(시스템 키보드 화면에 두벌식) | 진단 판. 가상 실크가 없는 OS 4 영문 기종(T600C 등)용, NR70V에서도 동작 |
 | 2. 화면 밖 실크스크린에 자체 키보드 | 가상 실크스크린(Graffiti 자리)에 **이 저장소의 자판**을 그림 | 그대로 | Mn 가상 키보드(`MnSkPlugin` + `MnSkCore`) | 구현. 단모음 한글·영문·숫자 |
-| 3. 화면 밖 Sony 키보드를 한글 자판으로 | 가상 실크스크린의 **Sony 가상 키보드**를 그대로 쓰고 키 글자·입력만 두벌식으로 | 그대로 | MnSonyKbd | 시험 단계. `한A` 한/영, Shift 쌍자음 |
+| 3. 화면 밖 Sony 키보드를 한글 자판으로 | 가상 실크스크린의 **Sony 가상 키보드**를 그대로 쓰고 키 글자·입력만 두벌식으로 | 그대로 | MnSonyKbd | 시험 단계. sym 오른쪽 `한`/`A` = 한/영, Shift 쌍자음 |
 
 입력한 한글을 화면에 그리는 **한글 표시**는 입력 방법과 별개로 필요하다: CJKOS 등 한글 시스템 또는 MnHangul.
 
@@ -36,7 +40,8 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 모듈 | 파일 | 하는 일 | 상태 |
 | --- | --- | --- | --- |
 | Mn 가상 키보드 | `MnSkPlugin.prc` + `MnSkCore.prc` | 가상 실크스크린(Graffiti 영역) 자리에 단모음 한글·영문 QWERTY 자판 | 구현 완료, 동결(안정화). 나랏글은 보류 |
-| Sony 가상 키보드 한글 | `MnSonyKbd.prc` | Sony 내장 가상 키보드에 두벌식 한글. ⇪ 자리 `한A` = 한/영, 키 글자를 자모로 표시 | 시험 단계, 리셋 없음 |
+| Sony 가상 키보드 한글 | `MnSonyKbd.prc` | Sony 내장 가상 키보드에 두벌식 한글. sym 탭 오른쪽 `한`/`A` = 한/영, 키 글자를 자모로 표시 | 시험 단계, 리셋 없음 |
+| 시스템 키보드 화면 한글 | `MnKbdHan.prc` | 시스템 키보드 화면(메모 Edit > Keyboard)에 두벌식 한글. Int'l 오른쪽 `한`/`A` = 한/영 | 진단 판, 리셋 없음 |
 | 한글 표시(CJKOS 대체) | `MnHangul.prc` | 조합형 글꼴로 2바이트 한글 그리기, 글자 경계, 폭·줄바꿈 | 시험 단계, 리셋 없음 |
 
 한글 표시는 CJKOS 등 기존 한글 시스템을 써도 되고 MnHangul을 써도 된다. 둘을 같이 켜지는 않는다(MnHangul이 CJKOS를 감지하면 켜지지 않음).
@@ -48,7 +53,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 - [용어](#용어)
 - [현재 상태](#현재-상태)
 - [설치·업데이트](#설치업데이트) — 설치 경우 A~D, 배포 파일, 업데이트, 리셋이 필요한 이유
-- [Sony 가상 키보드로 한글(MnSonyKbd)](#sony-가상-키보드로-한글mnsonykbd) — `한A` 키, 리셋 없음
+- [Sony 가상 키보드로 한글(MnSonyKbd)](#sony-가상-키보드로-한글mnsonykbd) — sym 오른쪽 한/A, 리셋 없음
 - [한글 표시(MnHangul)](#한글-표시mnhangul)
 - [MnHangul·MnSonyKbd 공통: 켜기·업데이트·CJKOS 전환](#mnhangulmnsonykbd-공통-켜기업데이트cjkos-전환)
 - [제한사항](#제한사항)
@@ -59,32 +64,25 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 
 ## 소개
 
-[한글 입력 방법](#한글-입력-방법)의 분류대로 그림을 나눈다(1번 화면 안 키보드는 이 저장소에서 만들지 않으므로 그림 없음).
+[한글 입력 방법](#한글-입력-방법)의 분류대로 그림을 나눈다. 모든 그림은 CloudpilotEmu(PEG-NR70V, Palm OS 4.1S)의 **실제 화면 캡처**다
+(MnSonyKbd v47·MnSkCore·MnKbdHan v9·MnHangul v67, CJKOS 없이 MnHangul로 한글 표시).
+캡처는 에뮬레이터를 브라우저 없이 돌리고 펜 누름을 스크립트로 재생해 얻었다. 원본은 `docs/images/capture/`, 그림 다시 만들기: `python3 tools/gen-readme-captures.py`.
+
+### 1. 화면 안 키보드 — MnKbdHan (진단 판)
+
+<img src="docs/images/system-keyboard.png" width="760" alt="시스템 키보드 화면에서 두벌식 한글(MnKbdHan): 한, shift 쌍자음, 영문">
 
 ### 2. 화면 밖 실크스크린에 자체 키보드 — Mn 가상 키보드
 
-<table>
-<tr>
-<td><img src="docs/images/01-overview.png" width="380" alt="메모장에서 Mn 가상 키보드로 한글 입력"></td>
-<td><img src="docs/images/02-hangul-layout.png" width="380" alt="단모음 한글 자판과 Shift 쌍자음"></td>
-</tr>
-<tr>
-<td><img src="docs/images/03-english-number.png" width="380" alt="영문 QWERTY와 숫자·기호 자판"></td>
-<td><img src="docs/images/04-compose.png" width="380" alt="받침 넘김과 자모 단위 지우기"></td>
-</tr>
-</table>
+<img src="docs/images/mn-keyboard.png" width="760" alt="Mn 가상 키보드: 한글 단모음, Shift 쌍자음, 영문, 숫자·기호">
 
 ### 3. 화면 밖 Sony 키보드를 한글 자판으로 — MnSonyKbd
 
-<img src="docs/images/06-sony-keyboard.png" width="380" alt="Sony 가상 키보드로 한글 입력(MnSonyKbd, 한A 키, 리셋 없음)">
+<img src="docs/images/sony-keyboard.png" width="760" alt="Sony 가상 키보드로 한글(MnSonyKbd): 한, Shift 쌍자음, A 영문, sym 자판">
 
 ### 한글 표시 — MnHangul (입력 방법과 별개)
 
-<img src="docs/images/05-mnhangul.png" width="380" alt="CJKOS 없이 조합형 글꼴로 한글 표시(시험 중)">
-
-Sony 가상 키보드 그림은 CloudpilotEmu(NR70V) 실제 캡처(MnHangul v50 시절, 같은 코드가 지금의 MnSonyKbd)다. 다시 만들기: `python3 tools/gen-readme-sony.py docs/images/capture-sony-base.png docs/images/capture-sony-shift.png`
-Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판 배치·자모 선 그림·조합형 글꼴 데이터로 다시 그린 것이라 실제 화면과 조금 다를 수 있다
-(영문 글자는 Sony 글꼴 대신 픽셀 글꼴). 다시 만들기: `python3 tools/gen-readme-images.py <neodgm.ttf>`.
+<img src="docs/images/mnhangul.png" width="420" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul)">
 
 ## 용어
 
@@ -98,7 +96,8 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | 본체(Core) | 자판 그리기, 터치 판정, 한글 조합을 실제로 처리하는 프로그램(`MnSkCore.prc`) |
 | PRC | Palm OS의 앱·코드·리소스를 담아 배포하는 데이터베이스 파일 형식 |
 | CJKOS | 영문 Palm OS에서 한중일 문자 표시·입력을 지원하는 외부 소프트웨어 |
-| Sony 가상 키보드 | NR70V 상태바 키보드 아이콘으로 여는 ROM에 들어 있는 Sony의 영문 키보드(`SilkExtn`). MnSonyKbd가 키 글자와 ⇪ 키를 바꿔 그린다 |
+| Sony 가상 키보드 | NR70V 상태바 키보드 아이콘으로 여는 ROM에 들어 있는 Sony의 영문 키보드(`SilkExtn`). MnSonyKbd가 키 글자를 자모로 바꿔 그리고 sym 탭 오른쪽에 `한`/`A`를 그린다 |
+| 시스템 키보드 화면 | Palm OS가 띄우는 화면 안 키보드(메모 Edit > Keyboard 등, `SysKeyboardDialog`). MnKbdHan이 키 글자를 자모로 바꿔 그린다 |
 | Mn 가상 키보드 | 이 저장소의 단모음 한글 키보드(`MnSkPlugin` + `MnSkCore`). 글에서 줄여 Mn 키보드 |
 | 연결(패치) | 시스템 함수(트랩) 주소를 자기 코드로 바꿔 끼우는 것. 여러 모듈이 같은 함수에 차례로 끼면 위에서 아래로 이어 부른다 |
 
@@ -114,7 +113,9 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | 한글 조합: 초성·중성·종성, 복합모음, 겹받침, 받침 넘김, 조합 중 자모 단위 BS | 구현 완료 (메모장 실측, PC 조합 시험 41개 통과) |
 | Mn 가상 키보드: 리셋 없는 본체(`MnSkCore`) 업데이트 / 리셋 1번 로더(`MnSkPlugin`) 업데이트 | 구현 완료 (CloudpilotEmu 실측) |
 | Mn 가상 키보드: 나랏글 / 키 반복 | 개발 보류 / 미구현 |
-| Sony 가상 키보드 한글(MnSonyKbd, MnHangul v35에서 시작해 v54에 분리): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
+| Sony 가상 키보드 한글(MnSonyKbd, MnHangul v35에서 시작해 v54에 분리): 키 글자 두벌식 자모, 조합 입력 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
+| MnSonyKbd: 한/영을 ⇪에서 sym 오른쪽 `한`/`A` 단추로(누르면 자판 바로 바뀜), PC 두벌식 규칙(Shift = 쌍자음, ⇪·자동 대문자 = 기본 자모) | v32~v47 (CloudpilotEmu 실측, v47은 자동 시험 16개 중 14개 통과 — 실패 2개는 같은 원인: 메모 첫머리의 첫 Shift가 기본 자모로 들어감) |
+| 시스템 키보드 화면 한글(MnKbdHan): 키 글자 자모, 두벌식 조합 입력, Int'l 오른쪽 `한`/`A` | 진단 판 v9. T600C·NR70V 메모장 실측 |
 | MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. 키 글자 v3~, 입력 v9~ (CloudpilotEmu 실측) |
 | 조합 중 커서 이동 감지 | Mn 가상 키보드 build 17~, MnSonyKbd v10~ (메모장 실측) |
 | 리셋 없는 업데이트 `All OFF`(두 모듈 순서대로 끄기) | MnHangul v64~·MnSonyKbd v14~ (CloudpilotEmu 실측) |
@@ -130,7 +131,7 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | | A. CJKOS 등 + Mn 가상 키보드 | B. CJKOS 등 + Sony 가상 키보드 | C. MnHangul + Mn 가상 키보드 | D. MnHangul + Sony 가상 키보드 |
 | --- | --- | --- | --- | --- |
 | 설치 | `MnSkPlugin`, `MnSkCore` | `MnSonyKbd` | `MnSkPlugin`, `MnSkCore`, `MnHangul` (+ 24 글꼴 `MnHgFont24` 선택) | `MnHangul`, `MnSonyKbd` (+ 24 글꼴 선택) |
-| 자판 | 단모음 | 두벌식 (`한A` = 한/영) | 단모음 | 두벌식 (`한A` = 한/영) |
+| 자판 | 단모음 | 두벌식 (sym 오른쪽 `한`/`A` = 한/영) | 단모음 | 두벌식 (sym 오른쪽 `한`/`A` = 한/영) |
 | 한글 표시 | 설치된 한글 시스템 (완성형 KS X 1001 2바이트를 표시하는 것) | 설치된 한글 시스템 | MnHangul (시험 단계) | MnHangul (시험 단계) |
 | 순서 | 설치 → 리셋 → □→로 켜기 | 설치 → MnSonyKbd `ON` | 설치 → MnHangul `Hangul ON` → 리셋 → □→로 켜기 | 설치 → MnHangul `Hangul ON` → MnSonyKbd `ON` |
 | 리셋 | 처음 1번 — 가상 실크스크린에 Mn 키보드(로더) 등록 (`SilkExtn`이 부팅 때만 찾음) | **없음** — Sony 가상 키보드는 이미 등록되어 있고, MnSonyKbd는 켜는 즉시 동작 | 처음 1번 — Mn 키보드 등록. MnHangul은 리셋 필요 없음 (`Start at reset`으로 리셋 뒤 자동 시작) | **없음** |
@@ -143,7 +144,8 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | --- | --- | --- |
 | `MnSkPlugin.prc` | A·C (Mn 가상 키보드를 쓸 때) | 로더. `SilkExtn`에 등록되는 `SkWr` 플러그인(약 1KB)으로, 부팅 때 호출되어 키보드 본체와 연결한다 |
 | `MnSkCore.prc` | A·C (Mn 가상 키보드를 쓸 때) | 키보드 본체(자판 그리기·터치 판정·한글 조합). 로더가 불러 실행한다 |
-| `MnSonyKbd.prc` | B·D (Sony 가상 키보드로 입력할 때) | Sony 가상 키보드 한글(시험 단계). `한A` 한/영, 두벌식 입력, 키 글자 자모 표시. 한글 표시는 하지 않는다 |
+| `MnSonyKbd.prc` | B·D (Sony 가상 키보드로 입력할 때) | Sony 가상 키보드 한글(시험 단계). sym 오른쪽 `한`/`A` 한/영, 두벌식 입력, 키 글자 자모 표시. 한글 표시는 하지 않는다 |
+| `MnKbdHan.prc` | 선택 (시스템 키보드 화면으로 입력할 때) | 시스템 키보드 화면 두벌식(진단 판). `ON`을 누르면 켜짐, 리셋 없음. 한글 표시는 하지 않는다(한글 시스템이나 MnHangul 필요) |
 | `MnHangul.prc` | C·D (한글 표시를 MnHangul로 할 때) | 한글 표시 모듈(시험 단계). 한글 시스템(CJKOS 등)이 없을 때 한글 표시 |
 | `MnHgFont24.prc` | C·D 중 선택 (MnHangul 큰 글꼴) | MnHangul 24×24 추가 글꼴(큰 글꼴용) |
 | `ClieDiag.prc` | 선택 | 키보드 상태 확인(로더·본체 빌드, 불러오기 결과)·소프트 리셋(3초 누르기)·복구 스위치(DisS)·진단(Debug 체크 시). 키보드 동작에는 필요 없다 |
@@ -181,26 +183,28 @@ ClieDiag는 모두 선택이다. MnHangul·MnSonyKbd의 켜기·업데이트는 
 Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 한글을 넣는다(설치 B·D). `MnSonyKbd.prc` 하나, 리셋 없음.
 한글 표시는 하지 않으므로 CJKOS 등 한글 시스템(B)이나 MnHangul(D)과 같이 쓴다(첫 화면에 `Hangul display: CJKOS / MnHangul / none` 표시). v54에 MnHangul에서 분리했다.
 
-<img src="docs/images/06-sony-keyboard.png" width="480" alt="Sony 가상 키보드: 한A 켜짐 두벌식 자모, Shift 쌍자음">
+<img src="docs/images/sony-keyboard.png" width="760" alt="Sony 가상 키보드: 한 두벌식 자모, Shift 쌍자음, A 영문, sym 자판">
 
-**쓰는 법**
+**쓰는 법** (PC 두벌식과 같은 규칙)
 
 | 동작 | 결과 |
 | --- | --- |
-| 상태바 키보드 아이콘 → `abc` 자판 | Sony 가상 키보드. ⇪ 키 자리에 `한A`가 보인다 |
-| `한A` 누름 | 한글(`한A` 파랑). 키 글자가 두벌식 자모로 바뀐다 |
+| 상태바 키보드 아이콘 → `abc` 자판 | Sony 가상 키보드. sym 탭 오른쪽에 `한` 또는 `A`가 보인다 |
+| `한`/`A` 누름 | 한/영 전환. 자판 글자가 바로 두벌식 자모 ↔ 영문으로 바뀌고, 조합 중이던 글자는 확정된다 |
+| 한글에서 그냥 누름 | 기본 자모(ㅂㅈㄷㄱㅅ, ㅐㅔ) |
 | 한글에서 Shift | 쌍자음 ㅃㅉㄸㄲㅆ, ㅒㅖ (한 글자 넣으면 풀림) |
-| `한A` 다시 누름 | 영문(`한A` 회색), 영문 키 글자 |
+| ⇪·자동 대문자 | 한글에는 영향 없음(기본 자모). ⇪는 영문 대문자 고정으로만 쓴다 |
 | ← (BS) | 조합 중이면 자모 단위로 지움 |
+| `sym`·`int'l` 자판 | 그대로 쓴다. 이때 `한`/`A`를 누르면 표시만 바뀌고, `abc`로 돌아오면 그 상태로 그려진다 |
 
 **MnSonyKbd 첫 화면**
 
 | 버튼 | 뜻 |
 | --- | --- |
-| `ON` / `OFF` | Sony 가상 키보드 한글(입력·`한A`·키 글자 자모)을 켬 / 끔 |
+| `ON` / `OFF` | Sony 가상 키보드 한글(입력·`한`/`A` 단추·키 글자 자모)을 켬 / 끔 |
 | `Start at reset: ON/off` | 리셋 뒤 자동으로 켬(기본 ON) |
 | `Update (hold 3s)` | 업데이트용 리셋. 리셋 뒤 한 번만 자동 시작을 건너뛰어 잠금 없이 바로 설치할 수 있다 |
-| 제목 누르기 | 판정 기록 화면(한/영 표시가 틀릴 때 원인 확인용). 다시 누르면 돌아옴 |
+| 제목 누르기 | 진단 기록 화면(자판 다시 그리기·shift 판단·조합 끝 까닭 등). 다시 누르면 돌아옴 |
 
 `Now:` 줄은 실제 연결 상태다: `ON`(연결됨) / `ON (other patch above)`(위에 다른 패치가 있어 끝까지 확인 못 함) / `broken: tap ON`(빠짐, `ON`을 누르면 다시 이음) / `off`.
 `ON`을 눌렀을 때 `already ON`은 이미 켜져 있고 연결도 정상이라 할 일이 없다는 뜻이다.
@@ -208,7 +212,9 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 
 **제한**
 
-- NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 전용이다. 키 글자를 그리는 순서(숫자 줄 → qwerty 줄 → ⇪ 키 → …)에 기대어 한/영 표시를 정하므로, 드물게 한 번 표시가 틀릴 수 있다. 입력은 글자를 받는 순간의 ⇪ 상태로 판정해 항상 맞다.
+- NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 전용이다. Sony는 `한`/`A` 단추를 모르므로, 누를 때 MnSonyKbd가 Sony가 그린 영문 키 자리를 기억해 두었다가 직접 다시 그린다(Sony 글꼴·화면 색을 읽어 같은 모양으로).
+- Shift는 Sony가 그리는 첫 줄 글자(`` ` ``/`~`)로 판단한다. **메모 첫머리처럼 자동 대문자가 걸려 있을 때 처음 누른 Shift는 기본 자모로 들어간다**(알려진 문제, 고칠 예정).
+- Mn 가상 키보드와 같이 설치했을 때 Mn 키보드 화면에 MnSonyKbd의 `A` 표시나 자모가 잘못 그려지는 경우가 있다(자동 시험에서 한 번 관찰, 확인 중).
 - 한글 범위는 완성형 2,350자(Mn 키보드와 같음).
 - 메모장에서만 시험했다. 다른 앱과 실기기는 검증 대상이다.
 
@@ -221,6 +227,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 | 첫 줄 `Hangul ON/off  Reset ON/off  CJKOS running/no` | 한글 표시 연결 상태, 리셋 뒤 자동 시작, CJKOS 감지 |
 | `Hangul ON` / `Hangul OFF` | 한글 표시를 켬 / 끔. 이미 켜져 있으면 다시 끼우지 않는다(v58). CJKOS가 감지되면 켜지 않는다 |
 | `Start at reset: ON/off` | 리셋 뒤 자동으로 켬(기본 ON) |
+| `All OFF (for install)` | 업데이트 전에 MnHangul·MnSonyKbd를 순서대로 끔([공통](#mnhangulmnsonykbd-공통-켜기업데이트cjkos-전환)) |
 | `Soft Reset (hold 3s)` | 3초 누르면 소프트 리셋 |
 | `Update (hold 3s)` | 업데이트용 리셋([공통](#mnhangulmnsonykbd-공통-켜기업데이트cjkos-전환)) |
 | `Sony kbd Hangul: MnSonyKbd ON/off/(none)` | MnSonyKbd 상태 |
@@ -270,6 +277,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 
 - **실기기 시험은 하지 않았다.** 모든 개발·검증은 아래 에뮬레이터에서 했다.
 - 에뮬레이터: [CloudpilotEmu](https://github.com/cloudpilot-emu/cloudpilot-emu) (웹, 휴대폰 브라우저에서 실행)
+- 자동 시험·캡처: 같은 에뮬레이터의 npm 패키지 `cloudpilot-emu-embedded`(2.3.0)를 헤드리스 Chromium에서 돌리고, 내보낸 세션 이미지를 불러 펜 누름을 스크립트로 재생한다(입력 시간 간격 0~0.3초, 결과는 화면 캡처로 확인)
 - 기기 ROM: PEG-NR70V, Palm OS 4.1S
 - 한글: CJKOS(설치 A·B) / MnHangul, CJKOS 끈 세션(설치 C·D)
 
