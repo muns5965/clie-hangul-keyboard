@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v31(진단): v30 실측 — 누르면 바로 한↔A 바뀜(HR 그리기 정상), 표시가 탭 글자보다 조금 위 → 자리 y 105 → 108(dubeol.h kMarkX·kMarkY).
  * v30(진단): v29 실측 — 누를 때 바로 그린 표시가 안 보임(bg 0). 앱 쪽 Win 함수는 저해상도 좌표(2배)라 (143,105)가 실크 창 밖.
  *   → 누를 때는 Sony HR 라이브러리 함수로 그림(참조 번호는 ImOn이 SysLibFind로 찾아 #254 = 0x10000 | 번호).
  * v29(진단): 한/영 누름은 마지막 전환 뒤 0.5초 안이면 무시(v28 실측: 누름 하나에 t +2로 값이 제자리 — 바뀌지 않는 것처럼 보임, #253 = 무시 수).
@@ -68,7 +69,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v30"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v31"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 

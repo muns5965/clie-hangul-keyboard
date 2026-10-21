@@ -228,7 +228,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 RectangleType r;
                 UInt8         m[2];
 
-                RctSetRectangle(&r, 143, 105, 30, rc[3]);
+                RctSetRectangle(&r, kMarkX, kMarkY, 30, rc[3]);
                 FtrSet(kSyCr, 242, ((UInt32)(UInt16)r.topLeft.x << 16) | (UInt16)r.topLeft.y);
                 FtrSet(kSyCr, 251, (UInt32)WinGetDrawWindow());   /* v28: 가상 실크 창(한/영 누를 때 바로 그리기용) */
                 if (GetF(246) != 0 && GetF(247) != 0) {   /* v27: 그림으로(아래 함수가 한글을 못 그려도 됨) */

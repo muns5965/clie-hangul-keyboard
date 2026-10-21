@@ -173,10 +173,10 @@ void HgImGet(EventType *event, Int32 timeout)
                         IndexedColorType bg = HRWinGetPixel((UInt16)hr, 139, 113), ob;
 
                         ob = WinSetBackColor(bg);
-                        RctSetRectangle(&rr, 143, 105, 14, 18);
+                        RctSetRectangle(&rr, kMarkX, kMarkY, 14, 18);
                         HRWinEraseRectangle((UInt16)hr, &rr, 0);
                         WinSetBackColor(ob);
-                        HRWinDrawBitmap((UInt16)hr, (BitmapPtr)a, 143, 105);
+                        HRWinDrawBitmap((UInt16)hr, (BitmapPtr)a, kMarkX, kMarkY);
                         WinSetDrawWindow(old);
                         FtrSet(kSyCr, 243, bg);
                     }
