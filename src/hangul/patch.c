@@ -34,6 +34,7 @@
 
 #define kHgCreator 'MnHg'
 #include "winlog.h"
+#include "../common/diag.h"
 
 typedef UInt32 (*BltFn)(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7);
 
@@ -252,9 +253,11 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
             px += w;
         }
     }
+#if MN_DIAG
     FtrSet(kHgCreator, 19, GetF(19) + n);
     FtrSet(kHgCreator, 27, GetF(27) + 1);
     FtrSet(kHgCreator, 28, ratio);
+#endif
     return res;
 }
 
@@ -303,6 +306,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
     UInt16 i;
     Boolean hi = false;
 
+#if MN_DIAG
     if (p2 != NULL)
         OtherLog(chars, len, p2, p6);   /* v29 진단 */
     FtrSet(kHgCreator, 0, GetF(0) + 1);
@@ -315,11 +319,13 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
     FtrSet(kHgCreator, 7, (UInt32)p1);
     FtrSet(kHgCreator, 8, (UInt32)p7);
     FtrSet(kHgCreator, 14, FontInfo(p6));
+#endif
     for (i = 0; chars != NULL && i < len; i++)
         if (chars[i] >= 0x80) {
             hi = true;
             break;
         }
+#if MN_DIAG
     if (hi) {
         FtrSet(kHgCreator, 9, GetF(9) + 1);
         FtrSet(kHgCreator, 10, len);
@@ -338,6 +344,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
             WinLog(fh0 == rh0 ? kWinSeen1 : fh0 == rh0 * 2 ? kWinSeen2 : kWinSeenX);   /* v16 진단 */
         }
     }
+#endif
     if (orig == 0)
         return 0;
     if (hi && GetF(22) == 2 && p2 != NULL && p6 != NULL) {
@@ -380,7 +387,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 } else
                     i++;
             }
-            FtrSet(kHgCreator, 19, GetF(19) + n);
+            MN_D(FtrSet(kHgCreator, 19, GetF(19) + n));
             r = ((BltFn)orig)(p1, p2, p3, buf, len, p6, p7);
             MemPtrFree(buf);
             return r;

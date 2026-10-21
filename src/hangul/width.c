@@ -26,6 +26,7 @@
 
 #define kHgCreator 'MnHg'
 #include "winlog.h"
+#include "../common/diag.h"
 #define kGlyphW    18
 #define kTab       20
 
@@ -80,12 +81,16 @@ static inline UInt32 Ftr(UInt16 n)
 
 static inline void Bump(UInt16 n)
 {
+#if MN_DIAG
     FtrSet(kHgCreator, n, Ftr(n) + 1);
+#endif
 }
 
 static inline void Last(UInt16 fn, UInt32 len, Int16 res)
 {
+#if MN_DIAG
     FtrSet(kHgCreator, 63, ((UInt32)fn << 24) | ((len & 0xFFF) << 12) | ((UInt16)res & 0xFFF));
+#endif
 }
 
 /* 1바이트 글자 폭(원래 FntCharsWidth) */
@@ -110,20 +115,20 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
     }
     f = (const Int16 *)FntGetFontPtr();
     if (f != NULL)
-        FidLog(kFidW, (UInt16)f[7]);   /* v21 진단 */
+        MN_D(FidLog(kFidW, (UInt16)f[7]));   /* v21 진단 */
     /* v12: 폭을 잴 때는 저해상도 글꼴(높이 8~15)인데 그릴 때 Sony가 2배 고해상도 글꼴로 바꿔 넘긴다(v11 실측:
      * 폭 잴 때 11, 그릴 때 22 ×2). 그러면 그리기는 16×16 한글을 배율 2로 그리므로 폭 = 18 ÷ 2 */
     if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {
-        WinLog(kWinSeenW);   /* v16 진단: 이 창이 그릴 때 ×1인지 ×2인지 비교 */
+        MN_D(WinLog(kWinSeenW));   /* v16 진단: 이 창이 그릴 때 ×1인지 ×2인지 비교 */
         if (WinOffscreen() && Ftr(24) != 0) {   /* v17: offscreen 창 = ×1, 12×12 칸 */
-            FtrSet(kHgCreator, 62, ((UInt32)kCell12W << 16) | (1 << 8) | (UInt8)f[7]);
+            MN_D(FtrSet(kHgCreator, 62, ((UInt32)kCell12W << 16) | (1 << 8) | (UInt8)f[7]));
             return kCell12W;
         }
         if (f[7] >= 14 && Ftr(92) != 0) {       /* v22: 큰 글자(저해상도 15, v21 실측 15/7) → 그릴 때 30 ×2, 24×24 */
-            FtrSet(kHgCreator, 62, ((UInt32)(kCell24W / 2) << 16) | (2 << 8) | (UInt8)f[7]);
+            MN_D(FtrSet(kHgCreator, 62, ((UInt32)(kCell24W / 2) << 16) | (2 << 8) | (UInt8)f[7]));
             return kCell24W / 2;
         }
-        FtrSet(kHgCreator, 62, ((UInt32)(kGlyphW / 2) << 16) | (2 << 8) | (UInt8)f[7]);
+        MN_D(FtrSet(kHgCreator, 62, ((UInt32)(kGlyphW / 2) << 16) | (2 << 8) | (UInt8)f[7]));
         return kGlyphW / 2;
     }
     if (mode == 2 && f != NULL && f[7] >= 16 && f[7] <= 40 && Ftr(23) != 0) {
@@ -136,15 +141,15 @@ static Int16 HangulW(UInt8 lead, UInt8 trail)
         if (coord > 0 && px >= (UInt16)coord * 2 - 1)
             ratio = 2;
         if (f[7] >= 28 && Ftr(92) != 0) {       /* v22: 28 이상은 24×24 칸 */
-            FtrSet(kHgCreator, 62, ((UInt32)((kCell24W + ratio - 1) / ratio) << 16) | (ratio << 8) | (UInt8)f[7]);
+            MN_D(FtrSet(kHgCreator, 62, ((UInt32)((kCell24W + ratio - 1) / ratio) << 16) | (ratio << 8) | (UInt8)f[7]));
             return (kCell24W + ratio - 1) / ratio;
         }
-        FtrSet(kHgCreator, 62, ((UInt32)((kGlyphW + ratio - 1) / ratio) << 16) | (ratio << 8) | (UInt8)f[7]);
+        MN_D(FtrSet(kHgCreator, 62, ((UInt32)((kGlyphW + ratio - 1) / ratio) << 16) | (ratio << 8) | (UInt8)f[7]));
         return (kGlyphW + ratio - 1) / ratio;
     }
     b[0] = '[';
     b[1] = ']';
-    FtrSet(kHgCreator, 62, ((UInt32)((CharsWidthFn)Orig(0))(b, 2) << 16) | (f != NULL ? (UInt8)f[7] : 0));
+    MN_D(FtrSet(kHgCreator, 62, ((UInt32)((CharsWidthFn)Orig(0))(b, 2) << 16) | (f != NULL ? (UInt8)f[7] : 0)));
     return ((CharsWidthFn)Orig(0))(b, 2);
 }
 

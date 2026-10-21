@@ -16,13 +16,22 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+# 진단 빌드(기본, DIAG=1) → bin/. 배포 빌드(DIAG=0: 진단 기록을 뺌, src/common/diag.h) → build/release/
+DIAG="${DIAG:-1}"
+DFLAG="-DMN_DIAG=$DIAG"
+outbin="$root/bin"
 out="$root/build/hangul"
+if [ "$DIAG" = "0" ]; then
+  outbin="$root/build/release"
+  out="$root/build/hangul-release"
+fi
+mkdir -p "$outbin"
 rm -rf "$out"
 mkdir -p "$out" "$root/bin"
 cd "$out"
 
 # 1) 패치 코드
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,PatchBlt \
   "$root/src/hangul/patch.c" -o patch.coff
@@ -55,7 +64,7 @@ m68k-palmos-objcopy -O binary -j .text count.o HgCt0000.bin
 [ "$(stat -c %s HgCt0000.bin)" -eq $((100 + 18 * 24)) ] || { echo "error: HgCt size" >&2; exit 1; }
 
 # 1c) 글자 경계 코드(src/hangul/intl.c) → 리소스 HgIt 0. 오프셋 0 = 진입점 오프셋 표, 24 = 원래 주소 칸
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,HgCharAttr \
   "$root/src/hangul/intl.c" -o intl.coff
@@ -75,7 +84,7 @@ m68k-palmos-objcopy -O binary -j .text intl.coff HgIt0000.bin
 m68k-palmos-objdump -d intl.coff > intl.dis
 
 # 1d) 폭 계산 코드(src/hangul/width.c) → 리소스 HgWd 0. 오프셋 0 = 진입점 오프셋 표, 20 = 원래 주소 칸
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,HgCharsWidth \
   "$root/src/hangul/width.c" -o width.coff
@@ -95,7 +104,7 @@ m68k-palmos-objcopy -O binary -j .text width.coff HgWd0000.bin
 m68k-palmos-objdump -d width.coff > width.dis
 
 # 1e) v28 키보드 대화상자 진단 코드(src/hangul/kbd.c) → 리소스 HgKd 0. 오프셋 0 = 진입점 오프셋 표, 32 = 원래 주소 칸
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,HgKbdDialog \
   "$root/src/hangul/kbd.c" -o kbd.coff
@@ -115,7 +124,7 @@ m68k-palmos-objcopy -O binary -j .text kbd.coff HgKd0000.bin
 m68k-palmos-objdump -d kbd.coff > kbd.dis
 
 # 2) 앱
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar "$root/src/hangul/app.c" -o app 2>&1 | tee build.log
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar "$root/src/hangul/app.c" -o app 2>&1 | tee build.log
 m68k-palmos-obj-res app
 # 3) 조합형 글꼴 묶음(tools/gen-johab.py로 생성해 커밋된 파일): HgJb 0 = 16×16, HgJb 1 = 12×12
 cp "$root/src/hangul/data/HgJ16.bin" HgJb0000.bin
@@ -128,5 +137,5 @@ for fn in ResetDiag AutoGet SkipGet SkipSet CjkOn InstallAll InstPatch BltFind I
   [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
 done
 
-build-prc "$root/bin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgJb0000.bin HgJb0001.bin
-ls -l "$root/bin/MnHangul.prc"
+build-prc "$outbin/MnHangul.prc" "MnHangul" MnHg *.app.grc HgPt0000.bin HgCt0000.bin HgIt0000.bin HgWd0000.bin HgKd0000.bin HgJb0000.bin HgJb0001.bin
+ls -l "$outbin/MnHangul.prc"

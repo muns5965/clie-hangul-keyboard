@@ -14,6 +14,7 @@
 
 /* v54: Sony 가상 키보드 한글은 별도 모듈 MnSonyKbd(크리에이터 'MnSy', src/sony)로 분리. 기록 feature도 'MnSy' */
 #define kSyCr 'MnSy'
+#include "../common/diag.h"
 
 static inline UInt8 Dubeol(UInt8 c)
 {
@@ -53,11 +54,15 @@ static inline UInt8 Dubeol(UInt8 c)
  *        (그림: 판정에 씀<<1 | 반전) */
 static inline void DecLog(UInt32 e)
 {
+#if MN_DIAG
     UInt32 k = 0;
 
     FtrGet(kSyCr, 176, &k);
     FtrSet(kSyCr, 160 + (UInt16)(k & 15), e);
     FtrSet(kSyCr, 176, k + 1);
+#else
+    (void)e;
+#endif
 }
 
 /* 지금 쉬프트 고정(⇪)인가 = 한글 모드 */

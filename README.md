@@ -291,9 +291,10 @@ sudo ./tools/setup-toolchain.sh
 `.github/workflows/build-prc.yml`: `src/` 또는 `tools/build-*.sh`가 바뀌어 푸시되면 GitHub 서버에서 PRC를 빌드한다.
 Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고정)와 Palm OS SDK 4를 설치하고,
 `tools/build-*.sh`를 파일명 순서로 모두 실행한다(`build-hello.sh` 제외). 빌드 전에 저장소에 커밋된 `bin/*.prc`는 지운다.
-새 PRC를 추가할 때는 `tools/build-<이름>.sh`만 만들면 CI에 자동으로 포함된다. 공통 코드 디렉터리를 만들면 워크플로의 `paths` 트리거에 추가할 것.
+새 PRC를 추가할 때는 `tools/build-<이름>.sh`만 만들면 CI에 자동으로 포함된다. 트리거는 `src/**`라 `src/common/`도 포함된다.
 빌드된 PRC마다 `tools/prc-info.sh`로 DB 이름·타입·크리에이터·리소스 목록을 실행 요약에 표시한다.
-결과 PRC와 스크립트별 로그(`build/logs/`)는 실행 페이지의 Artifacts(`prc`)에서 받는다. 실행 요약에 날짜를 뺀 PRC 해시와
+결과 PRC와 스크립트별 로그(`build/logs/`)는 실행 페이지의 Artifacts(`prc`)에서 받는다.
+**진단 빌드 / 배포 빌드**: `bin/`의 PRC는 진단 빌드(기본, 앱 진단 화면용 기록 포함)다. `DIAG=0 tools/build-hangul.sh`(sony·core도 같음)는 그리기·폭·입력 경로의 진단 기록을 뺀 배포 빌드를 `build/release/`에 만든다. 동작은 같고 기록만 다르다(감사 표: [ARCHITECTURE 7.1](docs/ARCHITECTURE.md)). 같은 크리에이터라 둘 중 하나만 설치된다. CI는 배포 빌드도 매번 만들어 검사하고 Artifacts(`prc-release`)로 올린다. 실행 요약에 날짜를 뺀 PRC 해시와
 한글 조합 시험 결과가 표시된다. 로컬·CI 일치 여부는 PRC별 해시로 확인하고, 본체(`MnSkCore`)는 gcc 지역변수 배치 차이로
 해시가 달라 코드 블록 해시·트랩 목록으로 비교한다(기록: [docs/DEVELOPMENT_HISTORY.md](docs/DEVELOPMENT_HISTORY.md#빌드-해시-기록)).
 

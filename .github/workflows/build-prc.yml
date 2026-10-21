@@ -89,6 +89,23 @@ jobs:
             exit 1
           fi
 
+      # 배포 빌드(진단 기록을 뺀 것, src/common/diag.h): 검사(%a5·재배치·진입점)만 하고 산출물로 올린다. bin/에는 넣지 않는다.
+      - name: Build release variant (DIAG=0)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in build-hangul build-sony build-core; do
+            echo "::group::DIAG=0 $name"
+            if DIAG=0 bash "tools/$name.sh" > "build/logs/$name-release.log" 2>&1; then
+              cat "build/logs/$name-release.log"; echo "::endgroup::"
+            else
+              cat "build/logs/$name-release.log"; echo "::endgroup::"
+              echo "::error::DIAG=0 $name failed: $(tail -3 "build/logs/$name-release.log" | tr '\n' ' ')"
+              exit 1
+            fi
+          done
+          for f in build/release/*.prc; do echo "::notice::release $(basename "$f") $(stat -c %s "$f") bytes"; done
+
       # 한글 조합 로직을 PC용으로 컴파일해 시험 (test/compose_test.py)
       - name: Test Hangul composition (keyboard, johab glyphs)
         shell: bash
@@ -130,4 +147,11 @@ jobs:
           path: |
             bin/*.prc
             build/logs/*.log
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prc-release
+          path: build/release/*.prc
           if-no-files-found: ignore

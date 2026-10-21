@@ -95,12 +95,14 @@ void HgImGet(EventType *event, Int32 timeout)
     UInt8   j;
 
     OrigGet()(event, timeout);
+#if MN_DIAG
     {   /* v9 진단: 입력 함수가 불린 횟수(CJKOS가 위에 있을 때 아래로 부르는지 확인용) */
         UInt32 n = 0;
 
         FtrGet(kSyCr, 188, &n);
         FtrSet(kSyCr, 188, n + 1);
     }
+#endif
     st = St();
     if (st == NULL || event == NULL)
         return;
@@ -203,8 +205,10 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
          *     이 그림 연결은 CJKOS를 꺼도 남으므로 여기서 입력만 다시 잇는다(ROM이 맨 위일 때만, 그림 연결 자신은 건드리지 않음) */
         SyImHealOne(0);
         /* v9 진단: 이 순간의 맨 위 주소(입력·키 글자) */
+#if MN_DIAG
         FtrSet(kSyCr, 189, (UInt32)SysGetTrapAddress(sysTrapEvtGetEvent));
         FtrSet(kSyCr, 190, (UInt32)SysGetTrapAddress(kSyTrapBlt));
+#endif
 
         /* v47: 자판 전체 그리기에서 ⇪ 그림은 2줄 끝 키(\ 또는 |) 바로 다음(v46 실측). 그때만 Sony 실제 상태로 쓴다.
          *      ⇪ 누를 때의 눌림 표시(반전 그림, 앱이 펜을 받기 전에 그려짐)는 판정에 쓰지 않는다 */
@@ -217,6 +221,7 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
             FtrSet(kSyCr, kFtrHan, on);
             FtrSet(kSyCr, kFtrSonyCaps, 0x100 | on);   /* v45 */
         }
+#if MN_DIAG
         DecLog((2UL << 30) | ((v & 0xFFF) << 18) | ((pc & 3) << 7) |   /* v46 진단 */
                (use ? 2 : 0) | on);
         FtrSet(kSyCr, 177, 0);   /* 그림 다음 키 글자는 다시 기록 */
@@ -224,6 +229,7 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
         v = 0;
         FtrGet(kSyCr, 147, &v);
         FtrSet(kSyCr, 147, v + 1);
+#endif
         if (ic[2 + on] != 0) {
             OrigBmp()((BitmapPtr)ic[2 + on], x - 2, y);
             return;

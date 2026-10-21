@@ -23,6 +23,7 @@
 
 #define kHgCreator 'MnHg'
 #include "winlog.h"
+#include "../common/diag.h"
 #define kGlyphW    18
 
 UInt16 HgCharAttr(WChar c);
@@ -171,9 +172,11 @@ Int16 HgCharWidth(WChar c)
     UInt32       mode = Ftr(22);
     Char         box[2];
 
+#if MN_DIAG
     FtrSet(kHgCreator, 55, Ftr(55) + 1);   /* v11 진단: 호출 수, 2바이트 호출 수 #61 */
     if (c > 0xFF)
         FtrSet(kHgCreator, 61, Ftr(61) + 1);
+#endif
     if (c <= 0xFF)
         return Orig(5) ? ((WidthFn)Orig(5))(c) : FntCharWidth((Char)c);
     if (mode == 0) {   /* 그리기 패치가 꺼진 모드: 두 바이트가 라틴 글자 둘로 그려짐 */
@@ -183,9 +186,9 @@ Int16 HgCharWidth(WChar c)
     }
     f = (const Int16 *)FntGetFontPtr();
     if (f != NULL)
-        FidLog(kFidW, (UInt16)f[7]);   /* v21 진단 */
+        MN_D(FidLog(kFidW, (UInt16)f[7]));   /* v21 진단 */
     if (mode == 2 && f != NULL && f[7] >= 8 && f[7] < 16 && Ftr(23) != 0) {
-        WinLog(kWinSeenW);   /* v16 진단 */
+        MN_D(WinLog(kWinSeenW));   /* v16 진단 */
         if (WinOffscreen() && Ftr(24) != 0)
             return kCell12W;   /* v17: offscreen 창 = ×1, 12×12 칸(width.c와 같은 규칙) */
         if (f[7] >= 14 && Ftr(92) != 0)

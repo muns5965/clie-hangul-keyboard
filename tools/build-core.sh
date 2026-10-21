@@ -13,12 +13,21 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+# 진단 빌드(기본, DIAG=1) → bin/. 배포 빌드(DIAG=0: 진단 기록을 뺌, src/common/diag.h) → build/release/
+DIAG="${DIAG:-1}"
+DFLAG="-DMN_DIAG=$DIAG"
+outbin="$root/bin"
 out="$root/build/core"
+if [ "$DIAG" = "0" ]; then
+  outbin="$root/build/release"
+  out="$root/build/core-release"
+fi
+mkdir -p "$outbin"
 rm -rf "$out"
 mkdir -p "$out" "$root/bin"
 cd "$out"
 
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,SkwrEntry \
   "$root/src/skwr/skwr.c" -o skwr.coff
@@ -57,7 +66,7 @@ m68k-palmos-objdump -d skwr.coff > skwr.dis
 
 # DB 버전 1 = 로더 ABI. 로더(loader.c kCoreAbi)와 맞아야 불러온다.
 build-prc --no-check-resources -t SkCo -v 1 \
-  "$root/bin/MnSkCore.prc" "MnSkCore" MnSk MnCo0000.bin
+  "$outbin/MnSkCore.prc" "MnSkCore" MnSk MnCo0000.bin
 
-ls -l "$root/bin/MnSkCore.prc"
+ls -l "$outbin/MnSkCore.prc"
 cat skwr.dis

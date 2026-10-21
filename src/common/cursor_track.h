@@ -15,6 +15,8 @@
 #ifndef CURSOR_TRACK_H
 #define CURSOR_TRACK_H
 
+#include "diag.h"   /* b+0~b+3(비교 수·결과)은 진단 기록, b+4~b+6은 동작용 */
+
 #ifndef MNSK_HOST_TEST
 
 static inline UInt32 CtGet(UInt32 cr, UInt16 n)
@@ -78,14 +80,14 @@ static inline Boolean CtCheck(UInt32 cr, UInt16 b, Boolean composing)
     if (pf == (UInt32)fld && (pp & 0x80000000UL) == 0) {
         UInt16 e = (UInt16)((Int32)(pp & 0xFFFF) + (Int32)CtGet(cr, b + 6));
 
-        FtrSet(cr, b + 0, CtGet(cr, b + 0) + 1);
+        MN_D(FtrSet(cr, b + 0, CtGet(cr, b + 0) + 1));
         if (e != pos) {
-            FtrSet(cr, b + 1, CtGet(cr, b + 1) + 1);
+            MN_D(FtrSet(cr, b + 1, CtGet(cr, b + 1) + 1));
             if (composing)
                 end = true;   /* 커서가 옮겨짐 — 옛 조합 글자를 고치지 않는다 */
         }
-        FtrSet(cr, b + 2, ((UInt32)e << 16) | pos);
-        FtrSet(cr, b + 3, (e != pos ? 1UL : 0) | (composing ? 2UL : 0));
+        MN_D(FtrSet(cr, b + 2, ((UInt32)e << 16) | pos));
+        MN_D(FtrSet(cr, b + 3, (e != pos ? 1UL : 0) | (composing ? 2UL : 0)));
     }
     FtrSet(cr, b + 4, (UInt32)fld);
     FtrSet(cr, b + 5, pos);

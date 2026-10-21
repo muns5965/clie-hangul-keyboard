@@ -126,6 +126,7 @@ static inline Boolean HanLabel(UInt8 c)
     /* v49·v50: 소문자 키 글자 + ⇪ 꺼짐 = 영문(키보드 처음 띄울 때). 키 누름(3) 동안은 적용 안 함 */
     if (!caps && c >= 'a' && c <= 'z' && GetF(kFtrPenCaps) != 3 && GetF(kFtrHan) != 0)
         FtrSet(kSyCr, kFtrHan, 0);
+#if MN_DIAG
     {   /* v46 진단: (H, p, caps, temp)가 바뀔 때만 기록 */
         UInt32 st = ((GetF(kFtrHan) ? 1UL : 0) << 9) | ((GetF(kFtrPenCaps) & 3) << 7) | ((caps ? 1UL : 0) << 6) |
                     ((UInt32)(temp & 0xF) << 2);
@@ -135,12 +136,15 @@ static inline Boolean HanLabel(UInt8 c)
             DecLog((1UL << 30) | ((GetF(108) & 0xFFF) << 18) | ((UInt32)c << 10) | st);
         }
     }
+#else
+    (void)temp;
+#endif
     return GetF(kFtrHan) != 0;
 }
 
 static inline void Reject(UInt16 why, UInt16 fh, const Int16 *rc)
 {
-    FtrSet(kSyCr, 128, ((UInt32)why << 24) | ((UInt32)(fh & 0xFF) << 8) | (UInt8)rc[3]);
+    MN_D(FtrSet(kSyCr, 128, ((UInt32)why << 24) | ((UInt32)(fh & 0xFF) << 8) | (UInt8)rc[3]));
 }
 
 UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7)
@@ -180,8 +184,10 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 r.extent.x = kCell / ratio;
                 res = ((BltFn)(b != 0 ? b : orig))(p1, &r, p3, &one, 1, tmp, p7);
                 MemPtrFree(tmp);
+#if MN_DIAG
                 FtrSet(kSyCr, 127, GetF(127) + 1);
                 FtrSet(kSyCr, 128, ((UInt32)(fh & 0xFF) << 8) | (UInt8)rh);
+#endif
                 return res;
             }
         }

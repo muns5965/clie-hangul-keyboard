@@ -9,7 +9,16 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
+# 진단 빌드(기본, DIAG=1) → bin/. 배포 빌드(DIAG=0: 진단 기록을 뺌, src/common/diag.h) → build/release/
+DIAG="${DIAG:-1}"
+DFLAG="-DMN_DIAG=$DIAG"
+outbin="$root/bin"
 out="$root/build/sony"
+if [ "$DIAG" = "0" ]; then
+  outbin="$root/build/release"
+  out="$root/build/sony-release"
+fi
+mkdir -p "$outbin"
 rm -rf "$out"
 mkdir -p "$out" "$root/bin"
 cd "$out"
@@ -36,7 +45,7 @@ check_code() {   # $1 = coff, $2 = 코드 끝 기호(없으면 전체)
 }
 
 # 1) 오버레이 패치
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar -fno-builtin -nostartfiles -nostdlib \
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,PatchBlt "$root/src/sony/spatch.c" -o spatch.coff
 a=$(m68k-palmos-nm spatch.coff | awk '$3=="PatchOrig" {print $1}')
 [ "$((16#$a))" -eq 0 ] || { echo "error: PatchOrig at $a" >&2; exit 1; }
@@ -46,7 +55,7 @@ check_code spatch.coff
 m68k-palmos-objcopy -O binary -j .text spatch.coff SyPt0000.bin
 
 # 2) 입력·'한A'
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar -fno-builtin -nostartfiles -nostdlib \
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,HgImGet "$root/src/sony/ime.c" -o ime.coff
 a=$(m68k-palmos-nm ime.coff | awk '$3=="ImBase" {print $1}')
 [ "$((16#$a))" -eq 0 ] || { echo "error: ImBase at $a" >&2; exit 1; }
@@ -56,7 +65,7 @@ check_code ime.coff KscBits   # 코드 뒤 KSC 표 데이터는 검사에서 뺀
 m68k-palmos-objcopy -O binary -j .text ime.coff SyIm0000.bin
 
 # 3) 앱
-m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar "$root/src/sony/app.c" -o app 2>&1 | tee build.log
+m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar "$root/src/sony/app.c" -o app 2>&1 | tee build.log
 m68k-palmos-obj-res app
 m68k-palmos-objdump -d app > app.dis
 # 리셋 알림(앱 전역변수 없음)에서 부르는 함수는 %a5(전역) 참조가 없어야 한다
@@ -69,5 +78,5 @@ done
 # 4) 데이터
 cp "$root/src/sony/data/SyIc0000.bin" "$root/src/sony/data/SyIc0001.bin" "$root/src/sony/data/SyJm0000.bin" .
 
-build-prc "$root/bin/MnSonyKbd.prc" "MnSonyKbd" MnSy *.app.grc SyPt0000.bin SyIm0000.bin SyIc0000.bin SyIc0001.bin SyJm0000.bin
-ls -l "$root/bin/MnSonyKbd.prc"
+build-prc "$outbin/MnSonyKbd.prc" "MnSonyKbd" MnSy *.app.grc SyPt0000.bin SyIm0000.bin SyIc0000.bin SyIc0001.bin SyJm0000.bin
+ls -l "$outbin/MnSonyKbd.prc"
