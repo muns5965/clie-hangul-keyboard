@@ -115,7 +115,7 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | Sony 가상 키보드 한글(MnSonyKbd v10): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
 | MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. v7에서 CJKOS 끈 뒤 ⇪ 켬·끔·켬 정상 (CloudpilotEmu 실측) |
 | 한글 표시(MnHangul v58): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `Hangul ON`, 리셋 뒤 자동 시작 |
-| MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정) |
+| MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정, v62에서 예전 방식 뺌) |
 
 ## 설치·업데이트
 
@@ -173,7 +173,7 @@ ClieDiag는 모두 선택이다. MnHangul·MnSonyKbd의 켜기·업데이트는 
 ## Sony 가상 키보드로 한글(MnSonyKbd)
 
 Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 한글을 넣는다(설치 B·D). `MnSonyKbd.prc` 하나, 리셋 없음.
-한글 표시는 하지 않으므로 CJKOS 등 한글 시스템(B)이나 MnHangul(D)과 같이 쓴다(첫 화면에 `Hangul display: CJKOS? / MnHangul / none` 표시). v54에 MnHangul에서 분리했다.
+한글 표시는 하지 않으므로 CJKOS 등 한글 시스템(B)이나 MnHangul(D)과 같이 쓴다(첫 화면에 `Hangul display: CJKOS / MnHangul / none` 표시). v54에 MnHangul에서 분리했다.
 
 <img src="docs/images/06-sony-keyboard.png" width="480" alt="Sony 가상 키보드: 한A 켜짐 두벌식 자모, Shift 쌍자음">
 
@@ -212,7 +212,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 
 | 버튼·표시 | 뜻 |
 | --- | --- |
-| 첫 줄 `Hangul ON/off  Reset ON/off  CJKOS? running/no` | 한글 표시 연결 상태, 리셋 뒤 자동 시작, CJKOS 감지 |
+| 첫 줄 `Hangul ON/off  Reset ON/off  CJKOS running/no` | 한글 표시 연결 상태, 리셋 뒤 자동 시작, CJKOS 감지 |
 | `Hangul ON` / `Hangul OFF` | 한글 표시를 켬 / 끔. 이미 켜져 있으면 다시 끼우지 않는다(v58). CJKOS가 감지되면 켜지 않는다 |
 | `Start at reset: ON/off` | 리셋 뒤 자동으로 켬(기본 ON) |
 | `Soft Reset (hold 3s)` | 3초 누르면 소프트 리셋 |
@@ -246,7 +246,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
   한글이 라틴 문자 두 개로 깨져 보이고, BS가 2바이트 글자의 반쪽만 지울 수 있다. CJKOS 대신 MnHangul(시험 단계)을 쓸 수 있다(C·D).
 - **한글 범위**: KS X 1001 완성형(EUC-KR) 2,350자. 그 밖의 음절이 되면 앞 글자를 확정하고 마지막 자모부터 새로 조합한다(예: 똠 → `또ㅁ`).
 - **시험 범위**: CloudpilotEmu(NR70V ROM)의 런처·메모장·ClieDiag에서 시험했다. 다른 앱(주소록, 일정 등)과 실기는 검증 대상이다.
-- **NR70V 전용 부분**: MnSonyKbd는 NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 그리기 순서와 ROM 주소에 기댄다. MnHangul·MnSonyKbd의 CJKOS 감지는 CJKOS가 켜질 때 등록하는 Feature `dCJK`로 한다(v61·v11, 시험 기간에는 예전의 함수 4개 방식도 함께 봄).
+- **NR70V 전용 부분**: MnSonyKbd는 NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 그리기 순서와 ROM 주소에 기댄다. MnHangul·MnSonyKbd의 CJKOS 감지는 CJKOS가 켜질 때 등록하는 Feature `dCJK`로 한다(MnHangul v61~·MnSonyKbd v11~).
 
 ## 문서
 

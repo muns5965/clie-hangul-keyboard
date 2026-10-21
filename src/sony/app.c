@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v11 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v12 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v12: CJKOS 감지는 'dCJK' Feature만(함수 4개 방식 뺌). 첫 화면 'CJKOS'.
  * v11: CJKOS 감지 = 'dCJK' Feature(MnHangul v61과 같음). 첫 화면은 Feature로 확인되면 'CJKOS', 함수 4개 방식만 맞으면 'CJKOS?'.
  * v10: 조합 중 커서 이동 감지(MnSkCore build 17과 같은 방식, src/common/cursor_track.h). 진단 화면 9줄 = fld 비교·다름 수·기대/실제.
  * v9: CJKOS를 끈 뒤 입력 연결도 ⇪ 그림 때 스스로 다시 잇는다(v8 실측: 키 글자만 복구, 입력은 ON 필요).
@@ -257,31 +258,13 @@ static UInt16 SonyOn(void)
     return (UInt16)(p << 4) | ImOn();
 }
 
-/* MnSonyKbd v11(MnHangul v61과 같음): CJKOS 동작 감지. CJKOS는 켜질 때 크리에이터 'dCJK' Feature(#0, #1968)를 등록하고 끄면 지운다
- *   (ClieDiag v24 Ftr 페이지 실측 2026-10-21: 끔 254개 → 켬 256개 → 끔 254개, 나머지 같음). 공개 함수 FtrGet 하나로 판정.
- *   시험 기간에는 v56의 함수 4개 방식(CJKOS가 바꾸고 MnHangul·MnSonyKbd는 안 바꾸는 FntSetFont·FrmDrawForm·
- *   FldHandleEvent·StrCompare 중 하나라도 ROM 밖)도 함께 보고, 둘 중 하나라도 맞으면 동작 중으로 본다(안전 쪽).
- *   두 결과가 계속 같으면 함수 4개 방식은 뺀다. 앱 화면에서만 부름(첫 화면 한글 표시 줄) */
+/* MnSonyKbd v11·v12(MnHangul v61·v62와 같음): CJKOS 동작 감지 = CJKOS가 켜질 때 등록하고 끌 때 지우는 'dCJK' Feature
+ *   (ClieDiag v24 실측). v12: 함수 4개 방식은 v11 시험에서 일치 확인 뒤 뺌. 앱 화면에서만 부름(첫 화면 한글 표시 줄) */
 static inline Boolean CjkFtr(void)
 {
     UInt32 v = 0;
 
     return FtrGet('dCJK', 0, &v) == errNone;
-}
-
-static inline Boolean CjkTraps(void)
-{
-    UInt16 k;
-
-    for (k = 0; k < 4; k++) {
-        UInt16 t = k == 0 ? sysTrapFntSetFont : k == 1 ? sysTrapFrmDrawForm : k == 2 ? sysTrapFldHandleEvent :
-                   sysTrapStrCompare;
-        UInt32 a = (UInt32)SysGetTrapAddress(t);
-
-        if (a < 0x10000000UL || a >= 0x10800000UL)
-            return true;
-    }
-    return false;
 }
 
 /* ---------- 앱 화면에서만 부르는 함수 ---------- */
@@ -448,7 +431,7 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v11", 13, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v12", 13, 0, 0);
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
     {
@@ -466,7 +449,7 @@ static void DrawMain(void)
         UInt32 e = 0;
 
         FtrGet('MnHg', 21, &e);
-        Row(6, e != 0 ? "Hangul display: MnHangul" : CjkFtr() ? "Hangul display: CJKOS" : CjkTraps() ? "Hangul display: CJKOS?" :
+        Row(6, e != 0 ? "Hangul display: MnHangul" : CjkFtr() ? "Hangul display: CJKOS" :
                         "Hangul display: none (broken)");
     }
     if (ih != NULL) {   /* 사용법: '한A' 그림(켜짐) = 한/영 */
@@ -490,7 +473,7 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v11 Debug [tap: back]", 31, 0, 0);
+    WinDrawInvertedChars("MnSonyKbd v12 Debug [tap: back]", 31, 0, 0);
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);

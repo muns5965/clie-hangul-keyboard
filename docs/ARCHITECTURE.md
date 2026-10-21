@@ -157,13 +157,12 @@ MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므
 | OS 내부 구조체 직접 읽기 | 창 구조 `+8`(windowFlags, 0x4000 = 화면 밖 창)·`+26`(비트맵) | MnSonyKbd 가상 실크 창 판별 |
 | | 글꼴 구조(`FontType`) 필드·폭 표를 읽고 1글자 임시 글꼴을 만들어 `BltDrawChars`에 넘김 | MnHangul 한글, MnSonyKbd 자모 |
 | ROM 고정 주소 | `BltDrawChars` = `0x1008359A`, 시작 바이트 `4E56FFF0 48E71E30` 확인 뒤 사용 | MnSonyKbd 자모 그리기 |
-| | ROM = `0x10000000`~`0x107FFFFF` 범위 판정 | 연결 확인(`src/sony/chain.h`, MnHangul `BltFind`), CJKOS 감지 보조(아래) |
+| | ROM = `0x10000000`~`0x107FFFFF` 범위 판정 | 연결 확인(`src/sony/chain.h`, MnHangul `BltFind`) |
 | ROM 리소스 내용 | `SilkExtn`(`extn`/`SeSi`)의 `Tbmp` 2400·2500 = ⇪ 그림(보통·켜짐) | `한A` 그림, 한/영 판정 |
 | Sony 키보드 동작 관찰 | 자판 그리는 순서(숫자 줄 → qwerty 줄 → `\` → ⇪ 그림 → …), 키 글자 글꼴 높이 22 | 한/영 표시 판정 |
 | | 상태(`GrfSetState`)를 그린 **뒤에** 바꿈, 키를 누르는 순간 잠깐 ⇪ 꺼짐 + 일시 쉬프트 | 판정 규칙 |
 | | 펜이 Sony 다시 그리기보다 앱 `EvtGetEvent`에 먼저 옴 | 펜 누름 때 연결 복구, ⇪ 판단 |
 | 화면 좌표 | ⇪ 키 x 0~12·y 182~191, 키 영역 y < 213(저해상도 좌표) | MnSonyKbd |
-| 다른 프로그램 동작 | CJKOS 감지 보조 = `FntSetFont`·`FrmDrawForm`·`FldHandleEvent`·`StrCompare`가 ROM 밖인가. MnHangul v61·MnSonyKbd v11부터 주 판정은 1단계 `FtrGet('dCJK', 0)`(CJKOS가 켜질 때 등록·끌 때 삭제, 실측)이고, 이 방식은 시험 기간 비교용(OR)으로만 남김 | MnHangul `CJKOS`, MnSonyKbd 첫 화면 |
 | | CJKOS는 꺼질 때 자기가 켜질 때 저장한 주소로 되돌린다(실측) | 연결 복구 설계 |
 | 자체 약속 | 다른 모듈의 아래 함수 주소 = 진입점 − 4, 자기가 넣은 키 표시 keyCode `0x4D48` | 연결 따라가기, 입력 되먹임 방지 |
 | 부팅·복구 | `DisS` DB가 있으면 `SilkExtn`이 실크 초기화를 건너뜀(ROM 0x27EC) | 복구 수단([RECOVERY.md](RECOVERY.md)) |

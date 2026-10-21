@@ -48,7 +48,7 @@
 | --- | --- | --- |
 | 설치 실패("could not be overwritten") | 앱이 켜져 있어 코드가 잠김. 한쪽 앱의 `Update`로 다른 앱도 건너뛰는 기능은 MnHangul v57·MnSonyKbd v5부터 | 그 앱에서 `Update (hold 3s)` → 설치. 옛 판이라 안 되면 그 앱 자신의 `Update` |
 | `Hangul OFF`·`OFF`에서 `kept: use Update` | 다른 패치(CJKOS 등)가 위에 걸려 있어 안전을 위해 풀지 않음 | `Update` → 설치 |
-| MnHangul `Hangul ON`에서 `CJKOS? running` | CJKOS가 켜져 있음(같은 함수를 바꾸므로 충돌) | CJKOS를 끈 뒤 `Hangul ON`. CJKOS와 쓸 때는 MnSonyKbd만(설치 B) |
+| MnHangul `Hangul ON`에서 `CJKOS running` | CJKOS가 켜져 있음(같은 함수를 바꾸므로 충돌) | CJKOS를 끈 뒤 `Hangul ON`. CJKOS와 쓸 때는 MnSonyKbd만(설치 B) |
 | MnHangul을 켠 채 CJKOS를 켬 | 장애는 아님. 나중에 켠 CJKOS가 한글을 직접 그리고 MnHangul은 한글에 관여하지 않음(실측: MnHangul 2바이트 호출 수 변화 없음). CJKOS를 끄면 MnHangul로 돌아옴 | 할 일 없음. 헷갈리지 않도록 CJKOS를 켜기 전에 `Hangul OFF`, CJKOS를 계속 쓸 때는 `Start at reset: off` 권장 |
 | CJKOS를 끈 뒤 한글은 보이고 BS·커서가 반쪽 글자 단위 | MnHangul → CJKOS 켬·끔 순서에서는 **Intl·Width 연결이 빠지지 않음**(2026-10-18 실측: CJKOS를 끈 뒤 ClieDiag Trap 페이지에 MnHangul 폭 함수 5개·Intl 6개가 그대로). CJKOS는 꺼질 때 자기가 켜질 때 저장한 주소로 되돌리는 것으로 보인다(먼저 켜진 MnHangul 주소로 복귀). 빠지는 경우는 CJKOS보다 나중에 켠 모듈뿐이고, MnHangul은 그 경우를 감지해 막는다 | 그래도 생기면 리셋 → `Hangul ON`, ClieDiag Trap 페이지 캡처 |
 | MnHangul `Hangul ON`을 다시 누르면 먹통(v57 이하) | MnSonyKbd가 위에 있을 때 자기를 한 번 더 끼워 순환 | 소프트 리셋 → v58 이상으로 업데이트 |
