@@ -16,26 +16,7 @@
 #define kSyCr 'MnSy'
 #include "../common/diag.h"
 
-static inline UInt8 Dubeol(UInt8 c)
-{
-    switch (c) {   /* ⇪ + 쉬프트(소문자) 때만 쌍자음 */
-    case 'q': return 0xB3;  case 'w': return 0xB9;  case 'e': return 0xA8;  case 'r': return 0xA2;
-    case 't': return 0xB6;  case 'o': return 0xC2;  case 'p': return 0xC6;
-    }
-    if (c >= 'a' && c <= 'z')
-        c = (UInt8)(c - 'a' + 'A');
-    switch (c) {
-    case 'Q': return 0xB2;  case 'W': return 0xB8;  case 'E': return 0xA7;  case 'R': return 0xA1;
-    case 'T': return 0xB5;  case 'Y': return 0xCB;  case 'U': return 0xC5;  case 'I': return 0xC1;
-    case 'O': return 0xC0;  case 'P': return 0xC4;
-    case 'A': return 0xB1;  case 'S': return 0xA4;  case 'D': return 0xB7;  case 'F': return 0xA9;
-    case 'G': return 0xBE;  case 'H': return 0xC7;  case 'J': return 0xC3;  case 'K': return 0xBF;
-    case 'L': return 0xD3;
-    case 'Z': return 0xBB;  case 'X': return 0xBC;  case 'C': return 0xBA;  case 'V': return 0xBD;
-    case 'B': return 0xD0;  case 'N': return 0xCC;  case 'M': return 0xD1;
-    }
-    return 0;
-}
+#include "../common/dubeol_map.h"   /* Dubeol(): MnKbdHan과 공용 */
 
 /* v39: Sony 가상 키보드 한글 모드를 누른 키로 미리 안다(v38 실측: 펜 누름이 앱 EvtGetEvent를 먼저 지나고,
  *   Sony는 그다음 키 글자를 다시 그린 뒤 GrfSetState를 부른다. ⇪+쉬프트와 ⇪ 끄기는 상태로 구별 불가).
