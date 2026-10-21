@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v47: sym·int'l 자판에서 한/A를 누르면 영문 키 자리(이제 기호)에 자모를 그릴 위험 → 영문 키 줄 안에 영문 아닌 글자를 그리면
+ *   영문 키 기록 무효(#263), abc 자판 다시 그리기(`·~)에서 다시 유효. 무효면 다시 그리기 안 함(6줄 w 9 → rd 기록 그대로).
  * v46: v44 실측 fld bad 1 — 빨리 치면 Sony 다음 키가 우리 BS + 글자보다 먼저 큐에 있어 커서가 어긋나 조합 끝. 넣은 키(#266)·앱에 간 키(#267)
  *   수가 다르면 Sony 키를 큐 맨 뒤로 미룸(#265 연속, 20번 넘으면 맞춤, #264 = 미룬 수, 10줄 dl).
  * v45(진단): 가끔 조합이 끊김(대한뵤ㅁ뷰) — 조합 중 조합 끝난 까닭 최근 3개(#279~#282, 진단 6줄 end).
@@ -92,7 +94,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v46"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v47"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 

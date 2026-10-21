@@ -230,6 +230,7 @@ static void Expand(UInt8 *px, const UInt16 *g, UInt16 fh, UInt8 idx, UInt8 t)
  *   → 색이 그림 안에 있는 8비트 그림(글자 점 = 색 번호, 나머지 투명)으로 그림 — 한/A 표시(SyIc 8비트 + 투명)와 같은 길.
  *   색 번호는 화면에서 읽은 RGB의 가장 가까운 번호(WinRGBToIndex). 1) 옛 글자 점을 바탕색으로 2) 새 글자 점을 글자색으로 */
 /* v42 진단: 건너뛴 키(#284 비트), 첫 건너뜀 #283 = 까닭<<8 | 키(0 = a)
+ *   (v47: RdWhy 9 = sym·int'l 자판이라 안 그림)
  *   까닭 1 기록 없음, 2 다른 세대, 3 높이 다름, 4 글자 모양 없음, 5 글자색 모름, 6 바탕색 모름, 7 같은 색, 8 같은 번호 */
 static void Skip(UInt16 i, UInt16 why, UInt32 *mask)
 {
@@ -256,6 +257,11 @@ static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
     FtrGet(kSyCr, 3, &pk);
     FtrGet(kSyCr, 289, &hm);
     FtrGet(kSyCr, 290, &dm);
+    FtrGet(kSyCr, 263, &n);
+    if (n != 0) {   /* v47: sym·int'l 자판(영문 키 자리에 다른 글자) — 그리지 않음 */
+        RdWhy(9);
+        return 0;
+    }
     f = (const Int16 *)fp;
     /* 글꼴 모양이 예상과 다르면 그리지 않음. v34: 그림 줄 폭 상한 1024(v33 실측: 16워드는 너무 작음) */
     if (f == NULL || pk == 0) {

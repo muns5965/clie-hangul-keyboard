@@ -117,6 +117,8 @@ static inline void Reject(UInt16 why, UInt16 fh, const Int16 *rc)
     MN_D(FtrSet(kSyCr, 128, ((UInt32)why << 24) | ((UInt32)(fh & 0xFF) << 8) | (UInt8)rc[3]));
 }
 
+static Boolean LetterSpot(Int16 x, Int16 y);   /* v47, PatchBlt 뒤에 둠(코드 리소스 진입점은 오프셋 4) */
+
 UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7)
 {
     UInt32 orig = OrigAddr();
@@ -172,6 +174,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
                 if (c == '`' || c == '~') {
                     FtrSet(kSyCr, 299, GetF(299) + 1);
+                    FtrSet(kSyCr, 263, 0);   /* v47: abc 자판 다시 그리기 = 영문 키 기록 유효 */
                     FtrSet(kSyCr, 287, GetF(286));   /* v41 진단: 앞 첫 키 뒤에 그린 영문 키 수(첫 줄이 먼저면 26 가까이) */
                     FtrSet(kSyCr, 286, 0);
                 }
@@ -182,6 +185,11 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
                     FtrSet(kSyCr, 270 + k, GetF(270 + k) | ((UInt32)GetF(kFtrShift) << 18));
                 }
+            }
+            if (!IsLetter(c) && GetF(263) == 0 && LetterSpot(rc[0], rc[1])) {
+                /* v47: 영문 키 자리에 영문 아닌 글자 = sym·int'l 자판 → 영문 키 기록 무효(#263, 한/A 때 그 자리에 자모를 그리지 않음).
+                 *   abc 자판을 다시 그리면('`'·'~') 다시 유효 */
+                FtrSet(kSyCr, 263, 1);
             }
             if (IsLetter(c)) {
                 UInt16           i = (UInt16)((c | 0x20) - 'a');
@@ -291,4 +299,22 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         }
         return res;
     }
+}
+
+/* v47: (x, y)가 이번 abc 자판의 영문 키 줄 안(같은 줄 첫 영문 키 x ~ 끝 영문 키 x)인가 — q~p, a~l, z~m */
+static Boolean LetterSpot(Int16 x, Int16 y)
+{
+    UInt16 r;
+
+    for (r = 0; r < 3; r++) {
+        UInt16 a = r == 0 ? 'q' - 'a' : r == 1 ? 0 : 'z' - 'a', b = r == 0 ? 'p' - 'a' : r == 1 ? 'l' - 'a' : 'm' - 'a';
+        UInt32 ia = GetF(301 + 2 * a), ib = GetF(301 + 2 * b), xa = GetF(300 + 2 * a), xb = GetF(300 + 2 * b);
+        UInt8  g = (UInt8)GetF(299);
+
+        if ((UInt8)(ia >> 24) != g || (UInt8)(ib >> 24) != g || (Int16)xa != y)
+            continue;
+        if (x > (Int16)(xa >> 16) && x < (Int16)(xb >> 16))
+            return true;
+    }
+    return false;
 }
