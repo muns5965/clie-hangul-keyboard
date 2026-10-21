@@ -42,6 +42,11 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v68: 지원 기종 확인 — Palm OS 4.0 이상이고 문자 인코딩이 Latin(PalmLatin 3)일 때만 켜고 자동 시작한다(HgSupported, 공개 FtrGet).
+ *   OS 3.5에는 IntlGetRoutineAddress·IntlSetRoutineAddress가 없고(SDK 3.5 헤더), Shift-JIS(N700C 일본어 3.5.2) 등은 2바이트 범위가
+ *   한글과 겹친다. 아니면 아무것도 바꾸지 않고 'unsupported: OS 4 Latin only'(자동 시작 결과 #95 = 0x10000000).
+ *   N700C 실측(2026-10-21): 앱 화면이 중간부터 그려지지 않음 → 지원하지 않는 기종에서는 고해상도 전환도 하지 않는다.
+ *   T600C(영문 4.1) 실측: 수정 없이 한글 표시·글자 단위 BS·줄바꿈 정상.
  * v67: 지우기를 거부했을 때 맨 위 패치가 누구인지 기록(#165, src/common/top_who.h)하고, 다음에 앱을 열면 첫 화면 메시지로
  *   'can't delete: MnSonyKbd on top' 등(#166 = 아직 안 보여 준 거부). 진단 11줄 off 뒤에 누구(H/S/C/?).
  * v66: 런처 지우기 때 자동 끄기 — '-pdb' 알림이 MnHangul DB(크리에이터 MnHg: 앱, 24 글꼴)에 대해 오면 모두 끈다
@@ -129,7 +134,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v67"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v68"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -229,11 +234,14 @@ Err HRWinScreenMode(UInt16 ref, WinScreenModeOperation op, UInt32 *w, UInt32 *h,
                     UInt32 *depth, Boolean *color) SYS_TRAP(sysLibTrapCustom + 48);
 static UInt16 gHrRef = 0xFFFF;
 
+static Boolean HgSupported(void);
 static void StartHires(void)
 {
     UInt16 ref;
     UInt32 w = 320, h = 320;
 
+    if (!HgSupported())   /* v68 */
+        return;
     if (SysLibFind("Sony HR Library", &ref) != errNone || HROpen(ref) != errNone)
         return;
     if (HRWinScreenMode(ref, winScreenModeSet, &w, &h, NULL, NULL) != errNone) {
@@ -332,6 +340,16 @@ static void NotifyLog(const SysNotifyParamType *np)
         FtrGet(kHgCreator, kFtrNtHots, &v);
         FtrSet(kHgCreator, kFtrNtHots, v + 1);
     }
+}
+
+/* v68: 지원 기종 = Palm OS 4.0 이상(Intl 루틴 바꾸기·지우기 알림) + 문자 인코딩 PalmLatin(3). 전역 없음(리셋 알림에서 부름) */
+static Boolean HgSupported(void)
+{
+    UInt32 rom = 0, enc = 0;
+
+    if (FtrGet(sysFtrCreator, sysFtrNumROMVersion, &rom) != errNone || rom < 0x04000000UL)
+        return false;
+    return FtrGet(sysFtrCreator, sysFtrNumEncoding, &enc) == errNone && enc == 3;
 }
 
 /* v58: 그리기 패치가 연결 안에 있는가. 트랩에서 시작해 아는 패치(MnSonyKbd 'MnSy' #1, 아래 주소 = 진입점 - 4)를 따라 내려간다.
@@ -473,6 +491,8 @@ static UInt16 InstIntl(void)
     UInt16    i, card;
     LocalID   id;
 
+    if (!HgSupported())   /* v68: OS 3.5에는 Intl 루틴 함수가 없음 */
+        return 2;
     if (GetF(kFtrIntlC) != 0)
         return 1;
     h = DmGetResource(kIntlRes, 0);
@@ -893,6 +913,10 @@ static void PatchOn(void)
     UInt32 r;
     UInt16 p, f;
 
+    if (!HgSupported()) {   /* v68 */
+        StrCopy(gMsg, "unsupported: OS 4 Latin only");
+        return;
+    }
     if (CjkOn()) {   /* v56: CJKOS와 같은 함수를 바꾸므로 켜지 않는다 */
         StrCopy(gMsg, "CJKOS running: turn it off first");
         return;
@@ -1042,6 +1066,10 @@ static void CountOn(void)
     UInt16    i, card, n = 0;
     LocalID   id;
 
+    if (!HgSupported()) {   /* v68: OS 3.5에는 Intl 루틴 함수가 없음 */
+        StrCopy(gMsg, "unsupported: OS 4 Latin only");
+        return;
+    }
     if (GetF(kFtrCountC) != 0) {
         StrCopy(gMsg, "count already ON");
         return;
@@ -1828,7 +1856,9 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (SkipGet()) {   /* v53: Update 버튼 리셋 — 이번 한 번 켜지 않음(잠금 없음 → 바로 설치 가능) */
             SkipSet(0);
             FtrSet(kHgCreator, 95, 0x40000000UL);
-        } else if (AutoGet() && CjkOn())   /* v56: CJKOS가 먼저 걸려 있으면 건너뜀 */
+        } else if (AutoGet() && !HgSupported())   /* v68: 지원하지 않는 기종 — 아무것도 하지 않음 */
+            FtrSet(kHgCreator, 95, 0x10000000UL);
+        else if (AutoGet() && CjkOn())   /* v56: CJKOS가 먼저 걸려 있으면 건너뜀 */
             FtrSet(kHgCreator, 95, 0x20000000UL);
         else if (AutoGet())   /* v25: 자동 시작 */
             FtrSet(kHgCreator, 95, 0x80000000UL | InstallAll());
