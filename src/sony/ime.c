@@ -136,25 +136,30 @@ void HgImGet(EventType *event, Int32 timeout)
                 v = 0;
                 FtrGet(kSyCr, 108, &v);
                 FtrSet(kSyCr, 215, v);
-                /* v27 진단: v26 실측 — 일시 쉬프트를 바꿔도 다시 그리지 않음(u0). 이번 누름은 버리고, shift 키 두 번 누름 펜 점을
-                 *   고해상도 좌표(12,392)로 넣어 본다. 누른 뒤 첫 펜 누름 2개를 위치 상관없이 #248·#249에 기록(#250 = 남은 칸 수) */
+                /* v28: v27 실측 — 고해상도 좌표로 넣은 펜 점은 엉뚱한 자리(159,0)로 옴(펜 점은 디지타이저 값으로 읽힘) → 넣기 포기.
+                 *   이번 누름은 버리고, 가상 실크 창(#251, 키 글자 그릴 때 기록)에 표시를 바로 다시 그린다(v37 실측: 가상 실크 창에 그리면
+                 *   바로 보임). 바탕은 표시 왼쪽 점의 색으로 지운다. 키 글자는 다음에 Sony가 자판을 다시 그릴 때 바뀐다. */
                 event->eType = nilEvent;
                 {
-                    PointType pt;
-                    Err       e1;
+                    WinHandle sw = (WinHandle)0;
+                    UInt32    a = 0, h = 0;
 
-                    pt.x = 12; pt.y = 392;
-                    e1 = EvtEnqueuePenPoint(&pt);
-                    pt.x = -1; pt.y = -1;
-                    EvtEnqueuePenPoint(&pt);
-                    pt.x = 12; pt.y = 392;
-                    EvtEnqueuePenPoint(&pt);
-                    pt.x = -1; pt.y = -1;
-                    EvtEnqueuePenPoint(&pt);
-                    FtrSet(kSyCr, 248, 0);
-                    FtrSet(kSyCr, 249, 0);
-                    FtrSet(kSyCr, 250, 2);
-                    FtrSet(kSyCr, 243, e1);
+                    FtrGet(kSyCr, 251, (UInt32 *)&sw);
+                    FtrGet(kSyCr, kFtrHanTab, &h);
+                    FtrGet(kSyCr, h ? 246 : 247, &a);
+                    if (sw != NULL && a != 0) {
+                        WinHandle     old = WinSetDrawWindow(sw);
+                        RectangleType rr;
+                        IndexedColorType bg = WinGetPixel(139, 113), ob;
+
+                        ob = WinSetBackColor(bg);
+                        RctSetRectangle(&rr, 143, 105, 14, 18);
+                        WinEraseRectangle(&rr, 0);
+                        WinSetBackColor(ob);
+                        WinDrawBitmap((BitmapPtr)a, 143, 105);
+                        WinSetDrawWindow(old);
+                        FtrSet(kSyCr, 243, bg);
+                    }
                 }
                 return;
             }
