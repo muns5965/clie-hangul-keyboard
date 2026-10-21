@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v39: v38 실측 — 색은 맞으나(FFFFFF/222222) 새 글자 여전히 안 보임. 지우기·새 글자 그림 따로, 두 번에 나눠(바탕색 지우기 → 글자색 그리기).
  * v38: v37 실측 — 흰 글자 색이 번호 0C로 읽혀(16비트 화면) 새 글자가 안 보임 → 색은 RGB(HRWinGetPixelRGB·WinSetForeColorRGB). 6줄 f·b = RGB.
  * v37(진단): v36 실측 — 한→A 때 자모는 깨끗이 지워지나 영문이 안 보임. 첫 키 값 기록(6줄 k = 글자·옛 x·새 x·점 수, c = 글자색·바탕·#297·읽음).
  * v36: v35 실측 — 한/A 다시 그리기가 키 테두리·옆 키 글자를 지우고 회색 글자·검은 덩어리. 옛 글자를 바탕색으로 덧그려 지우고 색은 화면에서 읽음.
@@ -80,7 +81,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v38"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v39"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
