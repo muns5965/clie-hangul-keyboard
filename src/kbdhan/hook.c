@@ -11,7 +11,8 @@
  * KbdScan 실측(T600C 영문 4.1): 키보드 화면은 SysKeyboardDialog로 열리고, 키 글자·입력칸 글자를 WinDrawChars로 그린다.
  *   0 SysKeyboardDialog  1 SysKeyboardDialogV10  — 열려 있는 동안 = 버퍼 [0] 깊이
  *   2 WinDrawChars  3 EvtGetEvent(v2, 펜 누름 위치)
- * cap 키 위치(T600C 영문 키보드, 저해상도 화면 좌표, 화면 사진으로 추정 — 진단 [10]~[12]로 확인): x 0~22, y 107~121
+ * cap 키 위치(T600C 영문 키보드, 키보드 화면 창 기준 저해상도 좌표 — 펜 좌표·글자 그리기 좌표 모두 창 기준): x 0~21, y 89~105.
+ *   v3: v2는 화면 좌표로 잡아(y 107~121) 한 번도 맞지 않음(실측 cap taps 0, z~m 줄 글자 y 95).
  * 버퍼(앱이 동적 힙에 잡아 오프셋 32에 주소, UInt32 칸):
  *   [0] 깊이, [1] 키보드 화면 연 수, [2] 자모로 바꿔 그린 수, [3] 화면 안 영문 한 글자 그리기 수,
  *   [4] 마지막 영문 한 글자 = 글자<<24 | caps<<16 | temp<<8 | autoShifted, [5] 그 위치 x<<16 | y,
@@ -37,7 +38,7 @@ typedef void (*KbdV10Fn)(void);
 typedef void (*CharsFn)(const Char *, Int16, Coord, Coord);
 typedef void (*GetFn)(EventType *, Int32);
 
-#define kCapKey(x, y)  ((x) >= 0 && (x) <= 22 && (y) >= 107 && (y) <= 121)
+#define kCapKey(x, y)  ((x) >= 0 && (x) <= 21 && (y) >= 89 && (y) <= 105)
 
 static inline UInt32 *Buf(void)
 {

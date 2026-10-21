@@ -1,6 +1,7 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v3: cap 키 위치를 키보드 화면 창 기준으로 고침(x 0~21, y 89~105).
  * v2: 한글 모드를 펜이 cap 키를 누른 것으로 판단(v1 실측: 그리는 순간의 Graffiti caps가 한 박자 늦음). 진단 줄에 펜 위치 3개.
  * v1: 키 위 자모 표시만 시험한다(src/kbdhan/hook.c, 리소스 KhHk 0). 입력은 영문 그대로.
  *   키보드 화면에서 cap(쉬프트 고정)을 누르면 키 글자가 대문자로 다시 그려지는데, 그때 두벌식 자모로 바꿔 그린다
@@ -13,7 +14,7 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v2"
+#define kVer      "v3"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     16
