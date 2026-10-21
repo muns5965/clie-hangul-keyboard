@@ -1,6 +1,7 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v9: 두벌식 조합 입력(한글 모드, 키보드 화면 안) + 한글 모드에서 자동 대문자 풀기. 진단 줄 = keyDown 수·마지막 키·조합 상태.
  * v8: 키 글자 표를 키 단위로(같은 줄 x 4 이내 덮어씀). v7 실측: 전환 때 쌍자음이 보였다가 기본 자모로 바뀜.
  * v7: 키 글자만 바꿈(키보드 화면 창 + 키 세 줄 y 60~100). v6 실측: 메뉴 명령 글자도 자모로 그려짐.
  * v6: 한/영 표시 자리 지우기가 space 키 아래 테두리를 끊던 것 수정.
@@ -20,10 +21,10 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v8"
+#define kVer      "v9"
 #define kHookRes  'KhHk'
 #define kHookN    4
-#define kBufN     96
+#define kBufN     104
 #define kOrigOff  16
 #define kBufOff   32
 #define kLineH    11
@@ -181,7 +182,7 @@ static void Draw(void)
               Supported() ? "OS ok" : "unsupported");
     Row(4, s);
     Row(5, "Memo > keyboard > tap right of Int'l:");
-    Row(6, "keys show jamo (input stays ABC)");
+    Row(6, "type gks rmf -> Hangul");
     if (b == NULL)
         return;
     StrPrintF(s, "kbd opens %lu  letters %lu  jamo %lu", b[1], b[3], b[2]);
@@ -211,7 +212,17 @@ static void Draw(void)
         }
         Row(11, s);
     }
-    Row(12, "why: 1 jamo 2 not han 3 MnHangul off");
+    {   /* v9: 입력 */
+        Char a[12], c[12];
+
+        a[0] = (Char)(b[99] >> 16);
+        a[1] = 0;
+        if ((UInt8)a[0] < 0x20 || (UInt8)a[0] > 0x7E)
+            StrPrintF(a, "%x", (UInt16)(b[99] >> 16));
+        StrPrintF(c, "%lx", b[96]);
+        StrPrintF(s, "keys %lu last %s mod %x comp %s", b[98], a, (UInt16)b[99], c);
+        Row(12, s);
+    }
 }
 
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)

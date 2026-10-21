@@ -1,5 +1,12 @@
 /*
- * MnKbdHan 키보드 화면 자모 표시 (리소스 KhHk 0) — v4 진단: 표시만, 입력은 영문 그대로
+ * MnKbdHan 키보드 화면 한글 (리소스 KhHk 0) — v9: 자모 표시 + 두벌식 조합 입력
+ *
+ * v9 입력: 키보드 화면이 열려 있고 한글 모드일 때 EvtGetEvent의 keyDown 영문을 두벌식으로 조합한다(MnSonyKbd ime.c와 같은 방식,
+ *   공용 src/common/hangul_compose.h·cursor_track.h). 조합 결과는 EvtEnqueueKey(keyCode kKhMark)로 넣고, 조합 중 글자를 고칠 때는
+ *   BS 다음 새 글자. 소문자 = 기본 자모, 대문자 = 쌍자음. 숫자·기호·space 등은 조합을 끝내고 그대로 넘긴다. 입력칸(키 줄 위) 펜 누름도 끝.
+ *   조합 상태 [96]·[97](hangul_compose st), 커서 감지 기록 feature 'MnKh' #20~#26.
+ * v9 자동 대문자: 한글 모드에서 키보드 화면이 열릴 때(그리기 전)와 한글로 바꿀 때, Graffiti 자동 대문자(autoShifted)면 쉬프트를 푼다
+ *   (v8 실측: 새 메모에서 열면 자동 shift로 쌍자음 배치). 그래도 자동 대문자 상태에서 그리는 대문자 키 글자는 기본 자모로.
  *
  * 시스템 키보드 화면(SysKeyboardDialog)이 열려 있는 동안 WinDrawChars로 그리는 영문 한 글자(키 글자)를,
  * 한글 모드이면 두벌식 자모(KS X 1001 0xA4 xx, MnHangul이 그림)로 바꿔 원래 WinDrawChars로 그린다.
@@ -25,11 +32,17 @@
  *   [6] 마지막 판정(1 바꿈, 2 한글 모드 아님, 3 MnHangul 꺼짐, 4 자모 아님), [7] 바꾼 자모 폭<<16 | 영문 폭
  *   [8] 한글 모드, [9] 다음 펜 칸, [10]~[12] 화면 안 펜 누름 3개 x<<16 | y, [13] 한/영 빈칸 누름 수,
  *   [14] 키 글자 표 수, [15] 한/영 표시를 그려야 함, [16 + 2k]·[17 + 2k] 키 글자 표(최대 40): x<<16 | y, 글자<<24 | 글꼴
+ *   [96]·[97] 조합 상태(v9), [98] 받은 keyDown 수, [99] 마지막 keyDown chr<<16 | modifiers, [100] 마지막 조합 키 chr<<16 | 자모
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  */
 
 #include <PalmOS.h>
 #include "../common/dubeol_map.h"
+
+#define kKhCr    'MnKh'
+#define kKhMark  0x4D4B   /* 우리가 넣은 키의 keyCode ('MK') */
+#define kKhFld   20       /* 'MnKh' #20~#26 커서 이동 감지(cursor_track.h) */
+#define kSt      96       /* 버퍼 [96]·[97] 조합 상태 */
 
 void KhKbd(KeyboardType kbd);
 void KhKbdV10(void);
@@ -67,6 +80,40 @@ static inline UInt32 Orig(UInt16 i)
     return p[i];
 }
 
+/* ---------------- 한글 조합 (공용) ---------------- */
+#include "../common/cursor_track.h"
+
+static inline void HcSend(UInt16 c)
+{
+    EvtEnqueueKey(c, kKhMark, 0);
+    CtDelta(kKhCr, kKhFld, c);
+}
+
+#define HC_FN static
+#include "../common/hangul_compose.h"
+
+static void Key(UInt32 *b, EventType *event);
+
+/* v9: 자동 대문자(Graffiti autoShifted + 일시 쉬프트)면 쉬프트를 푼다 */
+static void NoAutoShift(void)
+{
+    Boolean caps = false, num = false, autoS = false;
+    UInt16  temp = 0;
+
+    GrfGetState(&caps, &num, &temp, &autoS);
+    if (autoS && temp != 0)
+        GrfSetState(caps, num, false);
+}
+
+static inline Boolean AutoShifted(void)
+{
+    Boolean caps = false, num = false, autoS = false;
+    UInt16  temp = 0;
+
+    GrfGetState(&caps, &num, &temp, &autoS);
+    return autoS && temp != 0;
+}
+
 static void Enter(void)
 {
     UInt32 *b = Buf();
@@ -75,6 +122,10 @@ static void Enter(void)
         if (b[0] == 0) {   /* 새로 열림: 키 글자 표 비우고 한/영 표시 그리기 예약 */
             b[14] = 0;
             b[15] = 1;
+            b[kSt] = 0;                /* v9: 조합은 새로 */
+            CtReset(kKhCr, kKhFld);
+            if (b[8] != 0)
+                NoAutoShift();         /* v9: 키보드가 그리기 전에 자동 대문자 풀기 */
         }
         b[0]++;
         b[1]++;
@@ -139,7 +190,7 @@ static void Remember(UInt32 *b, UInt8 c, Coord x, Coord y)
 /* 키 글자 하나 그리기(한글 모드면 자모). 키 가운데에 맞춘다 */
 static void DrawKey(UInt32 *b, UInt8 c, Coord x, Coord y)
 {
-    UInt8   j = Jamo(c);
+    UInt8   j = Jamo((c >= 'A' && c <= 'Z' && AutoShifted()) ? (UInt8)(c - 'A' + 'a') : c);   /* v9: 자동 대문자는 기본 자모 */
     UInt32  hg = 0;
     Boolean caps = false, num = false, autoS = false;
     UInt16  temp = 0;
@@ -253,6 +304,10 @@ void KhGetEvent(EventType *event, Int32 timeout)
         b[15] = 0;
         Mark(b);
     }
+    if (event->eType == keyDownEvent) {   /* v9 */
+        Key(b, event);
+        return;
+    }
     if (event->eType != penDownEvent && event->eType != penMoveEvent && event->eType != penUpEvent)
         return;
     if (event->eType == penDownEvent) {
@@ -267,9 +322,55 @@ void KhGetEvent(EventType *event, Int32 timeout)
         if (event->eType == penDownEvent) {
             b[8] = b[8] ? 0 : 1;
             b[13]++;
-            Redraw(b);
+            b[kSt] = 0;                 /* v9: 전환하면 조합 끝 */
+            Redraw(b);                  /* 자동 대문자 상태면 기본 자모로 그림 */
+            if (b[8] != 0)
+                NoAutoShift();
             Mark(b);
         }
         event->eType = nilEvent;   /* 키보드에는 넘기지 않음 */
+        return;
+    }
+    if (event->eType == penDownEvent && event->screenY < 60) {   /* v9: 입력칸(키 줄 위)을 누르면 커서가 옮겨질 수 있음 → 조합 끝 */
+        b[kSt] = 0;
+        CtUnknown(kKhCr, kKhFld);
     }
 }
+
+/* v9: 키보드 화면이 열려 있는 동안의 keyDown → 두벌식 조합 */
+static void Key(UInt32 *b, EventType *event)
+{
+    UInt32 *st = &b[kSt];
+    WChar   ch = event->data.keyDown.chr;
+    UInt8   j;
+
+    if (event->data.keyDown.keyCode == kKhMark)   /* 우리가 넣은 키 */
+        return;
+    b[98]++;
+    b[99] = ((UInt32)ch << 16) | event->data.keyDown.modifiers;
+    if (CtCheck(kKhCr, kKhFld, (GetComp(st) & 0xFF) != 0))   /* 커서가 옮겨졌거나 입력칸이 바뀜 → 조합 끝 */
+        st[0] = 0;
+    if ((event->data.keyDown.modifiers & commandKeyMask) != 0 || b[8] == 0) {
+        st[0] = 0;
+        CtUnknown(kKhCr, kKhFld);
+        return;
+    }
+    if (ch == chrBackspace) {
+        if (ComposeBack(st))
+            event->eType = nilEvent;
+        else
+            CtUnknown(kKhCr, kKhFld);
+        return;
+    }
+    j = (ch < 0x80 && Letter((UInt8)ch)) ? Jamo((UInt8)ch) : 0;
+    if (j == 0) {   /* 숫자·기호·space·Enter 등: 조합 끝, 그대로 넘김 */
+        st[0] = 0;
+        CtUnknown(kKhCr, kKhFld);
+        return;
+    }
+    b[100] = ((UInt32)ch << 16) | j;
+    Compose(st, (UInt8)(j - 0xA0));
+    event->eType = nilEvent;
+}
+
+#include "../skwr/ksc_table.h"

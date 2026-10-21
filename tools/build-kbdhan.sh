@@ -19,7 +19,12 @@ for s in KhBase:0 KhOrig:16 KhBuf:32; do
   a=$(m68k-palmos-nm hook.coff | awk -v n="${s%%:*}" '$3==n {print $1}')
   [ "$((16#$a))" -eq "${s##*:}" ] || { echo "error: ${s%%:*} at $a (must be ${s##*:})" >&2; exit 1; }
 done
-if m68k-palmos-objdump -d hook.coff | grep -q '%a5'; then
+# 코드 부분(KscBits 표 앞)만 %a5 검사. 파이프(objdump | grep -q)는 pipefail에서 grep이 먼저 끝나면 objdump가 SIGPIPE로 실패해
+# 검사가 거짓으로 통과할 수 있어(v9 조합 표를 넣고 확인) 파일로 쓴 뒤 검사한다
+stop=$(m68k-palmos-nm hook.coff | awk '$3=="KscBits" {print $1}')
+[ -n "$stop" ] || { echo "error: KscBits not found" >&2; exit 1; }
+m68k-palmos-objdump -d --stop-address=0x$stop hook.coff > hook.code.dis
+if grep -q '%a5' hook.code.dis; then
   echo "error: hook references %a5" >&2; exit 1
 fi
 if m68k-palmos-objdump -r hook.coff | grep -qE '^[0-9a-f]{8} '; then
