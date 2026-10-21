@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v35: v34 실측 — 한/A 누르면 자판 바로 바뀜, 그러나 shift 판단이 켜짐으로 남음(첫 키를 자리로 못 찾음) → 첫 줄 글자 `·1(꺼짐)·~·!(켜짐)로.
  * v34: v33 실측 — ⇪가 켜진 채면 쌍자음·기본 자모가 거꾸로, 한/A 다시 그리기 rd 0(그림 줄 폭 상한 16워드가 너무 작음).
  *   shift = 자판 첫 키가 '~'(자동 대문자 아님, #255), 입력은 누를 때 값(#256). 그림 줄 폭 상한 1024, 건너뛴 까닭 #295(6줄 w).
  * v33: v32 실측 — 키 위 자모가 한 박자 늦음(Graffiti 상태는 Sony가 다시 그린 뒤 바뀜), 한/A 눌러도 자판 그대로.
@@ -76,7 +77,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v34"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v35"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 

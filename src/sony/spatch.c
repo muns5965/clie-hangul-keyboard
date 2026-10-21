@@ -152,13 +152,17 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         if (c != 0 && p6 != NULL && SilkWin()) {   /* v33: 한/영 누를 때 다시 그리려고 영문 글자 키 글자·자리 기록 */
             const Int16 *rc = (const Int16 *)p2;
 
-            if (rc[0] < 20 && rc[1] < 10) {   /* 자판 첫 키 = 자판 다시 그리기 시작(배치가 바뀌면 옛 기록 버림) */
+            if (c == '`' || c == '~' || c == '1' || c == '!') {
+                /* v35: 자판 첫 줄 글자로 shift 판단(⇪와 상관없이 shift만 따름) — v34는 첫 키를 자리(x < 20, y < 10)로 찾았는데
+                 *   거의 안 잡혀(v33 g2) 옛 값이 남음. '~'·'!' = shift(자동 대문자면 기본 자모), '`'·'1' = 꺼짐.
+                 *   '`'·'~'는 자판 첫 키 = 자판 다시 그리기 세대(배치가 바뀌면 옛 기록 버림) */
                 Boolean caps = false, num = false, autoS = false;
                 UInt16  temp = 0;
 
-                FtrSet(kSyCr, 299, GetF(299) + 1);
-                GrfGetState(&caps, &num, &temp, &autoS);   /* v34: 첫 키 '~' = shift(⇪와 상관없음), 자동 대문자는 기본 자모 */
-                FtrSet(kSyCr, kFtrShift, (c == '~' && !autoS) ? 1 : 0);
+                if (c == '`' || c == '~')
+                    FtrSet(kSyCr, 299, GetF(299) + 1);
+                GrfGetState(&caps, &num, &temp, &autoS);
+                FtrSet(kSyCr, kFtrShift, ((c == '~' || c == '!') && !autoS) ? 1 : 0);
             }
             if (IsLetter(c)) {
                 UInt16           i = (UInt16)((c | 0x20) - 'a');
