@@ -225,11 +225,13 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 | 작업 | 절차 | 리셋 |
 | --- | --- | --- |
 | 처음 설치 | 설치 → MnHangul `Hangul ON` / MnSonyKbd `ON` | 없음 |
-| 업데이트 | 아무 앱에서나 `Update (hold 3s)` → 필요한 PRC 설치 → 각 앱 `Hangul ON` / `ON` | 1번 (`Update`가 함) |
+| 업데이트 | 아무 앱에서나 `All OFF`(MnHangul `All OFF (for install)`, MnSonyKbd `All OFF`) → `all off: ready to install`이면 필요한 PRC 설치 → 각 앱 `Hangul ON` / `ON` | 없음 |
+| 업데이트(`All OFF`가 `kept`일 때) | 아무 앱에서나 `Update (hold 3s)` → 설치 → 각 앱 `Hangul ON` / `ON` | 1번 (`Update`가 함) |
 | 리셋 뒤 자동 시작 | 각 앱 `Start at reset: ON`(기본) | — |
 | 비상 탈출 | 위 버튼을 누른 채 리셋(CloudpilotEmu: Reset → No extensions). 리셋 알림이 오지 않아 아무것도 켜지 않는다. 이 리셋은 Sony 가상 실크·상태 표시줄도 불러오지 않으므로 끝나면 일반 리셋을 한 번 한다 | — |
 
-- **업데이트에 `Update`를 쓰는 이유**: 켜져 있는 동안은 시스템 함수가 앱 코드를 가리키므로 코드를 잠가 두고, 잠긴 PRC는 덮어쓸 수 없다. `Update`는 다음 리셋 한 번만 자동 시작을 건너뛰게 하고 리셋하므로, 리셋 뒤에는 잠금 없이 설치된다. 두 앱이 모두 설치되어 있으면 어느 쪽 `Update`든 둘 다 건너뛴다(v57·v5). `Hangul OFF`·`OFF`로 풀 수도 있지만, 다른 패치가 위에 있으면 안전을 위해 풀지 않는다(`kept: use Update`).
+- **업데이트에 `Update`를 쓰는 이유**: 켜져 있는 동안은 시스템 함수가 앱 코드를 가리키므로 코드를 잠가 두고, 잠긴 PRC는 덮어쓸 수 없다. `Update`는 다음 리셋 한 번만 자동 시작을 건너뛰게 하고 리셋하므로, 리셋 뒤에는 잠금 없이 설치된다. 두 앱이 모두 설치되어 있으면 어느 쪽 `Update`든 둘 다 건너뛴다(v57·v5).
+- **리셋 없는 업데이트 `All OFF`**(MnHangul v64·MnSonyKbd v14): 같은 함수에 차례로 끼면 나중에 켠 쪽이 위에 있고, 아래쪽은 위가 먼저 빠지기 전에는 풀지 않는다(`kept`). `All OFF`는 "자기 끄기 → 다른 모듈 끄기"를 두 바퀴 돌려 켠 순서와 상관없이 둘 다 끈다(다른 모듈은 그 앱을 불러 직접 끄게 함). CJKOS가 위에 있으면 `kept: turn CJKOS off, retry` — CJKOS를 끄고 다시 누르거나 `Update`.
 - **패치는 RAM의 트랩 표에 걸리므로 어떤 리셋이든 풀린다.** 리셋 뒤 켜져 있는 것은 `Start at reset`이 다시 켰기 때문이다.
 - **CJKOS ↔ MnHangul 전환**: CJKOS가 켜져 있으면 MnHangul은 켜지지 않는다. CJKOS를 끈 뒤 `Hangul ON`. MnSonyKbd는 CJKOS·MnHangul 어느 쪽과도 같이 쓴다.
   MnHangul이 켜진 뒤에 CJKOS를 켜는 것은 막지 못하지만, 이때는 나중에 켠 CJKOS가 한글을 직접 그리고 MnHangul은 한글에 관여하지 않는다(실측, 한글은 CJKOS 글꼴). CJKOS를 끄면 MnHangul로 돌아온다. 헷갈리지 않도록 CJKOS를 켜기 전에 `Hangul OFF`, CJKOS를 계속 쓸 때는 MnHangul `Start at reset: off`를 **권장**한다.

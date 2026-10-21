@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v14: 첫 화면 3줄 [All OFF] = 자기와 MnHangul을 순서대로 끄기(src/common/mod_off.h). MnHangul이 실행 코드 kCmdModOff로 부르면 자기를 끈다.
  * v13: 판 번호를 kSyVer 한 곳에. 첫 화면 한글 표시 줄: CJKOS와 MnHangul이 둘 다 켜져 있으면 'CJKOS (+MnHangul)'.
  * v12: CJKOS 감지는 'dCJK' Feature만(함수 4개 방식 뺌). 첫 화면 'CJKOS'.
  * v11: CJKOS 감지 = 'dCJK' Feature(MnHangul v61과 같음). 첫 화면은 Feature로 확인되면 'CJKOS', 함수 4개 방식만 맞으면 'CJKOS?'.
@@ -29,7 +30,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v13"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v14"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -335,6 +336,16 @@ static UInt16 ImOff(void)
     return 0;
 }
 
+/* v14: 설치 전 두 모듈 순서대로 끄기. 0 꺼짐, 2 위에 다른 패치. 전역 없음(다른 앱이 불러도 됨) */
+static UInt16 SelfOff(void)
+{
+    UInt16 i = ImOff(), p = PatchOff();
+
+    return (i == 2 || p == 2) ? 2 : 0;
+}
+
+#include "../common/mod_off.h"
+
 static void SonyOff(void)
 {
     UInt16 i = ImOff(), p = PatchOff();
@@ -447,6 +458,7 @@ static void DrawMain(void)
     Row(2, s);
     ButtonAt(3, kRowOn, "ON");
     ButtonAt(40, kRowOn, "OFF");
+    ButtonAt(80, kRowOn, "All OFF");   /* v14 */
     ButtonAt(3, kRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");
     ButtonAt(3, kRowUpd, "Update (hold 3s)");
     {   /* v4: 한글 표시 모듈(없으면 입력한 한글이 깨져 보임) */
@@ -464,7 +476,7 @@ static void DrawMain(void)
     }
     WinDrawChars("key = Hangul / English", 22, 28, 8 * kLineH + 4);
     Row(9, "Shift in Hangul = double cons.");
-    Row(10, "Update: [Update], install, ON");
+    Row(10, "Update: All OFF or [Update], install, ON");
 }
 
 /* 판정 기록(MnHangul KDlg 7~11줄과 같음) */
@@ -551,6 +563,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             FtrSet(kSyCr, kFtrBoot, 0x80000000UL | SonyOn());
         return 0;
     }
+    if (cmd == kCmdModOff)   /* v14: MnHangul이 설치 전 끄기를 부탁 */
+        return SelfOff();
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
 
@@ -572,6 +586,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                         FtrSet(kSyCr, n, 0);
                 }
             }
+            else if (row == kRowOn && e.screenX >= 78)   /* v14: 두 모듈 순서대로 끄기 */
+                ModOffMsg(gMsg, ModOffBoth(SelfOff, 'MnHg'), CjkFtr());
             else if (row == kRowOn && e.screenX >= 40)
                 SonyOff();
             else if (row == kRowOn) {

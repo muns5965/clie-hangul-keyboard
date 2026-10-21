@@ -46,7 +46,7 @@
 
 | 상황 | 원인 | 방법 |
 | --- | --- | --- |
-| 설치 실패("could not be overwritten") | 앱이 켜져 있어 코드가 잠김. 한쪽 앱의 `Update`로 다른 앱도 건너뛰는 기능은 MnHangul v57·MnSonyKbd v5부터 | 그 앱에서 `Update (hold 3s)` → 설치. 옛 판이라 안 되면 그 앱 자신의 `Update` |
+| 설치 실패("could not be overwritten") | 앱이 켜져 있어 코드가 잠김 | `All OFF`(MnHangul v64·MnSonyKbd v14~, 리셋 없음) → 설치. `kept`면 `Update (hold 3s)` → 설치. 한쪽 `Update`로 다른 앱도 건너뛰는 기능은 MnHangul v57·MnSonyKbd v5부터 |
 | `Hangul OFF`·`OFF`에서 `kept: use Update` | 다른 패치(CJKOS 등)가 위에 걸려 있어 안전을 위해 풀지 않음 | `Update` → 설치 |
 | MnHangul `Hangul ON`에서 `CJKOS running` | CJKOS가 켜져 있음(같은 함수를 바꾸므로 충돌) | CJKOS를 끈 뒤 `Hangul ON`. CJKOS와 쓸 때는 MnSonyKbd만(설치 B) |
 | MnHangul을 켠 채 CJKOS를 켬 | 장애는 아님. 나중에 켠 CJKOS가 한글을 직접 그리고 MnHangul은 한글에 관여하지 않음(실측: MnHangul 2바이트 호출 수 변화 없음). CJKOS를 끄면 MnHangul로 돌아옴 | 할 일 없음. 헷갈리지 않도록 CJKOS를 켜기 전에 `Hangul OFF`, CJKOS를 계속 쓸 때는 `Start at reset: off` 권장 |

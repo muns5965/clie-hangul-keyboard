@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v64: 사용자 첫 화면 4줄 [All OFF (for install)] = 자기와 MnSonyKbd를 순서대로 끄기(src/common/mod_off.h).
+ *   MnSonyKbd가 실행 코드 kCmdModOff로 부르면 자기를 끈다(새 전역 공간이 있을 때만).
  * v63: 판 번호를 kHgVer 한 곳에(v61·v62는 사용자 첫 화면 제목이 v60으로 남아 있었음).
  * v62: CJKOS 감지는 'dCJK' Feature만(함수 4개 방식 뺌, v61에서 일치 확인). 진단 첫 화면 6줄 오른쪽 [Update](3초) 추가.
  * v61: CJKOS 감지 = 'dCJK' Feature(FtrGet, 공개 함수). 시험 기간에는 함수 4개 방식과 OR, KDlg 9줄에 둘 다 표시.
@@ -118,7 +120,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v63"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v64"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -679,6 +681,15 @@ static void AllOff(void)
     else   /* v53: 다른 패치가 위에 있어 못 푼 것 — Update 리셋 */
         StrCopy(gMsg, "kept: use Update, then install");
 }
+
+/* v64: 설치 전 두 모듈 순서대로 끄기. 자기 끄기 결과 0 꺼짐, 2 위에 다른 패치 */
+static UInt16 SelfOff(void)
+{
+    AllOff();
+    return ProtectCount() == 0 ? 0 : 2;
+}
+
+#include "../common/mod_off.h"
 
 /* v11 폭 진단 */
 static void DrawWidthPage(void)
@@ -1540,6 +1551,7 @@ static void DrawCheck(UInt16 row, const Char *label, Boolean on)
 /* v41: 사용자용 Main — Patch ON·All OFF, Auto·Sony, Soft Reset, 사용법, [ ] Debug */
 #define kURowOn    2
 #define kURowAuto  3
+#define kURowAll   4   /* v64 */
 #define kURowReset 5
 #define kURowUpd   6   /* v53 */
 static void DrawUserMain(void)
@@ -1556,6 +1568,7 @@ static void DrawUserMain(void)
     Button(kURowOn, "Hangul ON");
     ButtonAt(84, kURowOn, "Hangul OFF");
     Button(kURowAuto, AutoGet() ? "Start at reset: ON" : "Start at reset: off");
+    Button(kURowAll, "All OFF (for install)");   /* v64 */
     Button(kURowReset, "Soft Reset (hold 3s)");
     Button(kURowUpd, "Update (hold 3s)");   /* v53 */
     Row(7, "Hangul display, CJKOS replacement");
@@ -1570,7 +1583,7 @@ static void DrawUserMain(void)
                    "Sony kbd Hangul: MnSonyKbd (none)" :
                    on ? "Sony kbd Hangul: MnSonyKbd ON" : "Sony kbd Hangul: MnSonyKbd off");
     }
-    Row(10, "Update: [Update], install, ON");
+    Row(10, "Update: All OFF or [Update], install, ON");
     DrawCheck(12, "Debug", false);
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
 }
@@ -1640,6 +1653,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             FtrSet(kHgCreator, 95, 0x80000000UL | InstallAll());
         return 0;
     }
+    if (cmd == kCmdModOff)   /* v64: MnSonyKbd가 설치 전 끄기를 부탁(gMsg를 쓰므로 새 전역 공간이 있을 때만) */
+        return (launchFlags & sysAppLaunchFlagNewGlobals) ? SelfOff() : 3;
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
 
@@ -1660,7 +1675,9 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 else if (row == kURowAuto) {
                     AutoSet(AutoGet() ? 0 : 1);
                     StrCopy(gMsg, AutoGet() ? "start at reset: ON" : "start at reset: off");
-                } else if (row == kURowReset && e.screenX < 108)
+                } else if (row == kURowAll && e.screenX < 110)   /* v64: 두 모듈 순서대로 끄기 */
+                    ModOffMsg(gMsg, ModOffBoth(SelfOff, 'MnSy'), CjkOn());
+                else if (row == kURowReset && e.screenX < 108)
                     HoldReset(kURowReset);
                 else if (row == kURowUpd && e.screenX < 90)   /* v53 */
                     HoldResetAs(kURowUpd, "Update (hold 3s)", true);
