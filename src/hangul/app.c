@@ -42,6 +42,9 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v65(진단): 지우기·HotSync 알림이 오는지 확인 — 그리기 패치를 켤 때 '-pdb'(sysNotifyDeleteProtectedEvent, 보호된 DB를
+ *   지우기 직전)와 'hots'(sysNotifySyncStartEvent)를 받겠다고 등록하고 Patch OFF 때 해제. 받으면 횟수만 기록(#160 '-pdb' 수,
+ *   #161 그 DB 크리에이터, #162 'hots' 수, #163 등록 결과). 끄는 동작은 없음. 진단 첫 화면 11줄에 표시(hi: len 줄 대신).
  * v64: 사용자 첫 화면 4줄 [All OFF (for install)] = 자기와 MnSonyKbd를 순서대로 끄기(src/common/mod_off.h).
  *   MnSonyKbd가 실행 코드 kCmdModOff로 부르면 자기를 끈다(새 전역 공간이 있을 때만).
  * v63: 판 번호를 kHgVer 한 곳에(v61·v62는 사용자 첫 화면 제목이 v60으로 남아 있었음).
@@ -120,7 +123,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v64"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v65"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -272,6 +275,49 @@ static Boolean AppDB(UInt16 *card, LocalID *id)
     DmSearchStateType st;
 
     return DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, kHgCreator, true, card, id) == errNone;
+}
+
+/* v65 진단: 지우기('-pdb')·HotSync('hots') 알림 등록/해제. #163 = 등록 결과('-pdb' 오류 << 16 | 'hots' 오류), 해제 후 FFFFFFFF.
+ *   리셋 때 등록이 지워지므로 자동 시작(InstPatch)에서도 다시 등록된다. 전역 없음 */
+#define kFtrNtPdb   160
+#define kFtrNtPdbCr 161
+#define kFtrNtHots  162
+#define kFtrNtReg   163
+static void NotifyReg(Boolean on)
+{
+    UInt16  card;
+    LocalID id;
+    Err     a, b;
+
+    if (!AppDB(&card, &id))
+        return;
+    if (on) {
+        a = SysNotifyRegister(card, id, sysNotifyDeleteProtectedEvent, NULL, sysNotifyNormalPriority, NULL);
+        b = SysNotifyRegister(card, id, sysNotifySyncStartEvent, NULL, sysNotifyNormalPriority, NULL);
+        FtrSet(kHgCreator, kFtrNtReg, ((UInt32)a << 16) | b);
+    } else {
+        SysNotifyUnregister(card, id, sysNotifyDeleteProtectedEvent, sysNotifyNormalPriority);
+        SysNotifyUnregister(card, id, sysNotifySyncStartEvent, sysNotifyNormalPriority);
+        FtrSet(kHgCreator, kFtrNtReg, 0xFFFFFFFFUL);
+    }
+}
+
+/* 알림을 받으면 횟수만 기록(전역 없음, 끄지 않음) */
+static void NotifyLog(const SysNotifyParamType *np)
+{
+    UInt32 v = 0;
+
+    if (np == NULL)
+        return;
+    if (np->notifyType == sysNotifyDeleteProtectedEvent) {
+        FtrGet(kHgCreator, kFtrNtPdb, &v);
+        FtrSet(kHgCreator, kFtrNtPdb, v + 1);
+        if (np->notifyDetailsP != NULL)
+            FtrSet(kHgCreator, kFtrNtPdbCr, ((const SysNotifyDBInfoType *)np->notifyDetailsP)->creator);
+    } else if (np->notifyType == sysNotifySyncStartEvent) {
+        FtrGet(kHgCreator, kFtrNtHots, &v);
+        FtrSet(kHgCreator, kFtrNtHots, v + 1);
+    }
 }
 
 /* v58: 그리기 패치가 연결 안에 있는가. 트랩에서 시작해 아는 패치(MnSonyKbd 'MnSy' #1, 아래 주소 = 진입점 - 4)를 따라 내려간다.
@@ -793,6 +839,7 @@ static UInt16 InstPatch(void)
     FtrSet(kHgCreator, kFtrHandle, (UInt32)h);
     FtrSet(kHgCreator, kFtrEntry, (UInt32)(p + 4));
     SysSetTrapAddress(kTrapBlt, p + 4);
+    NotifyReg(true);   /* v65 진단 */
     return 0;
 }
 
@@ -829,6 +876,7 @@ static void PatchOff(void)
     orig = *(const UInt32 *)(e - 4);
     SysSetTrapAddress(kTrapBlt, (void *)orig);
     UnlockGlyphs();
+    NotifyReg(false);   /* v65 진단: 보호를 풀기 전에 해제(옛 DB 주소로 알림이 가지 않게) */
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     if (h != 0) {
@@ -1382,8 +1430,18 @@ static void Draw(void)
     Hex(b, GetF(7));
     StrPrintF(s, "font %s  p1 %s", a, b);
     Row(9, s);
-    Hex(b, GetF(11));
-    StrPrintF(s, "hi: len %lu  %s", GetF(10), b);
+    {   /* v65 진단: 알림 등록(r, - = 해제)·'-pdb' 수와 마지막 DB·'hots' 수 (hi: len 줄 대신) */
+        UInt32 cr = GetF(kFtrNtPdbCr), rg = GetF(kFtrNtReg);
+
+        a[0] = (Char)(cr >> 24); a[1] = (Char)(cr >> 16); a[2] = (Char)(cr >> 8); a[3] = (Char)cr; a[4] = 0;
+        if (cr == 0)
+            StrCopy(a, "-");
+        if (rg == 0xFFFFFFFFUL)
+            StrCopy(b, "-");
+        else
+            StrPrintF(b, "%lx", rg);
+        StrPrintF(s, "ntf r%s  -pdb %lu %s  hots %lu", b, GetF(kFtrNtPdb), a, GetF(kFtrNtHots));
+    }
     Row(10, s);
     XY(a, GetF(12));
     WH(b, GetF(13));
@@ -1651,6 +1709,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             FtrSet(kHgCreator, 95, 0x20000000UL);
         else if (AutoGet())   /* v25: 자동 시작 */
             FtrSet(kHgCreator, 95, 0x80000000UL | InstallAll());
+        return 0;
+    }
+    if (cmd == sysAppLaunchCmdNotify) {   /* v65 진단: 기록만 */
+        NotifyLog((const SysNotifyParamType *)cmdPBP);
         return 0;
     }
     if (cmd == kCmdModOff)   /* v64: MnSonyKbd가 설치 전 끄기를 부탁(gMsg를 쓰므로 새 전역 공간이 있을 때만) */
