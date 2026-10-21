@@ -149,6 +149,17 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
         FtrSet(kSyCr, 108, GetF(108) + 1);
         FtrSet(kSyCr, 151, c);
+        if (chars != NULL && len >= 1 && (chars[0] == '`' || chars[0] == '~' || chars[0] == '1' || chars[0] == '!') &&
+            SilkWin()) {   /* v42 진단: 첫 줄 글자 그리기 최근 8개(#270~#277, #278 다음 칸) — 그린 뒤 shift 값은 아래에서 더함 */
+            const Int16 *rc = (const Int16 *)p2;
+            Boolean      caps = false, num = false, autoS = false;
+            UInt16       temp = 0, k = (UInt16)(GetF(278) & 7);
+
+            GrfGetState(&caps, &num, &temp, &autoS);
+            FtrSet(kSyCr, 270 + k, ((UInt32)chars[0] << 24) | ((UInt32)(len > 15 ? 15 : len) << 20) |
+                                   ((UInt32)(autoS ? 1 : 0) << 19) | ((UInt32)(rc[1] & 0x7F) << 11) | (rc[0] & 0x7FF));
+            FtrSet(kSyCr, 278, k + 1);
+        }
         if (c != 0 && p6 != NULL && SilkWin()) {   /* v33: 한/영 누를 때 다시 그리려고 영문 글자 키 글자·자리 기록 */
             const Int16 *rc = (const Int16 *)p2;
 
@@ -166,15 +177,24 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 }
                 GrfGetState(&caps, &num, &temp, &autoS);
                 FtrSet(kSyCr, kFtrShift, ((c == '~' || c == '!') && !autoS) ? 1 : 0);
+                {   /* v42 진단: 방금 기록 칸에 결과 shift 값 */
+                    UInt16 k = (UInt16)((GetF(278) + 7) & 7);
+
+                    FtrSet(kSyCr, 270 + k, GetF(270 + k) | ((UInt32)GetF(kFtrShift) << 18));
+                }
             }
             if (IsLetter(c)) {
                 UInt16           i = (UInt16)((c | 0x20) - 'a');
                 IndexedColorType t = WinSetTextColor(0);
 
                 WinSetTextColor(t);
-                FtrSet(kSyCr, 300 + 2 * i, ((UInt32)(UInt16)rc[0] << 16) | (UInt16)rc[1]);
-                FtrSet(kSyCr, 301 + 2 * i, ((GetF(299) & 0xFF) << 24) | ((UInt32)c << 16) |
-                                           ((UInt32)(FntCharWidth((Char)c) & 0xFF) << 8) | (UInt8)rc[3]);
+                /* v42: 자리 기록은 이번 자판 그리기(세대)에서 처음 그린 값만 — v41 실측: 'm'을 친 뒤 한/A에서 'm'만 빠짐
+                 *   (키를 누를 때 Sony가 눌린 모양으로 다시 그린 값이 덮어쓴 것으로 추정) */
+                if ((UInt8)(GetF(301 + 2 * i) >> 24) != (UInt8)GetF(299)) {
+                    FtrSet(kSyCr, 300 + 2 * i, ((UInt32)(UInt16)rc[0] << 16) | (UInt16)rc[1]);
+                    FtrSet(kSyCr, 301 + 2 * i, ((GetF(299) & 0xFF) << 24) | ((UInt32)c << 16) |
+                                               ((UInt32)(FntCharWidth((Char)c) & 0xFF) << 8) | (UInt8)rc[3]);
+                }
                 FtrSet(kSyCr, 298, (UInt32)p6);
                 FtrSet(kSyCr, 297, t);
                 FtrSet(kSyCr, 286, GetF(286) + 1);

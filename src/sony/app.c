@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v42: v41 실측 — shift 없이 쌍자음(바로잡기 0 → shift 판단값 자체가 1), A에서 m만 빠짐(25키). 첫 줄 글자 그리기 기록(3~6줄),
+ *   자리 기록은 세대에서 처음 값만, 건너뛴 키·까닭(6줄 sk). 
  * v41: v40 실측 — 다시 그리기 정상(흰 글자), 그러나 shift 없이 쌍자음 자판, A에서 m 자리 ㅡ 남음.
  *   그린 모양 기록(#289 자모·#290 쌍자음), Sony 그리기 뒤 최종 shift와 다른 키 바로잡기(#288 + EvtWakeup), 글자색 = 바탕이면 앞 키 색.
  *   6줄: rd, fx = 바로잡은 횟수·키 수, o = 첫 키 뒤 영문 키 수(앞 그리기·지금), k.
@@ -85,7 +87,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v41"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v42"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -651,20 +653,22 @@ static void DrawDebug(void)
     Row(0, s);
     StrPrintF(s, "draw %lu ovl %lu heal %lx b%lx", GetF(108), GetF(127), GetF(kSyFtrHeal), GetF(kFtrBoot) >> 28);
     Row(1, s);
-    /* v23 진단: 3~6줄 = 가상 실크(화면 밖 창)에 그린 여러 글자 문자열 최근 4개(앞 4바이트, 사각형). v46 판정 기록 표시는 잠시 뺌 */
+    /* v42 진단: 3~6줄 = 첫 줄 글자(`·~·1·!) 그리기 최근 8개(오래된 것부터 2개씩): 글자 길이 a자동대문자 s결과 @x,y */
     for (m = 0; m < 4; m++) {
-        UInt16 k = (UInt16)((GetF(234) + m) & 3);
-        UInt32 t = GetF(235 + 3 * k), xy = GetF(236 + 3 * k), wh = GetF(237 + 3 * k);
-        Char   c4[5];
-        UInt16 i;
+        UInt16 j;
 
-        for (i = 0; i < 4; i++) {
-            c4[i] = (Char)(t >> (24 - 8 * i));
-            if ((UInt8)c4[i] < 0x20 || (UInt8)c4[i] > 0x7E)
-                c4[i] = c4[i] ? '?' : ' ';
+        s[0] = 0;
+        for (j = 0; j < 2; j++) {
+            UInt32 e = GetF(270 + (UInt16)((GetF(278) + 2 * m + j) & 7));
+            Char   t[24];
+
+            if (e == 0)
+                StrCopy(t, " -");
+            else
+                StrPrintF(t, " %c%u a%u s%u @%u,%u", (Char)(e >> 24), (UInt16)((e >> 20) & 15), (UInt16)((e >> 19) & 1),
+                          (UInt16)((e >> 18) & 1), (UInt16)(e & 0x7FF), (UInt16)((e >> 11) & 0x7F));
+            StrCat(s, t);
         }
-        c4[4] = 0;
-        StrPrintF(s, "str '%s' @%d,%d %ux%u", c4, (Int16)(xy >> 16), (Int16)xy, (UInt16)(wh >> 16), (UInt16)wh);
         Row(2 + m, s);
     }
     {   /* v24 진단: '`' '=' 키 글자 위치, 한/영 표시 위치(고해상도, 실크 화면 밖 창 기준) */
@@ -672,7 +676,7 @@ static void DrawDebug(void)
 
         UInt32 q1 = GetF(248), q2 = GetF(249);
 
-        StrPrintF(s, "rd%lx fx%lx o%lu,%lu k%lx", GetF(296), GetF(285), GetF(287), GetF(286), GetF(293));   /* v41 */
+        StrPrintF(s, "s%lu rd%lx sk%lx/%lx fx%lx", GetF(255), GetF(296), GetF(284), GetF(283), GetF(285));   /* v42 */
         (void)c;
         (void)q1;
         (void)q2;

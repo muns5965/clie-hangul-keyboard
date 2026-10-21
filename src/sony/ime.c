@@ -224,11 +224,20 @@ static void Expand(UInt8 *px, const UInt16 *g, UInt16 fh, UInt8 idx, UInt8 t)
 /* v40: v39 실측 — 두 번에 나눠도 새 글자가 안 보임: 1비트 그림에 그리기 색을 입혀 칠하는 방식은 이 기기에서 두 번째 색이 안 먹음.
  *   → 색이 그림 안에 있는 8비트 그림(글자 점 = 색 번호, 나머지 투명)으로 그림 — 한/A 표시(SyIc 8비트 + 투명)와 같은 길.
  *   색 번호는 화면에서 읽은 RGB의 가장 가까운 번호(WinRGBToIndex). 1) 옛 글자 점을 바탕색으로 2) 새 글자 점을 글자색으로 */
+/* v42 진단: 건너뛴 키(#284 비트), 첫 건너뜀 #283 = 까닭<<8 | 키(0 = a)
+ *   까닭 1 기록 없음, 2 다른 세대, 3 높이 다름, 4 글자 모양 없음, 5 글자색 모름, 6 바탕색 모름, 7 같은 색, 8 같은 번호 */
+static void Skip(UInt16 i, UInt16 why, UInt32 *mask)
+{
+    if (*mask == 0)
+        FtrSet(kSyCr, 283, ((UInt32)why << 8) | i);
+    *mask |= 1UL << i;
+}
+
 /* v41: 키마다 지금 그려진 모양(#289 비트 = 자모, #290 비트 = 쌍자음 — spatch.c가 그릴 때 기록, 우리가 그리면 고침)에서
  *   새 모양(nm: 0 영문, 1 기본 자모, 2 쌍자음)으로. mask 안의 키 중 모양이 다른 키만. 돌려주는 값 = 그린 키 수 */
 static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
 {
-    UInt32        gen = 0, fp = 0, pk = 0, n = 0, done = 0, hm = 0, dm = 0;
+    UInt32        gen = 0, fp = 0, pk = 0, n = 0, done = 0, hm = 0, dm = 0, skip = 0;
     const Int16  *f;
     BitmapPtr     bmp;
     UInt8        *px = NULL, fi = 0, bi = 0, ti;
@@ -280,15 +289,19 @@ static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
             continue;
         FtrGet(kSyCr, 300 + 2 * i, &xy);
         FtrGet(kSyCr, 301 + 2 * i, &inf);
-        if (inf == 0 || (UInt8)(inf >> 24) != (UInt8)gen || (UInt8)inf != fh)
+        if (inf == 0 || (UInt8)(inf >> 24) != (UInt8)gen || (UInt8)inf != fh) {
+            Skip(i, inf == 0 ? 1 : (UInt8)(inf >> 24) != (UInt8)gen ? 2 : 3, &skip);
             continue;
+        }
         c = (UInt8)(inf >> 16);
         cw = (UInt8)(inf >> 8);
         x = (Coord)(xy >> 16);
         y = (Coord)xy;
         ox = Glyph(g, f, (const UInt8 *)pk, c, cw, om8, fh);
-        if (ox == -1)
+        if (ox == -1) {
+            Skip(i, 4, &skip);
             continue;
+        }
         for (row = 0; row < fh && !(gotF && gotB); row++) {
             Int16 lo = -1, hi = -1;
 
@@ -315,21 +328,29 @@ static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
             haveF = true;
         } else if (haveF)
             fg = lastF;
-        else
+        else {
+            Skip(i, 5, &skip);
             continue;
+        }
         if (gotB) {
             lastB = bg;
             haveB = true;
         } else if (haveB)
             bg = lastB;
-        else
+        else {
+            Skip(i, 6, &skip);
             continue;
-        if (fg.r == bg.r && fg.g == bg.g && fg.b == bg.b)
+        }
+        if (fg.r == bg.r && fg.g == bg.g && fg.b == bg.b) {
+            Skip(i, 7, &skip);
             continue;
+        }
         fi = WinRGBToIndex(&fg);
         bi = WinRGBToIndex(&bg);
-        if (fi == bi)
+        if (fi == bi) {
+            Skip(i, 8, &skip);
             continue;
+        }
         for (ti = 0xD8; ti == fi || ti == bi; ti++)   /* 투명 번호 = 두 색과 다른 번호 */
             ;
         Expand(px, g, fh, bi, ti);   /* 옛 글자 점만 바탕색 번호 */
@@ -375,6 +396,7 @@ static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
     }
     WinSetDrawMode(om);
     BmpDelete(bmp);
+    FtrSet(kSyCr, 284, skip);
     FtrGet(kSyCr, 296, &n);
     FtrSet(kSyCr, 296, (((n >> 16) + 1) << 16) | drawn);
     return drawn;
