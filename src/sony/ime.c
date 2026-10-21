@@ -129,8 +129,23 @@ void HgImGet(EventType *event, Int32 timeout)
                 v = 0;
                 FtrGet(kSyCr, 108, &v);
                 FtrSet(kSyCr, 215, v);
-                event->screenX = 10;   /* v22 진단: abc 탭 누름으로 바꿔 넘김 — Sony가 자판을 다시 그리는지 */
-                event->screenY = 219;
+                /* v25 진단: v24 실측 — abc 탭으로 바꿔 넘겨도 다시 그리지 않음(d2). 이번 누름은 버리고, shift 키(6,196)를
+                 *   두 번 누른 펜 점을 넣어 Sony가 키 글자를 다시 그리게 한다(쉬프트는 켰다 꺼서 그대로) */
+                event->eType = nilEvent;
+                {
+                    PointType pt;
+                    Err       e1, e2;
+
+                    pt.x = 6;  pt.y = 196;
+                    e1 = EvtEnqueuePenPoint(&pt);
+                    pt.x = -1; pt.y = -1;
+                    EvtEnqueuePenPoint(&pt);
+                    pt.x = 6;  pt.y = 196;
+                    e2 = EvtEnqueuePenPoint(&pt);
+                    pt.x = -1; pt.y = -1;
+                    EvtEnqueuePenPoint(&pt);
+                    FtrSet(kSyCr, 243, ((UInt32)e1 << 16) | (UInt16)e2);
+                }
                 return;
             }
         }
@@ -163,8 +178,7 @@ void HgImGet(EventType *event, Int32 timeout)
         return;
     }
     if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(event->screenX, event->screenY)) {
-        event->screenX = 10;                     /* v22 진단: abc 탭 누름으로 바꿔 넘김(누름과 같은 자리) */
-        event->screenY = 219;
+        event->eType = nilEvent;                 /* v25: 한/영 자리 누름은 Sony에 넘기지 않음 */
         return;
     }
     if (event->eType == penUpEvent) {            /* v39: ⇪ 자리를 눌렀는데 키 글자 다시 그리기가 없었으면 되돌림 */
