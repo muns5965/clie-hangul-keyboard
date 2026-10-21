@@ -161,7 +161,7 @@ NR70V(HAL·기기 ID `'rdwd'` Redwood, Palm OS 4.1)에 맞는 SDK는 **Sony CLI�
 | | 창 구조 `+26`(비트맵) | MnHangul 진단(`winlog.h`)만 |
 | | 글꼴 구조(`FontType`)를 복사해 1글자 임시 글꼴을 만들어 `BltDrawChars`에 넘김(대체 함수 없음). MnSonyKbd는 v15·v16부터 폭·기준선·높이를 `FntCharWidth`·`FntBaseLine`·`FntCharHeight`로 읽고(실측 일치), 구조는 임시 글꼴 만들기에서만 읽음. MnHangul은 아직 폭 표·높이를 구조에서 읽음(별도 측정 필요) | MnHangul 한글, MnSonyKbd 자모 |
 | ROM 고정 주소 | `BltDrawChars` = `0x1008359A`, 시작 바이트 `4E56FFF0 48E71E30` 확인 뒤 사용 | MnSonyKbd 자모 그리기 |
-| | ROM = `0x10000000`~`0x107FFFFF` 범위 판정 | 연결 확인(`src/sony/chain.h`, MnHangul `BltFind`) |
+| | ROM = `0x10000000`~`0x107FFFFF` 범위 판정. 공개 함수 `MemPtrHeapID`로 바꾸는 시험은 코드 주소에서 Fatal Exception(ClieDiag v26)이라 유지 | 연결 확인(`src/sony/chain.h`, MnHangul `BltFind`) |
 | ROM 리소스 내용 | `SilkExtn`(`extn`/`SeSi`)의 `Tbmp` 2400·2500 = ⇪ 그림(보통·켜짐) | `한A` 그림, 한/영 판정 |
 | Sony 키보드 동작 관찰 | 자판 그리는 순서(숫자 줄 → qwerty 줄 → `\` → ⇪ 그림 → …), 키 글자 글꼴 높이 22 | 한/영 표시 판정 |
 | | 상태(`GrfSetState`)를 그린 **뒤에** 바꿈, 키를 누르는 순간 잠깐 ⇪ 꺼짐 + 일시 쉬프트 | 판정 규칙 |

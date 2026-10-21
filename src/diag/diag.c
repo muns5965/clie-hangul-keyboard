@@ -1,5 +1,5 @@
 /*
- * ClieDiag v26 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v27 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -19,7 +19,9 @@
  *      기본 글꼴들의 줄 높이(h)·기준선(b)·'A'/'W' 폭, CJKOS가 그리는 '가'(B0A1) 폭과 HR 글꼴 값.
  * v21: 진단 "Font" 페이지 — KS X 1001 "가나다 한글"을 기존 함수(std·bold·large)와 HR 함수(HR std·bold·small)로
  *      실제로 그려 CJKOS가 각 경로에서 한글을 그리는지 확인. 줄마다 측정 폭(w)도 표시.
- * v26: Info 페이지 끝에 ROM 판정 진단 — 주소가 ROM인지를 공개 함수로 알 수 있나(지금은 0x10000000~0x107FFFFF 고정 범위).
+ * v27: v26의 ROM 판정 진단을 뺌 — 실측 2026-10-21: ClieDiag 시작 때 Fatal Exception(코드 주소를 MemPtrHeapID에 넘김 등,
+ *      덩어리 포인터용 함수에 코드 주소를 준 것으로 추정). ROM 판정은 고정 범위 유지.
+ * v26(폐기): Info 페이지 끝에 ROM 판정 진단 — 주소가 ROM인지를 공개 함수로 알 수 있나(지금은 0x10000000~0x107FFFFF 고정 범위).
  *      MemPtrHeapID(주소) ≥ MemNumRAMHeaps(0)이면 ROM 힙(ROM 힙은 RAM 힙 뒤 번호), MemCardInfo ROM 크기, MemHeapFlags 원시값.
  *      표본: SysReset(ROM), BltDrawChars·EvtGetEvent 맨 위(패치면 RAM), MemPtrNew 덩어리(RAM).
  * v25: Info 페이지에 Sony SysInfo(Feature 'SoNy' #1이 가리키는 구조, Sony CLIÉ SDK SonySystemFtr.h) 해석 — 소프트웨어 실크·
@@ -427,29 +429,6 @@ static void CollectInfo(void)
     err = SysLibFind(kSilkLibName, &ref);
     StrPrintF(NextLine(&gInfo), "Silk lib: e=%x ref=%u", (UInt16)err, ref);
 
-    {   /* v26: ROM 판정 진단 */
-        UInt32  romSz = 0, ramSz = 0;
-        UInt16  nRam = MemNumRAMHeaps(0), nAll = MemNumHeaps(0), k;
-        void   *chunk = MemPtrNew(16);
-
-        MemCardInfo(0, NULL, NULL, NULL, NULL, &romSz, &ramSz, NULL);
-        StrPrintF(NextLine(&gInfo), "card0 rom %lx ram %lx heaps %u/%u", romSz, ramSz, nRam, nAll);
-        for (k = 0; k < 5; k++) {
-            UInt32 a = k == 0 ? (UInt32)SysGetTrapAddress(sysTrapSysReset) :
-                       k == 1 ? (UInt32)SysGetTrapAddress(sysTrapBltDrawChars) :
-                       k == 2 ? (UInt32)SysGetTrapAddress(sysTrapEvtGetEvent) :
-                       k == 3 ? (UInt32)SysGetTrapAddress(sysTrapFntCharsWidth) : (UInt32)chunk;
-            UInt16 id;
-
-            if (a == 0)
-                continue;
-            id = MemPtrHeapID((MemPtr)a);
-            StrPrintF(NextLine(&gInfo), "%s %lx h%u f%x %s", k == 0 ? "rst" : k == 1 ? "blt" : k == 2 ? "evt" : k == 3 ? "wid" : "new",
-                      a, id, MemHeapFlags(id), id >= nRam ? "ROM" : "RAM");
-        }
-        if (chunk != NULL)
-            MemPtrFree(chunk);
-    }
 }
 
 static void CollectLibr(void)
