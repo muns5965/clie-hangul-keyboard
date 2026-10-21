@@ -1,6 +1,8 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v4: PC 두벌식 규칙(소문자 = 기본 자모, 대문자 = 쌍자음). 한/영은 Int'l 오른쪽 빈칸(키보드 화면 왼쪽 아래 '한'/'A' 표시).
+ *   v3 실측: Palm 키보드는 cap 켜진 채 shift를 누르면 cap이 꺼져 cap 기반 한/영을 쓸 수 없음.
  * v3: cap 키 위치를 키보드 화면 창 기준으로 고침(x 0~21, y 89~105).
  * v2: 한글 모드를 펜이 cap 키를 누른 것으로 판단(v1 실측: 그리는 순간의 Graffiti caps가 한 박자 늦음). 진단 줄에 펜 위치 3개.
  * v1: 키 위 자모 표시만 시험한다(src/kbdhan/hook.c, 리소스 KhHk 0). 입력은 영문 그대로.
@@ -14,10 +16,10 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v3"
+#define kVer      "v4"
 #define kHookRes  'KhHk'
 #define kHookN    4
-#define kBufN     16
+#define kBufN     96
 #define kOrigOff  16
 #define kBufOff   32
 #define kLineH    11
@@ -106,7 +108,7 @@ static void HookOn(void)
     FtrSet(kCr, 4, mask);
     for (i = 0; i < kHookN; i++)
         SysSetTrapAddress(HookTrap(i), code + ((UInt32 *)code)[i]);
-    StrCopy(gMsg, "ON: open keyboard, tap cap");
+    StrCopy(gMsg, "ON: keyboard, tap right of Int'l");
 }
 
 static void HookOff(void)
@@ -174,13 +176,13 @@ static void Draw(void)
     StrPrintF(s, "hook %s  MnHangul %s  %s", GetF(2) ? "ON" : "off", hg ? "ON" : "off",
               Supported() ? "OS ok" : "unsupported");
     Row(4, s);
-    Row(5, "Memo > keyboard > tap cap:");
+    Row(5, "Memo > keyboard > tap right of Int'l:");
     Row(6, "keys show jamo (input stays ABC)");
     if (b == NULL)
         return;
     StrPrintF(s, "kbd opens %lu  letters %lu  jamo %lu", b[1], b[3], b[2]);
     Row(7, s);
-    StrPrintF(s, "han %lu  cap taps %lu", b[8], b[13]);
+    StrPrintF(s, "han %lu  han taps %lu  keys %lu", b[8], b[13], b[14]);
     Row(8, s);
     ch[0] = (Char)(b[4] >> 24);
     ch[1] = 0;
