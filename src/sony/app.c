@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v46: v44 실측 fld bad 1 — 빨리 치면 Sony 다음 키가 우리 BS + 글자보다 먼저 큐에 있어 커서가 어긋나 조합 끝. 넣은 키(#266)·앱에 간 키(#267)
+ *   수가 다르면 Sony 키를 큐 맨 뒤로 미룸(#265 연속, 20번 넘으면 맞춤, #264 = 미룬 수, 10줄 dl).
  * v45(진단): 가끔 조합이 끊김(대한뵤ㅁ뷰) — 조합 중 조합 끝난 까닭 최근 3개(#279~#282, 진단 6줄 end).
  * v44: shift 없이 쌍자음의 진짜 원인 — Dubeol()은 대문자 = 기본 자모·소문자 = 쌍자음(옛 ⇪ 규칙)인데 v32부터 반대로 넘김 → 고침.
  * v43: v42 실측 — s0(shift 판단 정상), m 건너뜀 까닭 4(글자 모양 없음): m 폭 16 → 자모 x (16-18)/2 = -1이 실패 값(-1)과 같았음 → 실패 값 kNoGlyph.
@@ -90,7 +92,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v45"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v46"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -729,8 +731,8 @@ static void DrawDebug(void)
         {   /* v10: 조합 중 커서 이동 감지 — 비교 수, 다름 수, 마지막 기대/실제 위치, X 다름, C 조합 중 (v9의 blt top 줄 자리) */
             UInt32 fl = GetF(194), la = GetF(193);
 
-            StrPrintF(s, "fld %lu bad %lu e%u a%u%s%s", GetF(191), GetF(192), (UInt16)(la >> 16), (UInt16)la,
-                      (fl & 1) ? " X" : "", (fl & 2) ? " C" : "");
+            StrPrintF(s, "fld %lu bad %lu e%u a%u%s%s dl%lu", GetF(191), GetF(192), (UInt16)(la >> 16), (UInt16)la,
+                      (fl & 1) ? " X" : "", (fl & 2) ? " C" : "", GetF(264));   /* v46 dl = 미룬 키 수 */
             Row(9, s);
         }
         {   /* v18: 지우기 알림 — 등록(ok / - 해제 / 오류 코드), '-pdb' 수·마지막 DB, 자동 끄기 결과 */

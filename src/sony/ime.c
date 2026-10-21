@@ -88,6 +88,10 @@ static inline GetFn OrigGet(void)
 
 static inline void HcSend(UInt16 c)
 {
+    UInt32 n = 0;
+
+    FtrGet(kSyCr, 266, &n);   /* v46: 우리가 넣은 키 수(#267 = 앱에 간 수와 비교) */
+    FtrSet(kSyCr, 266, n + 1);
     EvtEnqueueKey(c, kImMark, 0);
     CtDelta(kSyCr, kSyFtrFld, c);
 }
@@ -617,8 +621,34 @@ void HgImGet(EventType *event, Int32 timeout)
         }
         return;
     }
-    if (event->eType != keyDownEvent || event->data.keyDown.keyCode == kImMark)
+    if (event->eType == keyDownEvent && event->data.keyDown.keyCode == kImMark) {
+        UInt32 n = 0;
+
+        FtrGet(kSyCr, 267, &n);   /* v46: 우리가 넣은 키가 앱으로 감 */
+        FtrSet(kSyCr, 267, n + 1);
         return;
+    }
+    if (event->eType != keyDownEvent)
+        return;
+    {   /* v46: 앞 키로 넣은 키(BS + 글자)가 아직 앱에 안 갔는데 다음 키가 오면(빨리 칠 때 Sony 키가 먼저 큐에 있음 —
+         *   v44 실측 fld bad 1, 가끔 조합 끊김) 이 키를 큐 맨 뒤로 미룬다. 20번 넘게 이어지면 수를 맞추고 진행 */
+        UInt32 sent = 0, seen = 0, streak = 0;
+
+        FtrGet(kSyCr, 266, &sent);
+        FtrGet(kSyCr, 267, &seen);
+        FtrGet(kSyCr, 265, &streak);
+        if (sent != seen && streak < 20) {
+            EvtEnqueueKey(event->data.keyDown.chr, event->data.keyDown.keyCode, event->data.keyDown.modifiers);
+            FtrSet(kSyCr, 265, streak + 1);
+            FtrGet(kSyCr, 264, &seen);
+            FtrSet(kSyCr, 264, seen + 1);   /* 진단: 미룬 수 */
+            event->eType = nilEvent;
+            return;
+        }
+        if (sent != seen)
+            FtrSet(kSyCr, 267, sent);
+        FtrSet(kSyCr, 265, 0);
+    }
     ch = event->data.keyDown.chr;
     if (ch < 0x80)   /* v34: PC 두벌식 — 누를 때의 shift(#256)대로 쌍자음 또는 기본 자모, 쓰고 나면 0 */
         ch = HanInKey((UInt8)ch);
