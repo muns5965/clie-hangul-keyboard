@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v16: 글꼴 높이도 FntCharHeight(v15 실측 일치). 예전 방식 비교 진단(v8 창·글꼴, SilkWareLib GetScrWindow)은 할 일을 마쳐 뺌 —
+ *   동작 경로에서 글꼴 구조를 읽는 곳은 임시 글꼴 만들기(MakeTmpFont)만 남음.
  * v15: 창·글꼴 공개 함수 전환(spatch.c) — 화면 밖 창 = WinGetBitmap 비교, 자모 가운데 = FntCharWidth, 세로 위치 = FntBaseLine
  *   (v8 실측 일치). 글꼴 높이 f[7]은 그대로, FntCharHeight와 비교만(진단 10줄 hbad). 임시 글꼴 만들기는 구조 그대로.
  * v14: 첫 화면 3줄 [All OFF] = 자기와 MnHangul을 순서대로 끄기(src/common/mod_off.h). MnHangul이 실행 코드 kCmdModOff로 부르면 자기를 끈다.
@@ -32,7 +34,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v15"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v16"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -55,7 +57,7 @@
 #define kFtrBlt      152
 #define kImBufSz     16
 #define kRomBlt      0x1008359AUL
-#define kFtrScr      154            /* v8 진단: SilkWareLib GetScrWindow 결과(0 = 모름) */   /* NR70V ROM BltDrawChars(MnHangul v24 실측) */
+
 
 #define kLineH        11
 #define kRowOn        3
@@ -242,22 +244,6 @@ static UInt16 ImOn(void)
 }
 
 /* 모두 켜기. 결과 = 패치<<4 | 입력 */
-/* v8 진단: Sony "Silk Ware Library"(ROM libr SlSW v100) GetScrWindow = 디스패치 표 9번째(custom + 4).
- *   ROM 0x1035CF12 정적 분석: Err (UInt16 ref, WinHandle *out) — SilkExtn 전역(+172)을 읽기만 함, 'inoT' 확인 실패면 0x7704.
- *   앱 화면에서만 부른다(리셋 알림·패치 안에서는 부르지 않음). */
-Err SwGetScrWindow(UInt16 ref, WinHandle *winP) SYS_TRAP(sysLibTrapCustom + 4);
-
-static void ScrWin(void)
-{
-    UInt16    ref;
-    WinHandle w = NULL;
-
-    if (SysLibFind("Silk Ware Library", &ref) == errNone && SwGetScrWindow(ref, &w) == errNone)
-        FtrSet(kSyCr, kFtrScr, (UInt32)w);
-    else
-        FtrSet(kSyCr, kFtrScr, 0);
-}
-
 static UInt16 SonyOn(void)
 {
     UInt16 p = PatchOn();
@@ -516,14 +502,8 @@ static void DrawDebug(void)
         WinDrawChars(s, StrLen(s), 2 + (m % 2) * 80, (3 + m / 2) * kLineH);
         m++;
     }
-    {   /* v8 진단: 창 판정 세 가지, 글꼴 공개 함수 비교(row 12 누르면 지움) */
-        UInt32 v = GetF(182);
-        Char   ch[2];
-
-        ScrWin();
-        ch[0] = (Char)((v >> 8) & 0xFF) ? (Char)((v >> 8) & 0xFF) : '-';   /* StrPrintF는 %c를 지원하지 않는다 */
-        ch[1] = 0;
-        StrPrintF(s, "win %lu ok %lu last a%lub%luc%lu %s", GetF(180), GetF(181), v & 1, (v >> 1) & 1, (v >> 2) & 3, ch);
+    {   /* v16: 8·10줄의 v8 비교 진단은 뺌(창·글꼴은 공개 함수로 바꿈, KOREAN_SUPPORT v8·v15 실측) */
+        StrPrintF(s, "win/font: public API, overlay %lu", GetF(127));
         Row(8, s);
         StrPrintF(s, "get %lu ev %lx/%lx", GetF(188), GetF(189),
                   GetF(kFtrImC) ? *(const UInt32 *)(GetF(kFtrImC) + 8) : 0UL);   /* v9: 입력 불린 수, 맨 위/아래 */
@@ -535,9 +515,7 @@ static void DrawDebug(void)
                       (fl & 1) ? " X" : "", (fl & 2) ? " C" : "");
             Row(9, s);
         }
-        StrPrintF(s, "font %lu ptr %lu bad %lu hbad %lu last %lx", GetF(184), GetF(185), GetF(187), GetF(198),
-                  GetF(199));   /* v15: 높이 FntCharHeight 대 f[7] */
-        Row(10, s);
+        Row(10, "-");
     }
     StrPrintF(s, "why%u H%lu S%lx p%lu ic%lu@%lu", (UInt16)(w >> 24), GetF(143), GetF(150), GetF(144),
               GetF(147), GetF(146));
@@ -595,7 +573,6 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             else if (row == kRowOn && e.screenX >= 40)
                 SonyOff();
             else if (row == kRowOn) {
-                ScrWin();   /* v8 진단 */
                 if (Status() == 0) {
                     UInt16 rr = SonyOn();
 

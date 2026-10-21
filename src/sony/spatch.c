@@ -53,28 +53,11 @@ static inline UInt16 RdW(const UInt8 *p)
     return ((UInt16)p[0] << 8) | p[1];
 }
 
-/* 글꼴 f(SDK FontType)에서 글자 c의 폭. 없는 글자는 '없는 글자' 칸의 폭.
- * v15: 동작에는 쓰지 않음(FntCharWidth로 바꿈) — v8 진단 비교(Diag)에서만 쓴다 */
-static inline UInt16 CharW(const Int16 *f, UInt8 c)
+/* 1글자 임시 글꼴 (MnHangul patch.c MakeTmpFont와 같음). h = 글꼴 높이(v16: FntCharHeight).
+ * 글꼴을 직접 만드는 공개 함수가 없어 원래 글꼴 구조(종류 src[0], ascent src[9], descent src[10])를 복사한다 */
+static inline void MakeTmpFont(UInt16 *t, const Int16 *src, UInt16 cw, UInt16 h)
 {
-    const UInt16 *owt = (const UInt16 *)((const UInt8 *)f + 16 + (UInt16)f[8] * 2);
-    Int16         first = f[1], last = f[2];
-    UInt16        e;
-
-    if (c < first || c > last)
-        e = owt[last - first + 1];
-    else {
-        e = owt[c - first];
-        if (e == 0xFFFF)
-            e = owt[last - first + 1];
-    }
-    return e & 0xFF;
-}
-
-/* 1글자 임시 글꼴 (MnHangul patch.c MakeTmpFont와 같음) */
-static inline void MakeTmpFont(UInt16 *t, const Int16 *src, UInt16 cw)
-{
-    UInt16 h = src[7], loc = 13 + h * 2, i;
+    UInt16 loc = 13 + h * 2, i;
 
     for (i = 0; i < TmpWords(h); i++)
         t[i] = 0;
@@ -95,9 +78,9 @@ static inline void MakeTmpFont(UInt16 *t, const Int16 *src, UInt16 cw)
 }
 
 /* 자모 그림(16줄, 판 1 = 2바이트 줄)을 임시 글꼴 그림 칸에. 세로 시작 = ascent - 15(MnHangul GlyphTop 16과 같음) */
-static inline void PutJamo(UInt16 *t, const UInt8 *pk, UInt8 trail, const Int16 *f)
+static inline void PutJamo(UInt16 *t, const UInt8 *pk, UInt8 trail, UInt16 fh)
 {
-    UInt16       H = pk[3], w = pk[2] >= 2 ? 4 : 2, fh = (UInt16)f[7], y;
+    UInt16       H = pk[3], w = pk[2] >= 2 ? 4 : 2, y;
     const UInt8 *j = pk + RdW(pk + 124) + (UInt16)(trail - 0xA1) * H * w;
     Int16        top = FntBaseLine() - 15;   /* v15: 글꼴 구조 ascent(f[9]) 대신 공개 함수(v8 실측 일치) */
 
@@ -126,13 +109,6 @@ static inline Boolean SilkWin(void)
     return w != NULL && WinGetBitmap(w) != WinGetBitmap(WinGetDisplayWindow());
 }
 
-/* v8 진단에서만: 예전 판정(창 구조 +8 windowFlags 0x4000) */
-static inline Boolean SilkWinFlags(void)
-{
-    const UInt8 *w = (const UInt8 *)WinGetDrawWindow();
-
-    return w != NULL && (*(const UInt16 *)(w + 8) & 0x4000) != 0;
-}
 
 /* 키 글자를 그리는 순간의 한/영 판정 (MnHangul v36·v39·v44·v46·v49·v50과 같음, 자세한 이유는 docs/KOREAN_SUPPORT.md) */
 static inline Boolean HanLabel(UInt8 c)
@@ -162,45 +138,9 @@ static inline Boolean HanLabel(UInt8 c)
     return GetF(kFtrHan) != 0;
 }
 
-/* v8 진단(동작 변경 없음): 내부 구조 대신 공개 함수로 같은 판정이 나오는지 비교한다.
- *   창: a = 창 구조 windowFlags 0x4000(지금 쓰는 판정), b = 그리는 창 비트맵 != 화면 창 비트맵(WinGetBitmap),
- *       c = 그리는 창 == SilkWareLib GetScrWindow(앱이 #154에 기록, 0이면 모름=2)
- *       #180 표본 수, #181 모두 일치 수, #182 마지막 불일치(a | b<<1 | c<<2 | 글자<<8), #183 그때 그리는 창
- *   글꼴: #184 표본 수, #185 FntGetFontPtr() == p6 수, #186 마지막 불일치(FntGetFont<<24 | 높이<<16 | FntCharWidth<<8 | 폭 표),
- *       #187 불일치 수(포인터·폭·기준선 FntBaseLine 중 하나라도 다름) */
-static inline void Diag(UInt8 c, const Int16 *f)
+static inline void Reject(UInt16 why, UInt16 fh, const Int16 *rc)
 {
-    UInt32 dw = (UInt32)WinGetDrawWindow(), scr = GetF(154);
-    UInt16 a = SilkWinFlags() ? 1 : 0;   /* v15: a = 예전 판정, b = 지금 판정(SilkWin) */
-    UInt16 b = SilkWin() ? 1 : 0;
-    UInt16 k = scr == 0 ? 2 : (dw == scr ? 1 : 0);
-    UInt16 fw = (UInt16)FntCharWidth((Char)c), tw = CharW(f, c);
-    Boolean pm = (const Int16 *)FntGetFontPtr() == f;
-
-    FtrSet(kSyCr, 180, GetF(180) + 1);
-    if (a == b && (k == 2 || k == a))
-        FtrSet(kSyCr, 181, GetF(181) + 1);
-    else {
-        FtrSet(kSyCr, 182, (UInt32)a | ((UInt32)b << 1) | ((UInt32)k << 2) | ((UInt32)c << 8));
-        FtrSet(kSyCr, 183, dw);
-    }
-    FtrSet(kSyCr, 184, GetF(184) + 1);
-    if (pm)
-        FtrSet(kSyCr, 185, GetF(185) + 1);
-    if ((UInt16)FntCharHeight() != (UInt16)f[7]) {   /* v15: 글꼴 높이 f[7] → FntCharHeight 전환 가능성(#198 다름 수, #199 마지막) */
-        FtrSet(kSyCr, 198, GetF(198) + 1);
-        FtrSet(kSyCr, 199, ((UInt32)FntCharHeight() << 8) | (UInt8)f[7]);
-    }
-    if (!pm || fw != tw || FntBaseLine() != f[9]) {
-        FtrSet(kSyCr, 186, ((UInt32)FntGetFont() << 24) | ((UInt32)(f[7] & 0xFF) << 16) | ((UInt32)(fw & 0xFF) << 8) |
-                           (tw & 0xFF));
-        FtrSet(kSyCr, 187, GetF(187) + 1);
-    }
-}
-
-static inline void Reject(UInt16 why, const Int16 *f, const Int16 *rc)
-{
-    FtrSet(kSyCr, 128, ((UInt32)why << 24) | ((UInt32)(f[7] & 0xFF) << 8) | (UInt8)rc[3]);
+    FtrSet(kSyCr, 128, ((UInt32)why << 24) | ((UInt32)(fh & 0xFF) << 8) | (UInt8)rc[3]);
 }
 
 UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, void *p6, void *p7)
@@ -217,31 +157,31 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         if (c != 0 && p6 != NULL && Dubeol(c) != 0 && GetF(kFtrJamo) != 0) {
             const Int16 *f = (const Int16 *)p6, *rc = (const Int16 *)p2;
             UInt16      *tmp = NULL;
+            UInt16       fh = (UInt16)FntCharHeight();   /* v16: 글꼴 구조 f[7] 대신(v15 실측 446개 일치, p6 = 지금 글꼴은 v8 확인) */
 
-            Diag(c, f);   /* v8 진단 */
-            if (f[7] != 22)
-                Reject(3, f, rc);
+            if (fh != 22)
+                Reject(3, fh, rc);
             else if (!SilkWin())
-                Reject(4, f, rc);
+                Reject(4, fh, rc);
             else if (!HanLabel(c))
-                Reject(6, f, rc);
-            else if ((tmp = MemPtrNew(TmpWords(f[7]) * 2)) == NULL)
-                Reject(5, f, rc);
+                Reject(6, fh, rc);
+            else if ((tmp = MemPtrNew(TmpWords(fh) * 2)) == NULL)
+                Reject(5, fh, rc);
             else {
                 RectangleType r = *(const RectangleType *)p2;
                 Int16         rh = rc[3];
-                UInt16        ratio = (rh > 0 && f[7] == rh * 2) ? 2 : 1;
+                UInt16        ratio = (rh > 0 && fh == (UInt16)rh * 2) ? 2 : 1;
                 UInt8         one = kTmpChar;
                 UInt32        res, b = GetF(kFtrBlt);
 
-                MakeTmpFont(tmp, f, kCell);
-                PutJamo(tmp, (const UInt8 *)GetF(kFtrJamo), Dubeol(c), f);
+                MakeTmpFont(tmp, f, kCell, fh);
+                PutJamo(tmp, (const UInt8 *)GetF(kFtrJamo), Dubeol(c), fh);
                 r.topLeft.x += ((Int16)FntCharWidth((Char)c) - kCell) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤(v15: 공개 함수) */
                 r.extent.x = kCell / ratio;
                 res = ((BltFn)(b != 0 ? b : orig))(p1, &r, p3, &one, 1, tmp, p7);
                 MemPtrFree(tmp);
                 FtrSet(kSyCr, 127, GetF(127) + 1);
-                FtrSet(kSyCr, 128, ((UInt32)(f[7] & 0xFF) << 8) | (UInt8)rh);
+                FtrSet(kSyCr, 128, ((UInt32)(fh & 0xFF) << 8) | (UInt8)rh);
                 return res;
             }
         }

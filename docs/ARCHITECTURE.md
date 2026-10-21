@@ -148,15 +148,15 @@ MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므
 | --- | --- | --- |
 | `BltDrawChars`(트랩 0xA378) | MnHangul 그리기, MnSonyKbd 키 글자 | ROM 호출부 역분석으로 인자 7개(26바이트) 확인([KOREAN_SUPPORT.md](KOREAN_SUPPORT.md)) |
 | Sony `SkWr` 플러그인 호출 방식 | Mn 가상 키보드 로더 | `SilkExtn` ROM 역분석(1절) |
-| Sony "Silk Ware Library" `GetScrWindow`(custom + 4) | MnSonyKbd v8 진단만 | ROM `SlSW` v100 정적 분석: `Err (UInt16 ref, WinHandle *out)`, SilkExtn 전역 +172를 읽기만 함 |
+| (참고) Sony "Silk Ware Library" `GetScrWindow`(custom + 4) | 쓰지 않음(MnSonyKbd v8~v15 진단에서 실측 0을 돌려줘 v16에서 뺌) | ROM `SlSW` v100 정적 분석: `Err (UInt16 ref, WinHandle *out)`, SilkExtn 전역 +172를 읽기만 함 |
 
 **3단계: 함수가 아니라 내부 구조·관찰에 기댄 부분 (가장 취약)**
 
 | 분류 | 내용 | 쓰는 곳 |
 | --- | --- | --- |
-| OS 내부 구조체 직접 읽기 | 창 구조 `+8`(windowFlags, 0x4000 = 화면 밖 창). MnSonyKbd v15부터 공개 함수 `WinGetBitmap` 비교로 바꿈(v8 실측 불일치 0) — 이 구조 읽기는 v15 진단 비교에만 남음 | MnSonyKbd 가상 실크 창 판별 |
+| OS 내부 구조체 직접 읽기 | (해소) 창 구조 `+8`(windowFlags 0x4000). MnSonyKbd v15부터 공개 함수 `WinGetBitmap` 비교, v16에서 비교 진단까지 뺌 | — |
 | | 창 구조 `+26`(비트맵) | MnHangul 진단(`winlog.h`)만 |
-| | 글꼴 구조(`FontType`) 필드·폭 표를 읽고 1글자 임시 글꼴을 만들어 `BltDrawChars`에 넘김. MnSonyKbd v15부터 키 글자 폭·기준선은 `FntCharWidth`·`FntBaseLine`(v8 실측 일치). 높이 `f[7]`은 `FntCharHeight`와 비교 중(v15 진단). 임시 글꼴 만들기는 대체 함수 없음. MnHangul은 아직 구조 읽기(별도 측정 필요) | MnHangul 한글, MnSonyKbd 자모 |
+| | 글꼴 구조(`FontType`)를 복사해 1글자 임시 글꼴을 만들어 `BltDrawChars`에 넘김(대체 함수 없음). MnSonyKbd는 v15·v16부터 폭·기준선·높이를 `FntCharWidth`·`FntBaseLine`·`FntCharHeight`로 읽고(실측 일치), 구조는 임시 글꼴 만들기에서만 읽음. MnHangul은 아직 폭 표·높이를 구조에서 읽음(별도 측정 필요) | MnHangul 한글, MnSonyKbd 자모 |
 | ROM 고정 주소 | `BltDrawChars` = `0x1008359A`, 시작 바이트 `4E56FFF0 48E71E30` 확인 뒤 사용 | MnSonyKbd 자모 그리기 |
 | | ROM = `0x10000000`~`0x107FFFFF` 범위 판정 | 연결 확인(`src/sony/chain.h`, MnHangul `BltFind`) |
 | ROM 리소스 내용 | `SilkExtn`(`extn`/`SeSi`)의 `Tbmp` 2400·2500 = ⇪ 그림(보통·켜짐) | `한A` 그림, 한/영 판정 |
