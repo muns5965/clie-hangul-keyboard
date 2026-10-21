@@ -54,14 +54,33 @@ static inline void DecLog(UInt32 e)
 #endif
 }
 
-/* 지금 쉬프트 고정(⇪)인가 = 한글 모드 */
+/* v32: 한글 모드 = sym 오른쪽 한/영 단추 값(#214). ⇪(쉬프트 고정)는 더 이상 보지 않는다(⇪는 영문 대문자 고정만) */
 static inline Boolean HanMode(void)
 {
-    Boolean caps = false, num = false, autoS = false;
-    UInt16  temp = 0;
+    UInt32 v = 0;
 
+    FtrGet(kSyCr, kFtrHanTab, &v);
+    return v != 0;
+}
+
+/* v32: PC 두벌식 규칙 — 영문 글자 키를 기본 자모(소문자)·쌍자음(대문자) 중 어느 쪽으로 볼지.
+ *   쌍자음 = shift 키를 손으로 눌렀고(#255, 자동 대문자는 누름이 아니므로 0) Sony 일시 쉬프트가 지금 걸려 있음
+ *   (글자 대·소문자 ≠ ⇪). 그 밖(자동 대문자, ⇪만 켜짐)은 기본 자모. 글자 키가 아니면 그대로 */
+#define kFtrShift    255
+#define kShiftKey(x, y) ((x) >= 0 && (x) < 13 && (y) >= 192 && (y) < 202)
+static inline UInt8 HanKey(UInt8 c)
+{
+    Boolean caps = false, num = false, autoS = false, up;
+    UInt16  temp = 0;
+    UInt32  sf = 0;
+
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
+        return c;
+    up = c <= 'Z';
     GrfGetState(&caps, &num, &temp, &autoS);
-    return caps;
+    FtrGet(kSyCr, kFtrShift, &sf);
+    c |= 0x20;   /* 소문자 */
+    return (sf != 0 && up != caps) ? (UInt8)(c - 0x20) : c;
 }
 
 #endif

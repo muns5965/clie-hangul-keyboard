@@ -7,6 +7,9 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v32: 한/영을 ⇪에서 sym 오른쪽 단추(#214)로 옮김. PC 두벌식 규칙 — 소문자 = 기본 자모, 손으로 누른 shift(#255) = 쌍자음,
+ *   자동 대문자·⇪는 기본 자모. 키 위 자모 표시도 같은 규칙(dubeol.h HanKey). ⇪ '한A' 그림 바꾸기와 ⇪ 기반 판정(HanLabel) 뺌.
+ *   펜 판정은 화면 좌표(WinWindowToDisplayPt, 시스템 키보드 화면이 같이 떠도 맞게). 전환하면 조합 끝.
  * v31(진단): v30 실측 — 누르면 바로 한↔A 바뀜(HR 그리기 정상), 표시가 탭 글자보다 조금 위 → 자리 y 105 → 108(dubeol.h kMarkX·kMarkY).
  * v30(진단): v29 실측 — 누를 때 바로 그린 표시가 안 보임(bg 0). 앱 쪽 Win 함수는 저해상도 좌표(2배)라 (143,105)가 실크 창 밖.
  *   → 누를 때는 Sony HR 라이브러리 함수로 그림(참조 번호는 ImOn이 SysLibFind로 찾아 #254 = 0x10000 | 번호).
@@ -69,7 +72,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v31"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v32"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -588,7 +591,6 @@ static void DrawMain(void)
 {
     RectangleType r;
     Char          s[48];
-    MemHandle     ih = DmGetResource(kIconRes, 1);
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
@@ -615,12 +617,7 @@ static void DrawMain(void)
         Row(6, CjkFtr() ? (e != 0 ? "Hangul display: CJKOS (+MnHangul)" : "Hangul display: CJKOS") :
                 e != 0 ? "Hangul display: MnHangul" : "Hangul display: none (broken)");
     }
-    if (ih != NULL) {   /* 사용법: '한A' 그림(켜짐) = 한/영 */
-        WinDrawBitmap((BitmapPtr)MemHandleLock(ih), 3, 8 * kLineH);   /* 22×18(저해상도 좌표로 2배) */
-        MemHandleUnlock(ih);
-        DmReleaseResource(ih);
-    }
-    WinDrawChars("key = Hangul / English", 22, 28, 8 * kLineH + 4);
+    Row(8, "Tap right of sym: Hangul / English");   /* v32: 한/영 단추(⇪ 아님) */
     Row(9, "Shift in Hangul = double cons.");
     Row(10, "Update: All OFF or [Update], install, ON");
 }

@@ -110,37 +110,7 @@ static inline Boolean SilkWin(void)
 }
 
 
-/* 키 글자를 그리는 순간의 한/영 판정 (MnHangul v36·v39·v44·v46·v49·v50과 같음, 자세한 이유는 docs/KOREAN_SUPPORT.md) */
-static inline Boolean HanLabel(UInt8 c)
-{
-    Boolean caps = false, num = false, autoS = false;
-    UInt16  temp = 0;
-
-    GrfGetState(&caps, &num, &temp, &autoS);
-    /* v39: ⇪ 켜짐이고 마지막 펜이 ⇪가 아니면 한글로 다시 맞춤(v48: 키 누름 3 포함) */
-    if (caps && (GetF(kFtrPenCaps) == 0 || GetF(kFtrPenCaps) == 3) && GetF(kFtrHan) == 0)
-        FtrSet(kSyCr, kFtrHan, 1);
-    /* v44: ⇪ 꺼짐 + 일시 쉬프트이고 마지막 펜이 앱 화면이면 영문(새 메모에서 시스템이 ⇪를 푼 경우) */
-    if (!caps && temp != 0 && GetF(kFtrPenCaps) == 0 && GetF(kFtrHan) != 0)
-        FtrSet(kSyCr, kFtrHan, 0);
-    /* v49·v50: 소문자 키 글자 + ⇪ 꺼짐 = 영문(키보드 처음 띄울 때). 키 누름(3) 동안은 적용 안 함 */
-    if (!caps && c >= 'a' && c <= 'z' && GetF(kFtrPenCaps) != 3 && GetF(kFtrHan) != 0)
-        FtrSet(kSyCr, kFtrHan, 0);
-#if MN_DIAG
-    {   /* v46 진단: (H, p, caps, temp)가 바뀔 때만 기록 */
-        UInt32 st = ((GetF(kFtrHan) ? 1UL : 0) << 9) | ((GetF(kFtrPenCaps) & 3) << 7) | ((caps ? 1UL : 0) << 6) |
-                    ((UInt32)(temp & 0xF) << 2);
-
-        if ((GetF(177) & 0xFFFF) != (st | 0x8000)) {
-            FtrSet(kSyCr, 177, st | 0x8000);
-            DecLog((1UL << 30) | ((GetF(108) & 0xFFF) << 18) | ((UInt32)c << 10) | st);
-        }
-    }
-#else
-    (void)temp;
-#endif
-    return GetF(kFtrHan) != 0;
-}
+/* v32: 키 글자를 그리는 순간의 ⇪ 기반 한/영 판정(HanLabel, MnHangul v36~v50)은 뺌 — 한/영은 sym 오른쪽 단추(dubeol.h HanMode) */
 
 static inline void Reject(UInt16 why, UInt16 fh, const Int16 *rc)
 {
@@ -188,7 +158,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 Reject(3, fh, rc);
             else if (!SilkWin())
                 Reject(4, fh, rc);
-            else if (!HanLabel(c))
+            else if (!HanMode())
                 Reject(6, fh, rc);
             else if ((tmp = MemPtrNew(TmpWords(fh) * 2)) == NULL)
                 Reject(5, fh, rc);
@@ -200,7 +170,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 UInt32        res, b = GetF(kFtrBlt);
 
                 MakeTmpFont(tmp, f, kCell, fh);
-                PutJamo(tmp, (const UInt8 *)GetF(kFtrJamo), Dubeol(c), fh);
+                PutJamo(tmp, (const UInt8 *)GetF(kFtrJamo), Dubeol(HanKey(c)), fh);   /* v32: PC 규칙 */
                 r.topLeft.x += ((Int16)FntCharWidth((Char)c) - kCell) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤(v15: 공개 함수) */
                 r.extent.x = kCell / ratio;
                 res = ((BltFn)(b != 0 ? b : orig))(p1, &r, p3, &one, 1, tmp, p7);

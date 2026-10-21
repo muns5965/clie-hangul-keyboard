@@ -98,6 +98,7 @@ void HgImGet(EventType *event, Int32 timeout)
     UInt32 *st;
     WChar   ch;
     UInt8   j;
+    Coord   px, py;
 
     OrigGet()(event, timeout);
 #if MN_DIAG
@@ -111,17 +112,30 @@ void HgImGet(EventType *event, Int32 timeout)
     st = St();
     if (st == NULL || event == NULL)
         return;
+    px = event->screenX;
+    py = event->screenY;
+    if (event->eType == penDownEvent || event->eType == penUpEvent || event->eType == penMoveEvent) {
+        /* v32: 펜 좌표는 활성 창 기준 — 시스템 키보드 화면(대화상자)이 떠 있으면 어긋나므로 화면 좌표로 바꿔 판정 */
+        WinHandle aw = WinGetActiveWindow();
+
+        if (aw != NULL) {
+            WinHandle ow = WinSetDrawWindow(aw);
+
+            WinWindowToDisplayPt(&px, &py);
+            WinSetDrawWindow(ow);
+        }
+    }
     if (event->eType == penDownEvent) {          /* 앱 영역을 누르면 커서가 옮겨질 수 있어 조합 끝 */
         UInt32 v = 0;
 
         FtrGet(kSyCr, 250, &v);   /* v27 진단: 한/영 누름 뒤 첫 펜 누름 2개(위치 상관없이) */
         if (v != 0) {
-            FtrSet(kSyCr, v == 2 ? 248 : 249, ((UInt32)(UInt16)event->screenX << 16) | (UInt16)event->screenY);
+            FtrSet(kSyCr, v == 2 ? 248 : 249, ((UInt32)(UInt16)px << 16) | (UInt16)py);
             FtrSet(kSyCr, 250, v - 1);
         }
         v = 0;
 
-        if (event->screenY >= 160) {
+        if (py >= 160) {
             SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
             {   /* v20 진단: 가상 실크 펜 누름 3개 */
                 UInt32 k = 0;
@@ -129,10 +143,10 @@ void HgImGet(EventType *event, Int32 timeout)
                 FtrGet(kSyCr, 210, &k);
                 if (k > 2)
                     k = 0;
-                FtrSet(kSyCr, 211 + (UInt16)k, ((UInt32)(UInt16)event->screenX << 16) | (UInt16)event->screenY);
+                FtrSet(kSyCr, 211 + (UInt16)k, ((UInt32)(UInt16)px << 16) | (UInt16)py);
                 FtrSet(kSyCr, 210, k + 1 > 2 ? 0 : k + 1);
             }
-            if (kHanTab(event->screenX, event->screenY)) {   /* v20 진단: 한/영 단추 후보 — 시험 표시만 바꾸고 Sony에는 넘기지 않음 */
+            if (kHanTab(px, py)) {   /* v20 진단: 한/영 단추 후보 — 시험 표시만 바꾸고 Sony에는 넘기지 않음 */
                 UInt32 now = TimGetTicks(), last = 0;
 
                 /* v29: 한 번 누름이 두 번 처리됨(v28 실측: 누름 하나에 t +2, 값이 제자리) → 마지막 전환 뒤 0.5초 안의 누름은 무시 */
@@ -144,6 +158,9 @@ void HgImGet(EventType *event, Int32 timeout)
                     return;
                 }
                 FtrSet(kSyCr, 252, now);
+                st[0] = 0;                        /* v32: 전환하면 조합 끝, 손 shift도 풀림 */
+                CtUnknown(kSyCr, kSyFtrFld);
+                FtrSet(kSyCr, kFtrShift, 0);
                 v = 0;
                 FtrGet(kSyCr, kFtrHanTab, &v);
                 FtrSet(kSyCr, kFtrHanTab, v ? 0 : 1);
@@ -184,11 +201,11 @@ void HgImGet(EventType *event, Int32 timeout)
                 return;
             }
         }
-        if (event->screenY < 160) {
+        if (py < 160) {
             st[0] = 0;
             CtUnknown(kSyCr, kSyFtrFld);     /* v10: 앱 화면 누름은 커서를 옮길 수 있음(조합은 이미 끝) */
             FtrSet(kSyCr, kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
-        } else if (kCapsKey(event->screenX, event->screenY)) {   /* v39: ⇪ → 한글 모드 전환 */
+        } else if (kCapsKey(px, py)) {   /* v39: ⇪ → 한글 모드 전환 */
             UInt32 sc = 0;
 
             /* v45: Sony 실제 상태(마지막 자판 전체 그리기의 ⇪ 그림)의 반대로. 모르면 지금 값을 뒤집음 */
@@ -207,12 +224,17 @@ void HgImGet(EventType *event, Int32 timeout)
             v = 0;
             FtrGet(kSyCr, 108, &v);
             FtrSet(kSyCr, kFtrPenDraw, v);
-        } else   /* v48: 가상 키보드 일반 키 = 3(키 누름 중 순간 상태로 영문 내림 안 함)
-                  * v50: 키 영역(y < 213)만 3. 아래 탭·상태 표시줄(키보드 띄우는 버튼 등)은 0 */
-            FtrSet(kSyCr, kFtrPenCaps, event->screenY < kKeyAreaEnd ? 3 : 0);
+        } else {  /* v48: 가상 키보드 일반 키 = 3(키 누름 중 순간 상태로 영문 내림 안 함)
+                   * v50: 키 영역(y < 213)만 3. 아래 탭·상태 표시줄(키보드 띄우는 버튼 등)은 0 */
+            FtrSet(kSyCr, kFtrPenCaps, py < kKeyAreaEnd ? 3 : 0);
+            if (kShiftKey(px, py)) {   /* v32: 손으로 누른 shift(Sony 일시 쉬프트처럼 누를 때마다 켜고 끔) */
+                FtrGet(kSyCr, kFtrShift, &v);
+                FtrSet(kSyCr, kFtrShift, v ? 0 : 1);
+            }
+        }
         return;
     }
-    if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(event->screenX, event->screenY)) {
+    if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(px, py)) {
         event->eType = nilEvent;                 /* v25: 한/영 자리 누름은 Sony에 넘기지 않음 */
         return;
     }
@@ -237,6 +259,13 @@ void HgImGet(EventType *event, Int32 timeout)
     if (event->eType != keyDownEvent || event->data.keyDown.keyCode == kImMark)
         return;
     ch = event->data.keyDown.chr;
+    {   /* v32: PC 두벌식 — 쌍자음 여부는 손 shift(#255)로. 키 하나 받으면 shift는 풀림(Sony 일시 쉬프트와 같음) */
+        UInt8 k = (ch < 0x80) ? HanKey((UInt8)ch) : 0;
+
+        FtrSet(kSyCr, kFtrShift, 0);
+        if (k != 0)
+            ch = k;
+    }
     /* v10: 조합 중인데 커서가 옮겨졌거나 입력칸이 바뀌었으면(펜 없이 앱이 옮긴 경우 등) 조합 끝 */
     if (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0))
         st[0] = 0;
@@ -346,10 +375,7 @@ void HgImBmp(BitmapPtr bmp, Coord x, Coord y)
         FtrGet(kSyCr, 147, &v);
         FtrSet(kSyCr, 147, v + 1);
 #endif
-        if (ic[2 + on] != 0) {
-            OrigBmp()((BitmapPtr)ic[2 + on], x - 2, y);
-            return;
-        }
+        /* v32: ⇪ 자리 '한A' 그림 바꾸기는 뺌(한/영은 sym 오른쪽 단추, ⇪는 원래 그림·영문 대문자 고정) */
     }
     OrigBmp()(bmp, x, y);
 }
