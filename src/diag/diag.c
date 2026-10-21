@@ -1,5 +1,5 @@
 /*
- * ClieDiag v24 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v25 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -19,6 +19,8 @@
  *      기본 글꼴들의 줄 높이(h)·기준선(b)·'A'/'W' 폭, CJKOS가 그리는 '가'(B0A1) 폭과 HR 글꼴 값.
  * v21: 진단 "Font" 페이지 — KS X 1001 "가나다 한글"을 기존 함수(std·bold·large)와 HR 함수(HR std·bold·small)로
  *      실제로 그려 CJKOS가 각 경로에서 한글을 그리는지 확인. 줄마다 측정 폭(w)도 표시.
+ * v25: Info 페이지에 Sony SysInfo(Feature 'SoNy' #1이 가리키는 구조, Sony CLIÉ SDK SonySystemFtr.h) 해석 — 소프트웨어 실크·
+ *      하드웨어 키보드·HR/Silk 라이브러리 비트. 켜기 전 기종 능력 확인에 쓸 수 있는지 보는 진단.
  * v24: 진단 "Ftr" 페이지 — RAM Feature 표 전체(FtrGetByIndex, 이 저장소 모듈 MnSk·MnHg·MnSy·MnDg 제외).
  *      CJKOS를 켜고/끄고 비교해, CJKOS가 켜질 때만 등록하는 Feature가 있으면 공개 함수로 CJKOS를 감지할 수 있다.
  * v23: SkEv 페이지 6줄 = MnSkCore build 16 조합 중 커서 이동 진단(#81~#87), 기록 지우기에 포함.
@@ -401,6 +403,18 @@ static void CollectInfo(void)
     }
     err = FtrGet('SoNy', 1, &v);
     StrPrintF(NextLine(&gInfo), "SoNy#1: e=%x v=%lx", (UInt16)err, v);
+    if (err == errNone && v != 0) {
+        /* v25: Sony SysInfo (SDK 헤더는 저장소에 넣지 않아 오프셋만: +0 revision(16), +4 extn(32), +8 libr(32),
+         *      +24 status(32), +36 msSlotNum(16), +38 jogType(16), +40 rmcType(16)) */
+        const UInt8 *si = (const UInt8 *)v;
+        UInt32       ex = *(const UInt32 *)(si + 4), lb = *(const UInt32 *)(si + 8), stt = *(const UInt32 *)(si + 24);
+
+        StrPrintF(NextLine(&gInfo), "SysInfo rev %u extn %lx libr %lx", *(const UInt16 *)si, ex, lb);
+        StrPrintF(NextLine(&gInfo), " silk %s kb %s jog %s hold %s", (ex & 0x10) ? "Y" : "n", (ex & 0x40) ? "Y" : "n",
+                  (ex & 0x01) ? "Y" : "n", (ex & 0x04) ? "Y" : "n");   /* extn: Silk 0x10, KB 0x40, Jog 0x01, Hold 0x04 */
+        StrPrintF(NextLine(&gInfo), " HRlib %s SilkLib %s  st %lx jogT %u", (lb & 0x01) ? "Y" : "n",
+                  (lb & 0x100) ? "Y" : "n", stt, *(const UInt16 *)(si + 38));   /* libr: HR 0x01, Silk 0x100 */
+    }
 
     ref = sysInvalidRefNum;
     err = SysLibFind("Sony HR Library", &ref);
