@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v26(진단): 다시 그리기 유도를 Graffiti 일시 쉬프트 바꾸기(누를 때 반대로, 뗄 때 원래대로)로. v25 실측: shift 펜 점은 넣기 결과 0인데
+ *   이벤트가 오지 않음, 다시 그리기 없음(d1). 6줄 끝 u = 뗄 때까지 다시 그린 글자 수, 7줄 d = 지금까지.
  * v25(진단): 표시를 고정 자리(143,105)에 맨 아래 키 줄 글자를 그릴 때마다(자판 종류 무관). 한/영 누름은 버리고 shift 키를
  *   두 번 누른 펜 점(EvtEnqueuePenPoint)을 넣어 다시 그리기 유도(v24 실측: abc로 바꿔 넘겨도 d2, 다시 그리지 않음). 6줄 끝 = 넣기 결과.
  * v24(진단): v23 실측 — 가상 실크에 글자로 그리는 것은 키 글자와 시계('10:2')뿐(space·탭 글자는 그림 안). 그래서 키 글자 '='(아래 줄 끝)를
@@ -57,7 +59,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v25"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v26"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -638,8 +640,8 @@ static void DrawDebug(void)
     {   /* v24 진단: '`' '=' 키 글자 위치, 한/영 표시 위치(고해상도, 실크 화면 밖 창 기준) */
         UInt32 a = GetF(240), b = GetF(241), c = GetF(242);
 
-        StrPrintF(s, "` %d,%d = %d,%d mk %d,%d e%lx", (Int16)(a >> 16), (Int16)a, (Int16)(b >> 16), (Int16)b,
-                  (Int16)(c >> 16), (Int16)c, GetF(243));
+        StrPrintF(s, "` %d,%d = %d,%d mk %d,%d u%ld", (Int16)(a >> 16), (Int16)a, (Int16)(b >> 16), (Int16)b,
+                  (Int16)(c >> 16), (Int16)c, GetF(243) ? (Int32)(GetF(243) - GetF(215)) : -1L);
         Row(6, s);
     }
     {   /* v16: 8·10줄의 v8 비교 진단은 뺌(창·글꼴은 공개 함수로 바꿈, KOREAN_SUPPORT v8·v15 실측) */

@@ -129,22 +129,16 @@ void HgImGet(EventType *event, Int32 timeout)
                 v = 0;
                 FtrGet(kSyCr, 108, &v);
                 FtrSet(kSyCr, 215, v);
-                /* v25 진단: v24 실측 — abc 탭으로 바꿔 넘겨도 다시 그리지 않음(d2). 이번 누름은 버리고, shift 키(6,196)를
-                 *   두 번 누른 펜 점을 넣어 Sony가 키 글자를 다시 그리게 한다(쉬프트는 켰다 꺼서 그대로) */
+                /* v26 진단: v25 실측 — shift 펜 점 넣기는 결과 0인데 이벤트가 오지 않음(효과 없음). 이번 누름은 버리고,
+                 *   Graffiti 일시 쉬프트를 바꿔(GrfSetState) Sony가 자판을 다시 그리게 한다. 뗄 때 원래대로(#244 = 저장한 쉬프트 | 0x100) */
                 event->eType = nilEvent;
                 {
-                    PointType pt;
-                    Err       e1, e2;
+                    Boolean caps = false, num = false, autoS = false;
+                    UInt16  temp = 0;
 
-                    pt.x = 6;  pt.y = 196;
-                    e1 = EvtEnqueuePenPoint(&pt);
-                    pt.x = -1; pt.y = -1;
-                    EvtEnqueuePenPoint(&pt);
-                    pt.x = 6;  pt.y = 196;
-                    e2 = EvtEnqueuePenPoint(&pt);
-                    pt.x = -1; pt.y = -1;
-                    EvtEnqueuePenPoint(&pt);
-                    FtrSet(kSyCr, 243, ((UInt32)e1 << 16) | (UInt16)e2);
+                    GrfGetState(&caps, &num, &temp, &autoS);
+                    FtrSet(kSyCr, 244, 0x100UL | (temp != 0 ? 1 : 0));
+                    GrfSetState(caps, num, temp == 0);
                 }
                 return;
             }
@@ -176,6 +170,21 @@ void HgImGet(EventType *event, Int32 timeout)
                   * v50: 키 영역(y < 213)만 3. 아래 탭·상태 표시줄(키보드 띄우는 버튼 등)은 0 */
             FtrSet(kSyCr, kFtrPenCaps, event->screenY < kKeyAreaEnd ? 3 : 0);
         return;
+    }
+    if (event->eType == penUpEvent) {   /* v26 진단: 한/영 누름 때 바꾼 일시 쉬프트를 뗄 때 원래대로(어디서 떼든) */
+        UInt32 sv = 0, v = 0;
+
+        FtrGet(kSyCr, 244, &sv);
+        if (sv & 0x100) {
+            Boolean caps = false, num = false, autoS = false;
+            UInt16  temp = 0;
+
+            GrfGetState(&caps, &num, &temp, &autoS);
+            GrfSetState(caps, num, (sv & 1) != 0);
+            FtrSet(kSyCr, 244, 0);
+            FtrGet(kSyCr, 108, &v);
+            FtrSet(kSyCr, 243, v);   /* 뗄 때의 다른 창 글자 그리기 수(누를 때 #215와 비교) */
+        }
     }
     if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(event->screenX, event->screenY)) {
         event->eType = nilEvent;                 /* v25: 한/영 자리 누름은 Sony에 넘기지 않음 */
