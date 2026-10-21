@@ -42,6 +42,10 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v66: 런처 지우기 때 자동 끄기 — '-pdb' 알림이 MnHangul DB(크리에이터 MnHg: 앱, 24 글꼴)에 대해 오면 모두 끈다
+ *   (All OFF와 같은 순서, 전역 없는 Uninst* 함수). 하나라도 다른 패치가 위에 있거나 호출 조사(Count)가 켜져 있으면
+ *   아무것도 끄지 않는다(지우기는 거부됨, 반쯤 꺼진 상태를 만들지 않음). 결과 #164(1 끔, 2 위에 다른 패치, 3 Count 켜짐,
+ *   4 켜진 것 없음). 지우기 직전 'gbye' 알림 때 알림 등록 해제. 업데이트 설치(에뮬레이터)는 알림이 오지 않아 All OFF 그대로(v65 실측).
  * v65(진단): 지우기·HotSync 알림이 오는지 확인 — 그리기 패치를 켤 때 '-pdb'(sysNotifyDeleteProtectedEvent, 보호된 DB를
  *   지우기 직전)와 'hots'(sysNotifySyncStartEvent)를 받겠다고 등록하고 Patch OFF 때 해제. 받으면 횟수만 기록(#160 '-pdb' 수,
  *   #161 그 DB 크리에이터, #162 'hots' 수, #163 등록 결과). 끄는 동작은 없음. 진단 첫 화면 11줄에 표시(hi: len 줄 대신).
@@ -123,7 +127,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v65"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v66"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -302,7 +306,8 @@ static void NotifyReg(Boolean on)
     }
 }
 
-/* 알림을 받으면 횟수만 기록(전역 없음, 끄지 않음) */
+static void NotifyOff(void);
+/* 알림 처리(전역 없음): 횟수 기록, v66부터 우리 DB 지우기면 끄기 */
 static void NotifyLog(const SysNotifyParamType *np)
 {
     UInt32 v = 0;
@@ -312,8 +317,15 @@ static void NotifyLog(const SysNotifyParamType *np)
     if (np->notifyType == sysNotifyDeleteProtectedEvent) {
         FtrGet(kHgCreator, kFtrNtPdb, &v);
         FtrSet(kHgCreator, kFtrNtPdb, v + 1);
-        if (np->notifyDetailsP != NULL)
-            FtrSet(kHgCreator, kFtrNtPdbCr, ((const SysNotifyDBInfoType *)np->notifyDetailsP)->creator);
+        if (np->notifyDetailsP != NULL) {
+            UInt32 cr = ((const SysNotifyDBInfoType *)np->notifyDetailsP)->creator;
+
+            FtrSet(kHgCreator, kFtrNtPdbCr, cr);
+            if (cr == kHgCreator)   /* v66: 우리 DB(앱·24 글꼴)를 지우려 함 → 끄고 보호 해제 */
+                NotifyOff();
+        }
+    } else if (np->notifyType == 'gbye') {   /* v66: sysNotifyCleanupEvent, 앱이 지워지기 직전(앱에만 옴) → 등록 해제 */
+        NotifyReg(false);
     } else if (np->notifyType == sysNotifySyncStartEvent) {
         FtrGet(kHgCreator, kFtrNtHots, &v);
         FtrSet(kHgCreator, kFtrNtHots, v + 1);
@@ -486,16 +498,15 @@ static void IntlOn(void)
     StrCopy(gMsg, r == 0 ? "intl ON (6)" : r == 1 ? "intl already ON" : "intl resource missing");
 }
 
-static void IntlOff(void)
+/* v66: 끄기 본체(전역 없음, 지우기 알림에서도 부름). 결과: 0 끔, 0xFFFF 켜져 있지 않음, 그 밖 = 다른 것이 위에 있어 남긴 수 */
+static UInt16 UninstIntl(void)
 {
     UInt8  *code = (UInt8 *)GetF(kFtrIntlC);
     UInt16  i, kept = 0, card;
     LocalID id;
 
-    if (code == NULL) {
-        StrCopy(gMsg, "intl not ON");
-        return;
-    }
+    if (code == NULL)
+        return 0xFFFF;
     for (i = 0; i < kIntlN; i++) {
         UInt8 *entry = code + ((UInt32 *)code)[i];
 
@@ -504,17 +515,27 @@ static void IntlOff(void)
         else
             kept++;
     }
-    if (kept != 0) {
-        StrPrintF(gMsg, "intl: %u changed by other, kept", kept);
-        return;
-    }
+    if (kept != 0)
+        return kept;
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     MemHandleUnlock((MemHandle)GetF(kFtrIntlH));
     DmReleaseResource((MemHandle)GetF(kFtrIntlH));
     FtrSet(kHgCreator, kFtrIntlH, 0);
     FtrSet(kHgCreator, kFtrIntlC, 0);
-    StrCopy(gMsg, "intl OFF");
+    return 0;
+}
+
+static void IntlOff(void)
+{
+    UInt16 r = UninstIntl();
+
+    if (r == 0xFFFF)
+        StrCopy(gMsg, "intl not ON");
+    else if (r != 0)
+        StrPrintF(gMsg, "intl: %u changed by other, kept", r);
+    else
+        StrCopy(gMsg, "intl OFF");
 }
 
 /* 3b: 폭 함수 트랩 5개 교체 */
@@ -553,16 +574,15 @@ static void WidthOn(void)
     StrCopy(gMsg, r == 0 ? "width ON (5)" : r == 1 ? "width already ON" : "width resource missing");
 }
 
-static void WidthOff(void)
+/* v66: 끄기 본체(전역 없음). 결과는 UninstIntl과 같음 */
+static UInt16 UninstWidth(void)
 {
     UInt8  *code = (UInt8 *)GetF(kFtrWidthC);
     UInt16  i, kept = 0, card;
     LocalID id;
 
-    if (code == NULL) {
-        StrCopy(gMsg, "width not ON");
-        return;
-    }
+    if (code == NULL)
+        return 0xFFFF;
     for (i = 0; i < kWidthN; i++) {
         UInt8 *entry = code + ((UInt32 *)code)[i];
 
@@ -571,17 +591,27 @@ static void WidthOff(void)
         else
             kept++;
     }
-    if (kept != 0) {
-        StrPrintF(gMsg, "width: %u changed by other, kept", kept);
-        return;
-    }
+    if (kept != 0)
+        return kept;
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     MemHandleUnlock((MemHandle)GetF(kFtrWidthH));
     DmReleaseResource((MemHandle)GetF(kFtrWidthH));
     FtrSet(kHgCreator, kFtrWidthH, 0);
     FtrSet(kHgCreator, kFtrWidthC, 0);
-    StrCopy(gMsg, "width OFF");
+    return 0;
+}
+
+static void WidthOff(void)
+{
+    UInt16 r = UninstWidth();
+
+    if (r == 0xFFFF)
+        StrCopy(gMsg, "width not ON");
+    else if (r != 0)
+        StrPrintF(gMsg, "width: %u changed by other, kept", r);
+    else
+        StrCopy(gMsg, "width OFF");
 }
 
 /* v28: SysKeyboardDialog 진단 (호출만 기록하고 원래 함수로) */
@@ -640,16 +670,15 @@ static void KbdOn(void)
     StrCopy(gMsg, "hooks ON (log only)");
 }
 
-static void KbdOff(void)
+/* v66: 끄기 본체(전역 없음). 결과는 UninstIntl과 같음 */
+static UInt16 UninstKbd(void)
 {
     UInt8  *code = (UInt8 *)GetF(kFtrKbdC);
     UInt16  i, kept = 0, card;
     LocalID id;
 
-    if (code == NULL) {
-        StrCopy(gMsg, "kbd hook not ON");
-        return;
-    }
+    if (code == NULL)
+        return 0xFFFF;
     for (i = 0; i < kKbdN; i++) {
         UInt8 *entry = code + ((UInt32 *)code)[i];
 
@@ -658,10 +687,8 @@ static void KbdOff(void)
         else
             kept++;
     }
-    if (kept != 0) {
-        StrPrintF(gMsg, "kbd: %u changed by other, kept", kept);
-        return;
-    }
+    if (kept != 0)
+        return kept;
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     {
@@ -676,7 +703,19 @@ static void KbdOff(void)
     DmReleaseResource((MemHandle)GetF(kFtrKbdH));
     FtrSet(kHgCreator, kFtrKbdH, 0);
     FtrSet(kHgCreator, kFtrKbdC, 0);
-    StrCopy(gMsg, "kbd hook OFF");
+    return 0;
+}
+
+static void KbdOff(void)
+{
+    UInt16 r = UninstKbd();
+
+    if (r == 0xFFFF)
+        StrCopy(gMsg, "kbd hook not ON");
+    else if (r != 0)
+        StrPrintF(gMsg, "kbd: %u changed by other, kept", r);
+    else
+        StrCopy(gMsg, "kbd hook OFF");
 }
 
 static void ClearKbdDlg(void)
@@ -736,6 +775,53 @@ static UInt16 SelfOff(void)
 }
 
 #include "../common/mod_off.h"
+
+/* v66: 지우기 알림('-pdb')에서 모두 끄기(전역 없음). 먼저 모두 맨 위인지 확인하고, 하나라도 아니면 아무것도 끄지 않는다.
+ *   결과(#164): 1 끔, 2 위에 다른 패치(남김), 3 Count 켜짐(전역 표가 필요해 여기서 못 끔), 4 켜진 것 없음 */
+#define kFtrNtOff 164
+static UInt16 UninstPatch(UInt32 *origP, Boolean unreg);
+static UInt16 NotifyOffCheck(void)
+{
+    UInt8  *code;
+    UInt16  i;
+
+    if (GetF(kFtrCountC) != 0)
+        return 3;
+    if (ProtectCount() == 0)
+        return 4;
+    if (GetF(kFtrEntry) != 0 && (UInt32)SysGetTrapAddress(kTrapBlt) != GetF(kFtrEntry))
+        return 2;
+    if ((code = (UInt8 *)GetF(kFtrWidthC)) != NULL)
+        for (i = 0; i < kWidthN; i++)
+            if ((UInt8 *)SysGetTrapAddress(WidthTrap(i)) != code + ((UInt32 *)code)[i])
+                return 2;
+    if ((code = (UInt8 *)GetF(kFtrIntlC)) != NULL)
+        for (i = 0; i < kIntlN; i++)
+            if ((UInt8 *)IntlGetRoutineAddress(IntlSel(i)) != code + ((UInt32 *)code)[i])
+                return 2;
+    if ((code = (UInt8 *)GetF(kFtrKbdC)) != NULL)
+        for (i = 0; i < kKbdN; i++)
+            if ((UInt8 *)SysGetTrapAddress(KbdTrap(i)) != code + ((UInt32 *)code)[i])
+                return 2;
+    return 0;
+}
+
+static void NotifyOff(void)
+{
+    UInt16 r = NotifyOffCheck();
+    UInt32 orig;
+
+    if (r == 0) {   /* 모두 맨 위 확인됨 → All OFF와 같은 순서 */
+        UninstKbd();
+        UninstWidth();
+        UninstIntl();
+        UninstPatch(&orig, false);   /* 글꼴 잠금·24 글꼴 보호도 풂 */
+        r = 1;
+    }
+    if (r == 4 && GetF(kFtrNtOff) == 1)   /* 지우기 한 번에 알림이 2번 옴(v65 실측): 두 번째(이미 꺼짐)가 결과를 덮지 않게 */
+        return;
+    FtrSet(kHgCreator, kFtrNtOff, r);
+}
 
 /* v11 폭 진단 */
 static void DrawWidthPage(void)
@@ -858,25 +944,24 @@ static UInt32 InstallAll(void)
     return ((UInt32)p << 12) | ((UInt32)f << 8) | ((UInt32)it << 4) | wd;
 }
 
-static void PatchOff(void)
+/* v66: 끄기 본체(전역 없음). 결과: 0 끔(*origP = 원래 주소), 1 켜져 있지 않음, 2 다른 것이 위에 있어 남김.
+ *   unreg = 알림 등록 해제(지우기 알림 처리 중에는 false — 그 알림의 등록을 그 안에서 풀지 않고 'gbye' 때 푼다) */
+static UInt16 UninstPatch(UInt32 *origP, Boolean unreg)
 {
     UInt32    e = GetF(kFtrEntry), h = GetF(kFtrHandle);
     UInt32    orig;
     UInt16    card;
     LocalID   id;
 
-    if (e == 0) {
-        StrCopy(gMsg, "not ON");
-        return;
-    }
-    if ((UInt32)SysGetTrapAddress(kTrapBlt) != e) {
-        StrCopy(gMsg, "trap changed by other: kept");
-        return;
-    }
+    if (e == 0)
+        return 1;
+    if ((UInt32)SysGetTrapAddress(kTrapBlt) != e)
+        return 2;
     orig = *(const UInt32 *)(e - 4);
     SysSetTrapAddress(kTrapBlt, (void *)orig);
     UnlockGlyphs();
-    NotifyReg(false);   /* v65 진단: 보호를 풀기 전에 해제(옛 DB 주소로 알림이 가지 않게) */
+    if (unreg)
+        NotifyReg(false);   /* v65: 보호를 풀기 전에 해제(옛 DB 주소로 알림이 가지 않게) */
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     if (h != 0) {
@@ -885,7 +970,21 @@ static void PatchOff(void)
     }
     FtrSet(kHgCreator, kFtrEntry, 0);
     FtrSet(kHgCreator, kFtrHandle, 0);
-    StrPrintF(gMsg, "OFF orig=%lx", orig);
+    *origP = orig;
+    return 0;
+}
+
+static void PatchOff(void)
+{
+    UInt32 orig = 0;
+    UInt16 r = UninstPatch(&orig, true);
+
+    if (r == 1)
+        StrCopy(gMsg, "not ON");
+    else if (r == 2)
+        StrCopy(gMsg, "trap changed by other: kept");
+    else
+        StrPrintF(gMsg, "OFF orig=%lx", orig);
 }
 
 static void ModeText(Char *o, UInt32 m)
@@ -1438,9 +1537,11 @@ static void Draw(void)
             StrCopy(a, "-");
         if (rg == 0xFFFFFFFFUL)
             StrCopy(b, "-");
+        else if (rg == 0)
+            StrCopy(b, "ok");
         else
             StrPrintF(b, "%lx", rg);
-        StrPrintF(s, "ntf r%s  -pdb %lu %s  hots %lu", b, GetF(kFtrNtPdb), a, GetF(kFtrNtHots));
+        StrPrintF(s, "ntf %s -pdb %lu %s off%lu hots %lu", b, GetF(kFtrNtPdb), a, GetF(kFtrNtOff), GetF(kFtrNtHots));
     }
     Row(10, s);
     XY(a, GetF(12));
