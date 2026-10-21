@@ -7,6 +7,9 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v41: v40 실측 — 다시 그리기 정상(흰 글자), 그러나 shift 없이 쌍자음 자판, A에서 m 자리 ㅡ 남음.
+ *   그린 모양 기록(#289 자모·#290 쌍자음), Sony 그리기 뒤 최종 shift와 다른 키 바로잡기(#288 + EvtWakeup), 글자색 = 바탕이면 앞 키 색.
+ *   6줄: rd, fx = 바로잡은 횟수·키 수, o = 첫 키 뒤 영문 키 수(앞 그리기·지금), k.
  * v40: v39 실측 — 그래도 새 글자 안 보임. 1비트 그림 + 그리기 색 대신 8비트 그림(글자 점 = 색 번호, 나머지 투명, 한/A 표시와 같은 길).
  * v39: v38 실측 — 색은 맞으나(FFFFFF/222222) 새 글자 여전히 안 보임. 지우기·새 글자 그림 따로, 두 번에 나눠(바탕색 지우기 → 글자색 그리기).
  * v38: v37 실측 — 흰 글자 색이 번호 0C로 읽혀(16비트 화면) 새 글자가 안 보임 → 색은 RGB(HRWinGetPixelRGB·WinSetForeColorRGB). 6줄 f·b = RGB.
@@ -82,7 +85,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v40"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v41"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -669,7 +672,7 @@ static void DrawDebug(void)
 
         UInt32 q1 = GetF(248), q2 = GetF(249);
 
-        StrPrintF(s, "f%lx b%lx k%lx rd%lx", GetF(294), GetF(292), GetF(293), GetF(296));   /* v38: 글자색·바탕 RGB 먼저 */
+        StrPrintF(s, "rd%lx fx%lx o%lu,%lu k%lx", GetF(296), GetF(285), GetF(287), GetF(286), GetF(293));   /* v41 */
         (void)c;
         (void)q1;
         (void)q2;

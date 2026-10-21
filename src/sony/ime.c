@@ -124,13 +124,13 @@ static inline void RdWhy(UInt32 w)
 }
 /* 글자 하나를 1비트 그림 줄(32 × fh, 줄마다 2워드)에. han = 자모(SyJm, spatch.c PutJamo와 같은 자리), 아니면 Sony 글꼴 영문.
  *   돌려주는 값: 그림 왼쪽 x(키 글자 기록 x 기준), 못 만들면 -1 */
-static Int16 Glyph(UInt16 *bits, const Int16 *f, const UInt8 *p, UInt8 c, UInt8 cw, Boolean han, UInt16 fh)
+static Int16 Glyph(UInt16 *bits, const Int16 *f, const UInt8 *p, UInt8 c, UInt8 cw, UInt8 mode, UInt16 fh)
 {
     UInt16 row;
 
     MemSet(bits, fh * 4, 0);
-    if (han) {
-        UInt8        t = Dubeol(HanLabelKey(c));
+    if (mode != 0) {   /* v41: mode 0 = 영문, 1 = 기본 자모, 2 = 쌍자음 */
+        UInt8        t = IsLetter(c) ? Dubeol(mode == 2 ? (UInt8)(c & ~0x20) : (UInt8)(c | 0x20)) : 0;
         UInt16       H = p[3], w = p[2] >= 2 ? 4 : 2;
         Int16        top = f[9] - 15;
         const UInt8 *j;
@@ -224,9 +224,11 @@ static void Expand(UInt8 *px, const UInt16 *g, UInt16 fh, UInt8 idx, UInt8 t)
 /* v40: v39 실측 — 두 번에 나눠도 새 글자가 안 보임: 1비트 그림에 그리기 색을 입혀 칠하는 방식은 이 기기에서 두 번째 색이 안 먹음.
  *   → 색이 그림 안에 있는 8비트 그림(글자 점 = 색 번호, 나머지 투명)으로 그림 — 한/A 표시(SyIc 8비트 + 투명)와 같은 길.
  *   색 번호는 화면에서 읽은 RGB의 가장 가까운 번호(WinRGBToIndex). 1) 옛 글자 점을 바탕색으로 2) 새 글자 점을 글자색으로 */
-static void RedrawKeys(UInt16 hr, Boolean han)
+/* v41: 키마다 지금 그려진 모양(#289 비트 = 자모, #290 비트 = 쌍자음 — spatch.c가 그릴 때 기록, 우리가 그리면 고침)에서
+ *   새 모양(nm: 0 영문, 1 기본 자모, 2 쌍자음)으로. mask 안의 키 중 모양이 다른 키만. 돌려주는 값 = 그린 키 수 */
+static UInt16 RedrawKeys(UInt16 hr, UInt8 nm, UInt32 mask)
 {
-    UInt32        gen = 0, fp = 0, pk = 0, n = 0, done = 0;
+    UInt32        gen = 0, fp = 0, pk = 0, n = 0, done = 0, hm = 0, dm = 0;
     const Int16  *f;
     BitmapPtr     bmp;
     UInt8        *px = NULL, fi = 0, bi = 0, ti;
@@ -238,24 +240,26 @@ static void RedrawKeys(UInt16 hr, Boolean han)
     FtrGet(kSyCr, 299, &gen);
     FtrGet(kSyCr, 298, &fp);
     FtrGet(kSyCr, 3, &pk);
+    FtrGet(kSyCr, 289, &hm);
+    FtrGet(kSyCr, 290, &dm);
     f = (const Int16 *)fp;
     /* 글꼴 모양이 예상과 다르면 그리지 않음. v34: 그림 줄 폭 상한 1024(v33 실측: 16워드는 너무 작음) */
     if (f == NULL || pk == 0) {
         RdWhy(1);
-        return;
+        return 0;
     }
     if ((f[0] & 0x0200) != 0) {
         RdWhy(2);
-        return;
+        return 0;
     }
     if (f[7] <= 0 || f[7] > 32 || f[12] <= 0 || f[12] > 1024) {
         RdWhy(3);
-        return;
+        return 0;
     }
     fh = (UInt16)f[7];
     bmp = GlyphBmp(fh, &px);
     if (bmp == NULL)
-        return;
+        return 0;
     RdWhy(0);
     om = WinSetDrawMode(winPaint);
     /* 1) 옛 글자(반대 모드) 색 읽기 + 바탕색으로 지우기 */
@@ -267,7 +271,13 @@ static void RedrawKeys(UInt16 hr, Boolean han)
         UInt16           row, k;
         Boolean          gotF = false, gotB = false;
         RGBColorType     fg, bg;
+        UInt8            om8;
 
+        if ((mask & (1UL << i)) == 0)
+            continue;
+        om8 = (hm & (1UL << i)) ? ((dm & (1UL << i)) ? 2 : 1) : 0;   /* 지금 그려진 모양 */
+        if (om8 == nm)
+            continue;
         FtrGet(kSyCr, 300 + 2 * i, &xy);
         FtrGet(kSyCr, 301 + 2 * i, &inf);
         if (inf == 0 || (UInt8)(inf >> 24) != (UInt8)gen || (UInt8)inf != fh)
@@ -276,7 +286,7 @@ static void RedrawKeys(UInt16 hr, Boolean han)
         cw = (UInt8)(inf >> 8);
         x = (Coord)(xy >> 16);
         y = (Coord)xy;
-        ox = Glyph(g, f, (const UInt8 *)pk, c, cw, !han, fh);
+        ox = Glyph(g, f, (const UInt8 *)pk, c, cw, om8, fh);
         if (ox == -1)
             continue;
         for (row = 0; row < fh && !(gotF && gotB); row++) {
@@ -296,7 +306,10 @@ static void RedrawKeys(UInt16 hr, Boolean han)
                 if (!Bit(g, row, k))
                     gotB = HRWinGetPixelRGB(hr, x + ox + (Coord)k, y + (Coord)row, &bg) == errNone;
         }
-        /* 'ㅣ'·'l'처럼 한 줄 안에 빈 자리가 없는 글자는 앞 키에서 읽은 색(모든 키 같은 색, a부터 차례) */
+        /* 'ㅣ'·'l'처럼 한 줄 안에 빈 자리가 없는 글자는 앞 키에서 읽은 색(모든 키 같은 색, a부터 차례).
+         * v41: 글자색이 바탕색과 같게 읽히면(v40 실측 'm'의 'ㅡ' — 가는 가로선 한 줄 어긋남) 글자색도 앞 키 색 */
+        if (gotF && gotB && fg.r == bg.r && fg.g == bg.g && fg.b == bg.b)
+            gotF = false;
         if (gotF) {
             lastF = fg;
             haveF = true;
@@ -342,18 +355,47 @@ static void RedrawKeys(UInt16 hr, Boolean han)
                 continue;
             FtrGet(kSyCr, 300 + 2 * i, &xy);
             FtrGet(kSyCr, 301 + 2 * i, &inf);
-            nx = Glyph(g, f, (const UInt8 *)pk, (UInt8)(inf >> 16), (UInt8)(inf >> 8), han, fh);
-            if (nx == -1)
-                continue;
-            Expand(px, g, fh, fi, ti);
-            SetTransp(bmp, ti);
-            HRWinDrawBitmap(hr, bmp, (Coord)(xy >> 16) + nx, (Coord)xy);
+            nx = Glyph(g, f, (const UInt8 *)pk, (UInt8)(inf >> 16), (UInt8)(inf >> 8), nm, fh);
+            if (nx != -1) {
+                Expand(px, g, fh, fi, ti);
+                SetTransp(bmp, ti);
+                HRWinDrawBitmap(hr, bmp, (Coord)(xy >> 16) + nx, (Coord)xy);
+            }
+            if (nm != 0)   /* 그려진 모양 기록 고침 */
+                hm |= 1UL << i;
+            else
+                hm &= ~(1UL << i);
+            if (nm == 2)
+                dm |= 1UL << i;
+            else
+                dm &= ~(1UL << i);
         }
+        FtrSet(kSyCr, 289, hm);
+        FtrSet(kSyCr, 290, dm);
     }
     WinSetDrawMode(om);
     BmpDelete(bmp);
     FtrGet(kSyCr, 296, &n);
     FtrSet(kSyCr, 296, (((n >> 16) + 1) << 16) | drawn);
+    return drawn;
+}
+
+/* v41: 가상 실크 창(#251)에 HR로 다시 그리기 — 한/A 누를 때·Sony가 자판을 그린 뒤 shift가 다르게 그려진 키 바로잡기 */
+static UInt16 RedrawIn(UInt8 nm)
+{
+    WinHandle sw = (WinHandle)0;
+    UInt32    hr = 0;
+    UInt16    d = 0;
+
+    FtrGet(kSyCr, 251, (UInt32 *)&sw);
+    FtrGet(kSyCr, 254, &hr);
+    if (sw != NULL && hr != 0) {
+        WinHandle old = WinSetDrawWindow(sw);
+
+        d = RedrawKeys((UInt16)hr, nm, 0x03FFFFFFUL);
+        WinSetDrawWindow(old);
+    }
+    return d;
 }
 
 void HgImGet(EventType *event, Int32 timeout)
@@ -375,6 +417,22 @@ void HgImGet(EventType *event, Int32 timeout)
     st = St();
     if (st == NULL || event == NULL)
         return;
+    {   /* v41: Sony가 자판을 그린 뒤(#288, 키 글자 패치가 켜고 EvtWakeup) 쌍자음 여부가 최종 shift와 다르게 그려진 키 바로잡기
+         *   (v40 실측: shift 없는데 쌍자음 — Sony가 글자 줄을 첫 줄보다 먼저 그리면 옛 shift 값으로 그려짐) */
+        UInt32 dirty = 0;
+
+        FtrGet(kSyCr, 288, &dirty);
+        if (dirty != 0) {
+            FtrSet(kSyCr, 288, 0);
+            if (HanMode()) {
+                UInt16 d = RedrawIn(GetShift() ? 2 : 1);
+                UInt32 fx = 0;
+
+                FtrGet(kSyCr, 285, &fx);
+                FtrSet(kSyCr, 285, (d != 0 ? (((fx >> 16) + 1) << 16) : (fx & 0xFFFF0000UL)) | d);
+            }
+        }
+    }
     px = event->screenX;
     py = event->screenY;
     if (event->eType == penDownEvent || event->eType == penUpEvent || event->eType == penMoveEvent) {
@@ -460,7 +518,7 @@ void HgImGet(EventType *event, Int32 timeout)
                             WinSetBackColorRGB(&ob, NULL);
                         }
                         HRWinDrawBitmap((UInt16)hr, (BitmapPtr)a, kMarkX, kMarkY);
-                        RedrawKeys((UInt16)hr, h != 0);   /* v33: 자판 영문 글자 키도 바로 자모↔영문 */
+                        RedrawKeys((UInt16)hr, h ? (GetShift() ? 2 : 1) : 0, 0x03FFFFFFUL);   /* v33: 자판 영문 글자 키도 바로 자모↔영문 */
                         WinSetDrawWindow(old);
                         FtrSet(kSyCr, 243, ((UInt32)bg.r << 16) | ((UInt32)bg.g << 8) | bg.b);
                     }

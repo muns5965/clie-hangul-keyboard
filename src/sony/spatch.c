@@ -159,8 +159,11 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 Boolean caps = false, num = false, autoS = false;
                 UInt16  temp = 0;
 
-                if (c == '`' || c == '~')
+                if (c == '`' || c == '~') {
                     FtrSet(kSyCr, 299, GetF(299) + 1);
+                    FtrSet(kSyCr, 287, GetF(286));   /* v41 진단: 앞 첫 키 뒤에 그린 영문 키 수(첫 줄이 먼저면 26 가까이) */
+                    FtrSet(kSyCr, 286, 0);
+                }
                 GrfGetState(&caps, &num, &temp, &autoS);
                 FtrSet(kSyCr, kFtrShift, ((c == '~' || c == '!') && !autoS) ? 1 : 0);
             }
@@ -174,6 +177,25 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                                            ((UInt32)(FntCharWidth((Char)c) & 0xFF) << 8) | (UInt8)rc[3]);
                 FtrSet(kSyCr, 298, (UInt32)p6);
                 FtrSet(kSyCr, 297, t);
+                FtrSet(kSyCr, 286, GetF(286) + 1);
+                {   /* v41: 그린 모양 기록(#289 자모, #290 쌍자음) — 자모면 그린 뒤 ime가 최종 shift와 비교해 바로잡음(#288 + EvtWakeup) */
+                    UInt32 hm = GetF(289), dm = GetF(290), bit = 1UL << i;
+
+                    if (HanMode() && FntCharHeight() == 22) {
+                        hm |= bit;
+                        if (GetF(kFtrShift) != 0)
+                            dm |= bit;
+                        else
+                            dm &= ~bit;
+                        if (GetF(288) == 0) {
+                            FtrSet(kSyCr, 288, 1);
+                            EvtWakeup();
+                        }
+                    } else
+                        hm &= ~bit;
+                    FtrSet(kSyCr, 289, hm);
+                    FtrSet(kSyCr, 290, dm);
+                }
             }
         }
         if (c != 0 && p6 != NULL && Dubeol(c) != 0 && GetF(kFtrJamo) != 0) {
