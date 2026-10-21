@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v45(진단): 가끔 조합이 끊김(대한뵤ㅁ뷰) — 조합 중 조합 끝난 까닭 최근 3개(#279~#282, 진단 6줄 end).
  * v44: shift 없이 쌍자음의 진짜 원인 — Dubeol()은 대문자 = 기본 자모·소문자 = 쌍자음(옛 ⇪ 규칙)인데 v32부터 반대로 넘김 → 고침.
  * v43: v42 실측 — s0(shift 판단 정상), m 건너뜀 까닭 4(글자 모양 없음): m 폭 16 → 자모 x (16-18)/2 = -1이 실패 값(-1)과 같았음 → 실패 값 kNoGlyph.
  * v42: v41 실측 — shift 없이 쌍자음(바로잡기 0 → shift 판단값 자체가 1), A에서 m만 빠짐(25키). 첫 줄 글자 그리기 기록(3~6줄),
@@ -89,7 +90,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v44"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v45"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -656,7 +657,7 @@ static void DrawDebug(void)
     StrPrintF(s, "draw %lu ovl %lu heal %lx b%lx", GetF(108), GetF(127), GetF(kSyFtrHeal), GetF(kFtrBoot) >> 28);
     Row(1, s);
     /* v42 진단: 3~6줄 = 첫 줄 글자(`·~·1·!) 그리기 최근 8개(오래된 것부터 2개씩): 글자 길이 a자동대문자 s결과 @x,y */
-    for (m = 0; m < 4; m++) {
+    for (m = 1; m < 4; m++) {   /* v45: 최근 6개만(3~5줄), 6줄은 조합 끝 기록 */
         UInt16 j;
 
         s[0] = 0;
@@ -671,7 +672,23 @@ static void DrawDebug(void)
                           (UInt16)((e >> 18) & 1), (UInt16)(e & 0x7FF), (UInt16)((e >> 11) & 0x7F));
             StrCat(s, t);
         }
-        Row(2 + m, s);
+        Row(1 + m, s);
+    }
+    {   /* v45 진단: 조합 중 조합이 끝난 까닭 최근 3개(오래된 것부터): 까닭:키 초성·중성 */
+        UInt16 j;
+
+        StrCopy(s, "end");
+        for (j = 0; j < 3; j++) {
+            UInt32 e = GetF(280 + (UInt16)((GetF(279) + j) % 3));
+            Char   t[16], k = (Char)((e >> 16) & 0xFF);
+
+            if (e == 0)
+                StrCopy(t, " -");
+            else
+                StrPrintF(t, " %u:%c %x", (UInt16)(e >> 24), (k >= 0x20 && k < 0x7F) ? k : '.', (UInt16)e);
+            StrCat(s, t);
+        }
+        Row(5, s);
     }
     {   /* v24 진단: '`' '=' 키 글자 위치, 한/영 표시 위치(고해상도, 실크 화면 밖 창 기준) */
         UInt32 a = GetF(240), b = GetF(241), c = GetF(242);

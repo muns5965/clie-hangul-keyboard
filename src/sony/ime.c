@@ -421,6 +421,21 @@ static UInt16 RedrawIn(UInt8 nm)
     return d;
 }
 
+/* v45 진단: 조합 중에 조합이 끝난 까닭 최근 3개(#280~#282, #279 다음 칸) = 까닭<<24 | 키<<16 | 초성<<8 | 중성.
+ *   까닭 1 한/A 전환, 2 앱 화면 누름, 3 커서 이동 감지(CtCheck), 4 명령 키·영문 모드, 5 글자 아닌 키 */
+static void EndLog(UInt32 *st, UInt16 why, WChar ch)
+{
+    UInt32 k = 0;
+
+    if (st[0] == 0)
+        return;
+    FtrGet(kSyCr, 279, &k);
+    if (k > 2)   /* 나눗셈(라이브러리 함수) 안 씀 */
+        k = 0;
+    FtrSet(kSyCr, 280 + (UInt16)k, ((UInt32)why << 24) | ((UInt32)(ch & 0xFF) << 16) | ((st[0] >> 16) & 0xFFFF));
+    FtrSet(kSyCr, 279, k + 1);
+}
+
 void HgImGet(EventType *event, Int32 timeout)
 {
     UInt32 *st;
@@ -503,6 +518,7 @@ void HgImGet(EventType *event, Int32 timeout)
                     return;
                 }
                 FtrSet(kSyCr, 252, now);
+                EndLog(st, 1, 0);
                 st[0] = 0;                        /* v32: 전환하면 조합 끝 */
                 CtUnknown(kSyCr, kSyFtrFld);
                 v = 0;
@@ -550,6 +566,7 @@ void HgImGet(EventType *event, Int32 timeout)
             }
         }
         if (py < 160) {
+            EndLog(st, 2, 0);
             st[0] = 0;
             CtUnknown(kSyCr, kSyFtrFld);     /* v10: 앱 화면 누름은 커서를 옮길 수 있음(조합은 이미 끝) */
             FtrSet(kSyCr, kFtrPenCaps, 0);   /* v44: 앱 화면 누름도 '마지막 펜이 ⇪ 아님' */
@@ -607,9 +624,12 @@ void HgImGet(EventType *event, Int32 timeout)
         ch = HanInKey((UInt8)ch);
     FtrSet(kSyCr, kFtrShiftIn, 0);
     /* v10: 조합 중인데 커서가 옮겨졌거나 입력칸이 바뀌었으면(펜 없이 앱이 옮긴 경우 등) 조합 끝 */
-    if (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0))
+    if (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0)) {
+        EndLog(st, 3, ch);
         st[0] = 0;
+    }
     if ((event->data.keyDown.modifiers & commandKeyMask) != 0 || !HanMode()) {
+        EndLog(st, 4, ch);
         st[0] = 0;
         CtUnknown(kSyCr, kSyFtrFld);   /* 앱에 그대로 넘기는 키: 커서 변화 모름 */
         return;
@@ -623,6 +643,7 @@ void HgImGet(EventType *event, Int32 timeout)
     }
     j = (ch < 0x80) ? Dubeol((UInt8)ch) : 0;
     if (j == 0) {
+        EndLog(st, 5, ch);
         st[0] = 0;
         CtUnknown(kSyCr, kSyFtrFld);
         return;
