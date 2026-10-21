@@ -100,6 +100,19 @@ static inline void HcSend(UInt16 c)
  *   글자 칸을 키 바탕색으로 지우고, 1비트 그림(32 × 글꼴 높이)에 자모(SyJm, 임시 글꼴과 같은 자리) 또는 Sony 글꼴의 영문을 옮겨
  *   겹쳐 그리기(winOverlay)로 그린다. 기록 #296 = 다시 그린 횟수<<16 | 마지막에 그린 키 수 */
 #define kRdCell 18
+static inline UInt32 GetShift(void)
+{
+    UInt32 v = 0;
+
+    FtrGet(kSyCr, kFtrShift, &v);
+    return v;
+}
+
+/* v34: 건너뛴 까닭 #295(1 기록 없음, 2 글꼴 v2, 3 글꼴 크기, 4 그림 못 만듦, 5 그림 줄 폭) */
+static inline void RdWhy(UInt32 w)
+{
+    FtrSet(kSyCr, 295, w);
+}
 static void RedrawKeys(UInt16 hr, Boolean han)
 {
     UInt32        gen = 0, fp = 0, fg = 0, pk = 0, n = 0;
@@ -115,18 +128,34 @@ static void RedrawKeys(UInt16 hr, Boolean han)
     FtrGet(kSyCr, 297, &fg);
     FtrGet(kSyCr, 3, &pk);
     f = (const Int16 *)fp;
-    if (f == NULL || pk == 0 || (f[0] & 0x0200) != 0 || f[7] <= 0 || f[7] > 32 || f[12] <= 0 || f[12] > 16)
-        return;   /* 글꼴 모양이 예상과 다르면 그리지 않음 */
+    /* 글꼴 모양이 예상과 다르면 그리지 않음. v34: v33 실측 rd 0 — 그림 줄 폭(f[12])을 16워드 이하로 잡았는데
+     *   22점 글꼴은 글자 전부가 한 줄로 이어져 훨씬 넓음 → 상한 1024 */
+    if (f == NULL || pk == 0) {
+        RdWhy(1);
+        return;
+    }
+    if ((f[0] & 0x0200) != 0) {
+        RdWhy(2);
+        return;
+    }
+    if (f[7] <= 0 || f[7] > 32 || f[12] <= 0 || f[12] > 1024) {
+        RdWhy(3);
+        return;
+    }
     fh = (UInt16)f[7];
     bmp = BmpCreate(32, fh, 1, NULL, &e);
-    if (bmp == NULL)
+    if (bmp == NULL) {
+        RdWhy(4);
         return;
+    }
     BmpGetDimensions(bmp, NULL, NULL, &rb);
     bits = (UInt16 *)BmpGetBits(bmp);
     if (rb != 4 || bits == NULL) {
+        RdWhy(0x500 | rb);
         BmpDelete(bmp);
         return;
     }
+    RdWhy(0);
     of = WinSetForeColor((IndexedColorType)fg);
     ot = WinSetTextColor((IndexedColorType)fg);
     ob = WinSetBackColor(0);
@@ -250,6 +279,7 @@ void HgImGet(EventType *event, Int32 timeout)
         v = 0;
 
         if (py >= 160) {
+            FtrSet(kSyCr, kFtrShiftIn, GetShift());   /* v34: 누르는 순간(Sony 다시 그리기 전)의 shift = 이 키 입력의 쌍자음 여부 */
             SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
             {   /* v20 진단: 가상 실크 펜 누름 3개 */
                 UInt32 k = 0;
@@ -369,8 +399,9 @@ void HgImGet(EventType *event, Int32 timeout)
     if (event->eType != keyDownEvent || event->data.keyDown.keyCode == kImMark)
         return;
     ch = event->data.keyDown.chr;
-    if (ch < 0x80)   /* v33: PC 두벌식 — 대문자는 화면 자모 판단(#255)대로 쌍자음 또는 기본 자모 */
+    if (ch < 0x80)   /* v34: PC 두벌식 — 누를 때의 shift(#256)대로 쌍자음 또는 기본 자모, 쓰고 나면 0 */
         ch = HanInKey((UInt8)ch);
+    FtrSet(kSyCr, kFtrShiftIn, 0);
     /* v10: 조합 중인데 커서가 옮겨졌거나 입력칸이 바뀌었으면(펜 없이 앱이 옮긴 경우 등) 조합 끝 */
     if (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0))
         st[0] = 0;

@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v34: v33 실측 — ⇪가 켜진 채면 쌍자음·기본 자모가 거꾸로, 한/A 다시 그리기 rd 0(그림 줄 폭 상한 16워드가 너무 작음).
+ *   shift = 자판 첫 키가 '~'(자동 대문자 아님, #255), 입력은 누를 때 값(#256). 그림 줄 폭 상한 1024, 건너뛴 까닭 #295(6줄 w).
  * v33: v32 실측 — 키 위 자모가 한 박자 늦음(Graffiti 상태는 Sony가 다시 그린 뒤 바뀜), 한/A 눌러도 자판 그대로.
  *   쌍자음은 그리는 글자 대문자 + 자동 대문자 아님 + ⇪ 아님(#255에 적고 입력도 그대로). 한/A 누르면 영문 글자 키를 직접 다시 그림(ime.c RedrawKeys).
  * v32: 한/영을 ⇪에서 sym 오른쪽 단추(#214)로 옮김. PC 두벌식 규칙 — 소문자 = 기본 자모, 손으로 누른 shift(#255) = 쌍자음,
@@ -74,7 +76,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v33"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v34"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -661,7 +663,7 @@ static void DrawDebug(void)
 
         UInt32 q1 = GetF(248), q2 = GetF(249);
 
-        StrPrintF(s, "bg%lx dup %lu rd%lx g%lu mk %d,%d", GetF(243), GetF(253), GetF(296), GetF(299), (Int16)(c >> 16), (Int16)c);
+        StrPrintF(s, "dup %lu rd%lx w%lx g%lu s%lu mk %d,%d", GetF(253), GetF(296), GetF(295), GetF(299), GetF(255), (Int16)(c >> 16), (Int16)c);
         (void)q1;
         (void)q2;
         (void)a;

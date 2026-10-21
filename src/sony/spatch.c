@@ -152,8 +152,14 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
         if (c != 0 && p6 != NULL && SilkWin()) {   /* v33: 한/영 누를 때 다시 그리려고 영문 글자 키 글자·자리 기록 */
             const Int16 *rc = (const Int16 *)p2;
 
-            if (rc[0] < 20 && rc[1] < 10)   /* 자판 첫 키 = 자판 다시 그리기 시작(배치가 바뀌면 옛 기록 버림) */
+            if (rc[0] < 20 && rc[1] < 10) {   /* 자판 첫 키 = 자판 다시 그리기 시작(배치가 바뀌면 옛 기록 버림) */
+                Boolean caps = false, num = false, autoS = false;
+                UInt16  temp = 0;
+
                 FtrSet(kSyCr, 299, GetF(299) + 1);
+                GrfGetState(&caps, &num, &temp, &autoS);   /* v34: 첫 키 '~' = shift(⇪와 상관없음), 자동 대문자는 기본 자모 */
+                FtrSet(kSyCr, kFtrShift, (c == '~' && !autoS) ? 1 : 0);
+            }
             if (IsLetter(c)) {
                 UInt16           i = (UInt16)((c | 0x20) - 'a');
                 IndexedColorType t = WinSetTextColor(0);

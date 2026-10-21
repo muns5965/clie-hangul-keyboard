@@ -63,39 +63,28 @@ static inline Boolean HanMode(void)
     return v != 0;
 }
 
-/* v33: PC 두벌식 규칙 — 영문 글자 키를 기본 자모(소문자)·쌍자음(대문자) 중 어느 쪽으로 볼지.
- *   v32 실측: Graffiti ⇪·일시 쉬프트 상태로 판단하면 한 박자 늦음(Sony는 키 글자를 다시 그린 뒤 상태를 바꿈, v38 실측).
- *   → 키 글자를 그리는 순간에는 Sony가 그리는 글자의 대·소문자로: 대문자이고 자동 대문자가 아니고 ⇪(#143, ⇪ 누름으로 미리 앎)도
- *   아니면 쌍자음. 그 판단을 #255에 적어 두고, 입력(keyDown)은 대문자가 오면 #255대로 → 보이는 자모와 입력이 같다. */
+/* v34: PC 두벌식 규칙 — 쌍자음 = shift(자동 대문자 아님). ⇪는 보지 않는다.
+ *   v33 실측: 대문자 글자로 판단하면 ⇪가 켜진 채면 거꾸로(⇪ 켜짐 = shift 없이 대문자). 첫 줄(` 1 2 …)은 ⇪와 상관없이 shift만 따르므로
+ *   자판을 그릴 때 첫 키가 '~'이고 자동 대문자가 아니면 쌍자음 — #255(spatch.c). 영문 글자 키는 대·소문자와 상관없이 이 값대로.
+ *   입력은 펜 누를 때(Sony가 다시 그리기 전, v38 실측) #255를 #256에 옮겨 두고 그 값대로 → 보이는 자모와 입력이 같다. */
 #define kFtrShift    255
+#define kFtrShiftIn  256
 static inline Boolean IsLetter(UInt8 c)
 {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
-static inline UInt8 HanLabelKey(UInt8 c)
-{
-    Boolean caps = false, num = false, autoS = false;
-    UInt16  temp = 0;
-    UInt32  lock = 0, dbl;
-
-    if (!IsLetter(c) || c >= 'a')
-        return c;
-    GrfGetState(&caps, &num, &temp, &autoS);
-    FtrGet(kSyCr, kFtrHan, &lock);
-    dbl = (!autoS && lock == 0) ? 1 : 0;
-    FtrSet(kSyCr, kFtrShift, dbl);
-    return dbl ? c : (UInt8)(c | 0x20);
-}
-
-static inline UInt8 HanInKey(UInt8 c)
+static inline UInt8 ShiftCase(UInt8 c, UInt16 n)
 {
     UInt32 dbl = 0;
 
-    if (!IsLetter(c) || c >= 'a')
+    if (!IsLetter(c))
         return c;
-    FtrGet(kSyCr, kFtrShift, &dbl);
-    return dbl ? c : (UInt8)(c | 0x20);
+    FtrGet(kSyCr, n, &dbl);
+    return dbl ? (UInt8)(c & ~0x20) : (UInt8)(c | 0x20);
 }
+
+#define HanLabelKey(c) ShiftCase((c), kFtrShift)
+#define HanInKey(c)    ShiftCase((c), kFtrShiftIn)
 
 #endif
