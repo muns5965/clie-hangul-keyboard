@@ -7,6 +7,10 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v18: 런처 지우기 때 자동 끄기(MnHangul v66과 같은 방식) — 켤 때 '-pdb'(sysNotifyDeleteProtectedEvent) 등록,
+ *   크리에이터 MnSy DB를 지우려 하면 입력·키 글자 둘 다 맨 위(또는 이미 빠짐)인지 먼저 확인하고 둘 다 끈다. 하나라도 위에
+ *   다른 패치가 있으면 아무것도 끄지 않음(지우기 거부). 등록 해제는 OFF 때, 그리고 앱 지우기 직전 'gbye' 알림 때.
+ *   기록 #200 '-pdb' 수, #201 그 DB 크리에이터, #202 결과(1 끔, 2 위에 다른 패치, 4 켜진 것 없음), #203 등록 결과. 진단 화면 10줄.
  * v17: 켜기 전 기종 확인 — Sony SysInfo(FtrGet('SoNy', 1), Sony SDK SonySystemFtr.h)의 소프트웨어 실크 비트가 없으면
  *   켜지 않음('no Sony virtual silk', 결과 0xEE). ClieDiag v25 실측: NR70V extn 0x7F(실크 0x10 있음).
  * v16: 글꼴 높이도 FntCharHeight(v15 실측 일치). 예전 방식 비교 진단(v8 창·글꼴, SilkWareLib GetScrWindow)은 할 일을 마쳐 뺌 —
@@ -36,7 +40,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v17"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v18"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -141,6 +145,27 @@ static void Protect(Boolean on)
         DmDatabaseProtect(card, id, on);
 }
 
+/* v18: 지우기 알림('-pdb') 등록/해제. #203 = 등록 결과(0 정상), 해제 후 FFFFFFFF. 리셋 때 등록이 지워지므로 자동 시작에서도 등록 */
+#define kFtrNtPdb   200
+#define kFtrNtPdbCr 201
+#define kFtrNtOff   202
+#define kFtrNtReg   203
+static void NotifyReg(Boolean on)
+{
+    UInt16  card;
+    LocalID id;
+
+    if (!AppDB(&card, &id))
+        return;
+    if (on)
+        FtrSet(kSyCr, kFtrNtReg, (UInt32)SysNotifyRegister(card, id, sysNotifyDeleteProtectedEvent, NULL,
+                                                           sysNotifyNormalPriority, NULL));
+    else {
+        SysNotifyUnregister(card, id, sysNotifyDeleteProtectedEvent, sysNotifyNormalPriority);
+        FtrSet(kSyCr, kFtrNtReg, 0xFFFFFFFFUL);
+    }
+}
+
 /* 자모 그리기 함수: 아래 함수가 ROM 범위면 그것, 아니면 NR70V ROM 0x1008359A 시작 바이트가 맞을 때만(MnHangul v52) */
 static UInt32 RomBlt(UInt32 below)
 {
@@ -181,6 +206,7 @@ static UInt16 PatchOn(void)
     FtrSet(kSyCr, kFtrEntry, (UInt32)(p + 4));
     Protect(true);
     SysSetTrapAddress(kTrapBlt, p + 4);
+    NotifyReg(true);   /* v18 */
     return 0;
 }
 
@@ -282,8 +308,9 @@ static inline Boolean CjkFtr(void)
 
 /* ---------- 앱 화면에서만 부르는 함수 ---------- */
 
-/* 0 끔, 1 켜져 있지 않음, 2 다른 패치가 위에 있어 못 끔 */
-static UInt16 PatchOff(void)
+/* 0 끔, 1 켜져 있지 않음, 2 다른 패치가 위에 있어 못 끔. 전역 없음(v18: 지우기 알림에서도 부름).
+ *   unreg = 알림 등록 해제(지우기 알림 처리 중에는 false — 'gbye' 때 푼다) */
+static UInt16 PatchOff(Boolean unreg)
 {
     UInt32 e = GetF(kFtrEntry);
 
@@ -301,6 +328,8 @@ static UInt16 PatchOff(void)
     FtrSet(kSyCr, kFtrPatchH, 0);
     FtrSet(kSyCr, kFtrJamo, 0);
     FtrSet(kSyCr, kFtrJamoH, 0);
+    if (unreg)
+        NotifyReg(false);   /* v18: 보호를 풀기 전에 해제 */
     Protect(false);
     return 0;
 }
@@ -347,16 +376,71 @@ static UInt16 ImOff(void)
 /* v14: 설치 전 두 모듈 순서대로 끄기. 0 꺼짐, 2 위에 다른 패치. 전역 없음(다른 앱이 불러도 됨) */
 static UInt16 SelfOff(void)
 {
-    UInt16 i = ImOff(), p = PatchOff();
+    UInt16 i = ImOff(), p = PatchOff(true);
 
     return (i == 2 || p == 2) ? 2 : 0;
+}
+
+/* v18: 지우기 알림에서 끄기(전역 없음). 먼저 입력·키 글자 모두 풀 수 있는지(맨 위 또는 이미 빠짐) 확인하고, 하나라도
+ *   위에 다른 패치가 있으면 아무것도 끄지 않는다. 결과(#202): 1 끔, 2 위에 다른 패치(남김), 4 켜진 것 없음 */
+static UInt16 NotifyOffCheck(void)
+{
+    UInt8  *code = (UInt8 *)GetF(kFtrImC);
+    UInt32  e = GetF(kFtrEntry);
+    UInt16  k;
+
+    if (code == NULL && e == 0)
+        return 4;
+    if (e != 0 && (UInt32)SysGetTrapAddress(kTrapBlt) != e && SyBltLinked(e) != 0)
+        return 2;
+    if (code != NULL)
+        for (k = 0; k < 2; k++)
+            if (SyImLinked(k == 0 ? sysTrapEvtGetEvent : sysTrapWinDrawBitmap,
+                           (UInt32)(code + ((UInt32 *)code)[k])) == 2)
+                return 2;
+    return 0;
+}
+
+static void NotifyOff(void)
+{
+    UInt16 r = NotifyOffCheck();
+
+    if (r == 0) {
+        ImOff();
+        PatchOff(false);
+        r = 1;
+    }
+    if (r == 4 && GetF(kFtrNtOff) == 1)   /* 이미 끈 뒤의 알림이 결과를 덮지 않게 */
+        return;
+    FtrSet(kSyCr, kFtrNtOff, r);
+}
+
+/* 알림 처리(전역 없음) */
+static void NotifyLog(const SysNotifyParamType *np)
+{
+    UInt32 v = 0;
+
+    if (np == NULL)
+        return;
+    if (np->notifyType == sysNotifyDeleteProtectedEvent) {
+        FtrGet(kSyCr, kFtrNtPdb, &v);
+        FtrSet(kSyCr, kFtrNtPdb, v + 1);
+        if (np->notifyDetailsP != NULL) {
+            UInt32 cr = ((const SysNotifyDBInfoType *)np->notifyDetailsP)->creator;
+
+            FtrSet(kSyCr, kFtrNtPdbCr, cr);
+            if (cr == kSyCr)   /* 우리 앱을 지우려 함 → 끄고 보호 해제 */
+                NotifyOff();
+        }
+    } else if (np->notifyType == 'gbye')   /* sysNotifyCleanupEvent: 앱이 지워지기 직전(앱에만 옴) → 등록 해제 */
+        NotifyReg(false);
 }
 
 #include "../common/mod_off.h"
 
 static void SonyOff(void)
 {
-    UInt16 i = ImOff(), p = PatchOff();
+    UInt16 i = ImOff(), p = PatchOff(true);
 
     if (i == 2 || p == 2)
         StrCopy(gMsg, "kept: use Update, then install");
@@ -535,7 +619,22 @@ static void DrawDebug(void)
                       (fl & 1) ? " X" : "", (fl & 2) ? " C" : "");
             Row(9, s);
         }
-        Row(10, "-");
+        {   /* v18: 지우기 알림 — 등록(ok / - 해제 / 오류 코드), '-pdb' 수·마지막 DB, 자동 끄기 결과 */
+            UInt32 cr = GetF(kFtrNtPdbCr), rg = GetF(kFtrNtReg);
+            Char   a[8], b[12];
+
+            a[0] = (Char)(cr >> 24); a[1] = (Char)(cr >> 16); a[2] = (Char)(cr >> 8); a[3] = (Char)cr; a[4] = 0;
+            if (cr == 0)
+                StrCopy(a, "-");
+            if (rg == 0xFFFFFFFFUL)
+                StrCopy(b, "-");
+            else if (rg == 0)
+                StrCopy(b, "ok");
+            else
+                StrPrintF(b, "%lx", rg);
+            StrPrintF(s, "ntf %s -pdb %lu %s off%lu", b, GetF(kFtrNtPdb), a, GetF(kFtrNtOff));
+            Row(10, s);
+        }
     }
     StrPrintF(s, "why%u H%lu S%lx p%lu ic%lu@%lu", (UInt16)(w >> 24), GetF(143), GetF(150), GetF(144),
               GetF(147), GetF(146));
@@ -561,6 +660,10 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             FtrSet(kSyCr, kFtrBoot, 0x40000000UL);
         } else if (PrefGet(0, 1))
             FtrSet(kSyCr, kFtrBoot, 0x80000000UL | SonyOn());
+        return 0;
+    }
+    if (cmd == sysAppLaunchCmdNotify) {   /* v18: 지우기 알림 */
+        NotifyLog((const SysNotifyParamType *)cmdPBP);
         return 0;
     }
     if (cmd == kCmdModOff)   /* v14: MnHangul이 설치 전 끄기를 부탁 */
