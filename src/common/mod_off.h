@@ -45,7 +45,7 @@ static void ModOffMsg(Char *m, UInt16 r, Boolean cjkos)
 {
     UInt16 a = r & 0xF, b = r >> 4;
 
-    if (a != 2 && b != 2 && b != 3)
+    if (a == 0 && (b == 0 || b == 1))   /* 성공을 명시적으로: 자기 꺼짐 + 다른 모듈 꺼짐 또는 없음 */
         StrCopy(m, "all off: ready to install");
     else if (b == 3)
         StrCopy(m, "other app: launch failed");

@@ -96,7 +96,7 @@ ClieDiag의 디버그 페이지에서 볼 수 있다.
 | `EvtEnqueueKey` | 키 입력 이벤트를 이벤트 큐에 추가 | 글자·BS를 현재 앱으로 보냄 |
 | `SysLibFind` | 이름으로 이미 열린 시스템 라이브러리 찾기 | `Sony HR Library` 참조 번호 |
 | `HRWinDrawLine` 등 HR 함수 | Sony 고해상도 라이브러리로 선·글자·사각형 그리기 | 고해상도 자판, 자모 선 글꼴 |
-| `DmDatabaseProtect` | **DB 삭제 보호** 켜기/끄기(보호 상태는 리셋 때 사라짐) | SilkExtn이 켬, 로더가 자기 DB에서 끔 |
+| `DmDatabaseProtect` | **DB 삭제 보호** 횟수 +1(`true`)/−1(`false`). 0이 되어야 지우거나 덮어쓸 수 있다(보호는 리셋 때 사라짐) | SilkExtn이 켬, 로더가 자기 DB에서 끔. MnHangul·MnSonyKbd는 연결마다 +1(켜기)·−1(끄기)이라 일부만 풀리면 보호가 남는다 |
 | `DmGetNextDatabaseByTypeCreator` | 타입·크리에이터로 DB 찾기 | 로더가 자기 DB 찾기 |
 | `DmOpenDatabaseByTypeCreator` | 타입·크리에이터로 DB 열기 | 본체 DB 열기 |
 | `DmOpenDatabaseInfo` / `DmDatabaseInfo` | 열린 DB의 ID / DB 정보(버전 등) 읽기 | 본체 버전(ABI) 확인 |

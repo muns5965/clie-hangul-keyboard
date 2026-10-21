@@ -104,6 +104,8 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 
 ## 현재 상태
 
+현재 판 번호는 각 앱 화면 제목과 [KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md)에서 확인한다. 아래 표의 판 번호는 그 기능이 들어온 판이다.
+
 | 기능 | 상태 |
 | --- | --- |
 | Mn 가상 키보드: 가상 실크스크린 자리에 자판 표시(고해상도 320×130) | 구현 완료 (런처·메모장·ClieDiag에서 실측) |
@@ -112,9 +114,11 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | 한글 조합: 초성·중성·종성, 복합모음, 겹받침, 받침 넘김, 조합 중 자모 단위 BS | 구현 완료 (메모장 실측, PC 조합 시험 41개 통과) |
 | Mn 가상 키보드: 리셋 없는 본체(`MnSkCore`) 업데이트 / 리셋 1번 로더(`MnSkPlugin`) 업데이트 | 구현 완료 (CloudpilotEmu 실측) |
 | Mn 가상 키보드: 나랏글 / 키 반복 | 개발 보류 / 미구현 |
-| Sony 가상 키보드 한글(MnSonyKbd v13): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
-| MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. v7에서 CJKOS 끈 뒤 ⇪ 켬·끔·켬 정상 (CloudpilotEmu 실측) |
-| 한글 표시(MnHangul v63): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `Hangul ON`, 리셋 뒤 자동 시작 |
+| Sony 가상 키보드 한글(MnSonyKbd, MnHangul v35에서 시작해 v54에 분리): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
+| MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. 키 글자 v3~, 입력 v9~ (CloudpilotEmu 실측) |
+| 조합 중 커서 이동 감지 | Mn 가상 키보드 build 17~, MnSonyKbd v10~ (메모장 실측) |
+| 리셋 없는 업데이트 `All OFF`(두 모듈 순서대로 끄기) | MnHangul v64~·MnSonyKbd v14~ (CloudpilotEmu 실측) |
+| 한글 표시(MnHangul): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `Hangul ON`, 리셋 뒤 자동 시작 |
 | MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정, v62에서 예전 방식 뺌) |
 
 ## 설치·업데이트
