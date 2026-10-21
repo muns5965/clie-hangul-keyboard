@@ -1,6 +1,7 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v8: 키 글자 표를 키 단위로(같은 줄 x 4 이내 덮어씀). v7 실측: 전환 때 쌍자음이 보였다가 기본 자모로 바뀜.
  * v7: 키 글자만 바꿈(키보드 화면 창 + 키 세 줄 y 60~100). v6 실측: 메뉴 명령 글자도 자모로 그려짐.
  * v6: 한/영 표시 자리 지우기가 space 키 아래 테두리를 끊던 것 수정.
  * v5: 한/영 표시('한'/'A')를 키 글자가 그려진 뒤에 그림(v4 실측: 표시가 덮여 안 보임).
@@ -19,7 +20,7 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v7"
+#define kVer      "v8"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     96

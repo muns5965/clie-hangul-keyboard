@@ -8,6 +8,9 @@
  *   v3 실측(T600C): Palm 키보드는 cap이 켜진 채 shift를 누르면 cap이 꺼져 "cap+shift = 쌍자음"(MnSonyKbd 규칙)을 쓸 수 없음.
  *   전환 직후 키보드가 키 글자를 다시 그리게 할 공개 방법이 없어, 이번 화면에서 그린 키 글자 위치(표 [16]~)를 기억해 두었다가
  *   그 자리를 지우고 우리가 다시 그린다. 빈칸 누름은 nilEvent로 바꿔 키보드에 넘기지 않는다.
+ * v8: 키 글자 표는 같은 줄(y 같음)에서 x가 4 이내면 같은 키로 보고 덮어씀 — 키보드는 글자를 가운데 맞춤해 q와 Q의 x가 1~2 다르다.
+ *   v7 실측: shift 뒤 한/영 전환 때 한 키 자리에 대·소문자 두 글자를 차례로 다시 그려 쌍자음 → 기본 자모로 바뀌어 보임.
+ *   다시 그릴 때 지우는 폭은 그 키의 대·소문자 영문·자모 중 가장 넓은 것(키 가운데 기준).
  * v7: 키 글자만 바꾼다 — 그리는 창이 키보드 화면(지금 폼) 창이고 y가 키 세 줄(60~100) 안일 때만.
  *   v6 실측: 키보드 화면이 열린 동안 메뉴의 명령 글자(/U /X …)와 입력칸의 한 글자 줄까지 자모로 그려짐.
  * v6: 한/영 표시 자리 지우기를 y 123부터(v5 실측: y 121부터 지워 space 키 아래 테두리가 끊김).
@@ -117,11 +120,15 @@ static void Remember(UInt32 *b, UInt8 c, Coord x, Coord y)
     UInt32 xy = ((UInt32)(UInt16)x << 16) | (UInt16)y, v = ((UInt32)c << 24) | (UInt8)FntGetFont();
     UInt16 k, n = (UInt16)b[14];
 
-    for (k = 0; k < n; k++)
-        if (b[16 + 2 * k] == xy) {
+    for (k = 0; k < n; k++) {   /* v8: 같은 줄, x 4 이내 = 같은 키 */
+        Int16 dx = (Int16)(b[16 + 2 * k] >> 16) - x;
+
+        if ((Int16)b[16 + 2 * k] == y && dx >= -4 && dx <= 4) {
+            b[16 + 2 * k] = xy;
             b[17 + 2 * k] = v;
             return;
         }
+    }
     if (n < kTabN) {
         b[16 + 2 * n] = xy;
         b[17 + 2 * n] = v;
@@ -208,15 +215,26 @@ static void Redraw(UInt32 *b)
         UInt8         c = (UInt8)(v >> 24);
         RectangleType r;
         Char          jm[2];
-        Int16         w1, w2, l;
+        UInt8         lo = (UInt8)(c >= 'A' && c <= 'Z' ? c - 'A' + 'a' : c), up = (UInt8)(lo - 'a' + 'A');
+        Int16         w, m = 0, cx;
+        UInt16        t;
 
         FntSetFont((FontID)(v & 0xFF));
-        w1 = FntCharWidth((Char)c);
-        jm[0] = (Char)0xA4;
-        jm[1] = (Char)(Jamo(c) ? Jamo(c) : 0xA1);
-        w2 = FntCharsWidth(jm, 2);
-        l = (w1 - w2) / 2 < 0 ? (w1 - w2) / 2 : 0;
-        RctSetRectangle(&r, x + l, y, (w1 > w2 ? w1 : w2), FntLineHeight());
+        for (t = 0; t < 4; t++) {   /* v8: 대·소문자 영문·자모 중 가장 넓은 폭 */
+            UInt8 ch = (t & 1) ? up : lo;
+
+            if (t < 2)
+                w = FntCharWidth((Char)ch);
+            else {
+                jm[0] = (Char)0xA4;
+                jm[1] = (Char)(Jamo(ch) ? Jamo(ch) : 0xA1);
+                w = FntCharsWidth(jm, 2);
+            }
+            if (w > m)
+                m = w;
+        }
+        cx = x + FntCharWidth((Char)c) / 2;   /* 키 가운데 */
+        RctSetRectangle(&r, cx - m / 2, y, m, FntLineHeight());
         WinEraseRectangle(&r, 0);
         DrawKey(b, c, x, y);
     }
