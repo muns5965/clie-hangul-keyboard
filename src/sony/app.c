@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v24(진단): v23 실측 — 가상 실크에 글자로 그리는 것은 키 글자와 시계('10:2')뿐(space·탭 글자는 그림 안). 그래서 키 글자 '='(아래 줄 끝)를
+ *   그린 직후, 그 아래 탭 줄('='에서 한 줄 아래, 고해상도 x -160)에 한/영 표시를 글자로 그린다. 진단 6줄 = '`'·'='·표시 위치.
  * v23(진단): v22 실측 — 320×130 그림은 자판이 아니라 Graffiti 판(표시가 Graffiti 영역에 나옴) → 그 표시는 끔.
  *   자판은 그림 기록에 없음. 가상 실크에 그리는 여러 글자 문자열(space 등)을 기록해 탭 줄 위치를 잡을 기준으로 삼는다(진단 3~6줄).
  * v22(진단): v21 실측 — 가상 실크 그림은 자판 전체 320×130(@0,0, 탭 줄 포함 한 장)과 상태 표시줄 아이콘뿐, 키 글자만 글자로 그림.
@@ -53,7 +55,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v23"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v24"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -631,8 +633,13 @@ static void DrawDebug(void)
         StrPrintF(s, "str '%s' @%d,%d %ux%u", c4, (Int16)(xy >> 16), (Int16)xy, (UInt16)(wh >> 16), (UInt16)wh);
         Row(2 + m, s);
     }
-    StrPrintF(s, "silk bmps %lu", GetF(233));
-    Row(6, s);
+    {   /* v24 진단: '`' '=' 키 글자 위치, 한/영 표시 위치(고해상도, 실크 화면 밖 창 기준) */
+        UInt32 a = GetF(240), b = GetF(241), c = GetF(242);
+
+        StrPrintF(s, "` %d,%d = %d,%d mk %d,%d", (Int16)(a >> 16), (Int16)a, (Int16)(b >> 16), (Int16)b,
+                  (Int16)(c >> 16), (Int16)c);
+        Row(6, s);
+    }
     {   /* v16: 8·10줄의 v8 비교 진단은 뺌(창·글꼴은 공개 함수로 바꿈, KOREAN_SUPPORT v8·v15 실측) */
         {   /* v20 진단: sym 탭·한/영 빈칸 */
             UInt32 xy = GetF(217), wh = GetF(218);

@@ -224,5 +224,36 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
             }
         }
     }
-    return ((BltFn)orig)(p1, p2, p3, chars, len, p6, p7);
+    {   /* v24: 키 글자 '`'(첫 줄 첫 키)·'='(아래 줄 끝 키) 위치 기록, '=' 다음에 탭 줄 sym 오른쪽에 한/영 표시.
+         *   v23 실측: 가상 실크에 글자로 그리는 것은 키 글자(한 글자)와 시계뿐 — space·탭 글자는 자판 그림 안. */
+        UInt32 res = ((BltFn)orig)(p1, p2, p3, chars, len, p6, p7);
+
+        if (p2 != NULL && len == 1 && chars != NULL && (chars[0] == '`' || chars[0] == '=') && GetF(106) == 0 &&
+            SilkWin()) {
+            const Int16 *rc = (const Int16 *)p2;
+
+            FtrSet(kSyCr, chars[0] == '`' ? 240 : 241, ((UInt32)(UInt16)rc[0] << 16) | (UInt16)rc[1]);
+            if (chars[0] == '=' && GetF(240) != 0) {
+                RectangleType r = *(const RectangleType *)p2;
+                Int16         pitch = (rc[1] - (Int16)GetF(240)) / 4;   /* 키 줄 간격 = ('=' y - '`' y) / 4 */
+                UInt8         m[2];
+
+                if (pitch <= 0)
+                    pitch = rc[3];
+                r.topLeft.y += pitch;
+                r.topLeft.x -= 160;   /* '=' 글자(고해상도 약 x 300) → sym 오른쪽 빈칸(약 x 140) */
+                r.extent.x = 30;
+                FtrSet(kSyCr, 242, ((UInt32)(UInt16)r.topLeft.x << 16) | (UInt16)r.topLeft.y);
+                if (GetF(kFtrHanTab) != 0) {
+                    m[0] = 0xC7;
+                    m[1] = 0xD1;
+                    ((BltFn)orig)(p1, &r, p3, m, 2, p6, p7);
+                } else {
+                    m[0] = 'A';
+                    ((BltFn)orig)(p1, &r, p3, m, 1, p6, p7);
+                }
+            }
+        }
+        return res;
+    }
 }
