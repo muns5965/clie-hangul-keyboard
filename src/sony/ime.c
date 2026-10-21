@@ -113,23 +113,82 @@ static inline void RdWhy(UInt32 w)
 {
     FtrSet(kSyCr, 295, w);
 }
+/* 글자 하나를 1비트 그림 줄(32 × fh, 줄마다 2워드)에. han = 자모(SyJm, spatch.c PutJamo와 같은 자리), 아니면 Sony 글꼴 영문.
+ *   돌려주는 값: 그림 왼쪽 x(키 글자 기록 x 기준), 못 만들면 -1 */
+static Int16 Glyph(UInt16 *bits, const Int16 *f, const UInt8 *p, UInt8 c, UInt8 cw, Boolean han, UInt16 fh)
+{
+    UInt16 row;
+
+    MemSet(bits, fh * 4, 0);
+    if (han) {
+        UInt8        t = Dubeol(HanLabelKey(c));
+        UInt16       H = p[3], w = p[2] >= 2 ? 4 : 2;
+        Int16        top = f[9] - 15;
+        const UInt8 *j;
+
+        if (t == 0)
+            return -1;
+        j = p + (((UInt16)p[124] << 8) | p[125]) + (UInt16)(t - 0xA1) * H * w;
+        if (top > (Int16)fh - (Int16)H)
+            top = (Int16)fh - (Int16)H;
+        if (top < 0)
+            top = 0;
+        for (row = 0; row < H && row + top < fh; row++) {
+            UInt32 v = (((UInt32)j[row * w] << 8) | j[row * w + 1]) << 16;
+
+            if (w == 4)
+                v |= ((UInt32)j[row * w + 2] << 8) | j[row * w + 3];
+            v >>= 1;
+            bits[(row + top) * 2] = (UInt16)(v >> 16);
+            bits[(row + top) * 2 + 1] = (UInt16)v;
+        }
+        return ((Int16)cw - kRdCell) / 2;
+    } else {
+        UInt16        rw = (UInt16)f[12], x0, x1, k;
+        const UInt16 *img = (const UInt16 *)(f + 13), *loc = img + rw * fh;
+
+        if (c < (UInt16)f[1] || c > (UInt16)f[2])
+            return -1;
+        x0 = loc[c - f[1]];
+        x1 = loc[c - f[1] + 1];
+        if (x1 <= x0 || x1 - x0 > 32)
+            return -1;
+        for (row = 0; row < fh; row++)
+            for (k = 0; k < x1 - x0; k++) {
+                UInt16 b = x0 + k;
+
+                if (img[row * rw + (b >> 4)] & (0x8000 >> (b & 15)))
+                    bits[row * 2 + (k >> 4)] |= 0x8000 >> (k & 15);
+            }
+        return 0;
+    }
+}
+
+static inline Boolean Bit(const UInt16 *bits, UInt16 row, UInt16 k)
+{
+    return (bits[row * 2 + (k >> 4)] & (0x8000 >> (k & 15))) != 0;
+}
+
+/* v36: v35 실측 — 사각형으로 지우면 키 테두리·옆 키 글자까지 지워지고, 바탕색을 글자 왼쪽 위 한 점에서 읽어 테두리(검정)가 되기도 하며,
+ *   글자 색(#297, WinSetTextColor)은 회색으로 나옴.
+ *   → 지금 화면의 옛 글자(반대 모드)를 바탕색으로 덧그려 지운다(글자 점만). 색은 화면에서 읽는다:
+ *   글자 색 = 옛 글자 점 자리, 바탕색 = 옛 글자 범위 안 빈 자리(키 안쪽). 그다음 새 글자를 글자 색으로. */
 static void RedrawKeys(UInt16 hr, Boolean han)
 {
-    UInt32        gen = 0, fp = 0, fg = 0, pk = 0, n = 0;
+    UInt32        gen = 0, fp = 0, pk = 0, n = 0;
     const Int16  *f;
     BitmapPtr     bmp;
     UInt16       *bits, fh, rb = 0, i, drawn = 0;
     Err           e = 0;
-    IndexedColorType of, ot, ob;
+    IndexedColorType of, ob, lastF = 0, lastB = 0;
+    Boolean       haveF = false, haveB = false;
     WinDrawOperation om;
 
     FtrGet(kSyCr, 299, &gen);
     FtrGet(kSyCr, 298, &fp);
-    FtrGet(kSyCr, 297, &fg);
     FtrGet(kSyCr, 3, &pk);
     f = (const Int16 *)fp;
-    /* 글꼴 모양이 예상과 다르면 그리지 않음. v34: v33 실측 rd 0 — 그림 줄 폭(f[12])을 16워드 이하로 잡았는데
-     *   22점 글꼴은 글자 전부가 한 줄로 이어져 훨씬 넓음 → 상한 1024 */
+    /* 글꼴 모양이 예상과 다르면 그리지 않음. v34: 그림 줄 폭 상한 1024(v33 실측: 16워드는 너무 작음) */
     if (f == NULL || pk == 0) {
         RdWhy(1);
         return;
@@ -156,16 +215,17 @@ static void RedrawKeys(UInt16 hr, Boolean han)
         return;
     }
     RdWhy(0);
-    of = WinSetForeColor((IndexedColorType)fg);
-    ot = WinSetTextColor((IndexedColorType)fg);
+    of = WinSetForeColor(0);
     ob = WinSetBackColor(0);
     om = WinSetDrawMode(winOverlay);
     for (i = 0; i < 26; i++) {
-        UInt32 xy = 0, inf = 0;
-        Coord  x, y, jx, l, r;
-        UInt8  c, cw;
-        RectangleType rr;
-        UInt16 row;
+        UInt32           xy = 0, inf = 0;
+        Coord            x, y;
+        Int16            ox, nx;
+        UInt8            c, cw;
+        UInt16           row, k;
+        Boolean          gotF = false, gotB = false;
+        IndexedColorType fg = 0, bg = 0;
 
         FtrGet(kSyCr, 300 + 2 * i, &xy);
         FtrGet(kSyCr, 301 + 2 * i, &inf);
@@ -175,61 +235,59 @@ static void RedrawKeys(UInt16 hr, Boolean han)
         cw = (UInt8)(inf >> 8);
         x = (Coord)(xy >> 16);
         y = (Coord)xy;
-        jx = x + ((Int16)cw - kRdCell) / 2;
-        l = jx < x ? jx : x;
-        r = (jx + kRdCell > x + cw) ? jx + kRdCell : x + cw;
-        WinSetBackColor(HRWinGetPixel(hr, x, y));
-        RctSetRectangle(&rr, l, y, r - l, fh);
-        HRWinEraseRectangle(hr, &rr, 0);
-        MemSet(bits, fh * 4, 0);
-        if (han) {   /* 자모: spatch.c PutJamo와 같은 자리(세로 = 글꼴 ascent - 15, 칸 안 왼쪽 1칸 띄움) */
-            const UInt8 *p = (const UInt8 *)pk;
-            UInt8        t = Dubeol(HanLabelKey(c));
-            UInt16       H = p[3], w = p[2] >= 2 ? 4 : 2;
-            Int16        top = f[9] - 15;
-            const UInt8 *j;
+        /* 옛 글자(반대 모드) → 색 읽기 */
+        ox = Glyph(bits, f, (const UInt8 *)pk, c, cw, !han, fh);
+        if (ox == -1)
+            continue;
+        for (row = 0; row < fh && !(gotF && gotB); row++) {
+            Int16 lo = -1, hi = -1;
 
-            if (t == 0)
-                continue;
-            j = p + (((UInt16)p[124] << 8) | p[125]) + (UInt16)(t - 0xA1) * H * w;
-            if (top > (Int16)fh - (Int16)H)
-                top = (Int16)fh - (Int16)H;
-            if (top < 0)
-                top = 0;
-            for (row = 0; row < H && row + top < fh; row++) {
-                UInt32 v = (((UInt32)j[row * w] << 8) | j[row * w + 1]) << 16;
-
-                if (w == 4)
-                    v |= ((UInt32)j[row * w + 2] << 8) | j[row * w + 3];
-                v >>= 1;
-                bits[(row + top) * 2] = (UInt16)(v >> 16);
-                bits[(row + top) * 2 + 1] = (UInt16)v;
-            }
-            HRWinPaintBitmap(hr, bmp, jx, y);
-        } else {     /* 영문: Sony 글꼴 그림 줄에서 글자 열을 옮김 */
-            UInt16        rw = (UInt16)f[12], x0, x1, k;
-            const UInt16 *img = (const UInt16 *)(f + 13), *loc = img + rw * fh;
-
-            if (c < (UInt16)f[1] || c > (UInt16)f[2])
-                continue;
-            x0 = loc[c - f[1]];
-            x1 = loc[c - f[1] + 1];
-            if (x1 <= x0 || x1 - x0 > 32)
-                continue;
-            for (row = 0; row < fh; row++)
-                for (k = 0; k < x1 - x0; k++) {
-                    UInt16 b = x0 + k;
-
-                    if (img[row * rw + (b >> 4)] & (0x8000 >> (b & 15)))
-                        bits[row * 2 + (k >> 4)] |= 0x8000 >> (k & 15);
+            for (k = 0; k < 32; k++)
+                if (Bit(bits, row, k)) {
+                    if (lo < 0)
+                        lo = (Int16)k;
+                    hi = (Int16)k;
                 }
-            HRWinPaintBitmap(hr, bmp, x, y);
+            if (lo < 0)
+                continue;
+            if (!gotF) {
+                fg = HRWinGetPixel(hr, x + ox + lo, y + (Coord)row);
+                gotF = true;
+            }
+            for (k = (UInt16)lo + 1; k < (UInt16)hi && !gotB; k++)   /* 같은 줄 글자 점 사이 빈 자리 = 키 안쪽 */
+                if (!Bit(bits, row, k)) {
+                    bg = HRWinGetPixel(hr, x + ox + (Coord)k, y + (Coord)row);
+                    gotB = true;
+                }
+        }
+        /* 'ㅣ'·'l'처럼 한 줄 안에 빈 자리가 없는 글자는 앞 키에서 읽은 색(모든 키 같은 색, a부터 차례) */
+        if (gotF) {
+            lastF = fg;
+            haveF = true;
+        } else if (haveF)
+            fg = lastF;
+        else
+            continue;
+        if (gotB) {
+            lastB = bg;
+            haveB = true;
+        } else if (haveB)
+            bg = lastB;
+        else
+            continue;
+        if (fg == bg)
+            continue;
+        WinSetForeColor(bg);   /* 옛 글자 점만 바탕색으로 */
+        HRWinPaintBitmap(hr, bmp, x + ox, y);
+        nx = Glyph(bits, f, (const UInt8 *)pk, c, cw, han, fh);
+        if (nx != -1) {
+            WinSetForeColor(fg);
+            HRWinPaintBitmap(hr, bmp, x + nx, y);
         }
         drawn++;
     }
     WinSetDrawMode(om);
     WinSetBackColor(ob);
-    WinSetTextColor(ot);
     WinSetForeColor(of);
     BmpDelete(bmp);
     FtrGet(kSyCr, 296, &n);
