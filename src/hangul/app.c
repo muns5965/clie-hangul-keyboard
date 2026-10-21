@@ -1,5 +1,5 @@
 /*
- * MnHangul v60 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
+ * MnHangul v61 — CJKOS 대체 한글 모듈 시험 앱 (2a~2c 그리기, 글꼴 덤프·크기 조사, 3단계 호출 조사, 3a 글자 경계, 3b 폭)
  *
  * 같은 PRC 안의 패치 코드 리소스(HgPt 0, src/hangul/patch.c)를 시스템 트랩 BltDrawChars(0xA378)에 끼운다.
  *   켜기: 리소스 잠금 → 원래 함수 주소를 리소스 오프셋 0에 기록(DmWrite) → DB 삭제 보호
@@ -42,6 +42,7 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v61: CJKOS 감지 = 'dCJK' Feature(FtrGet, 공개 함수). 시험 기간에는 함수 4개 방식과 OR, KDlg 9줄에 둘 다 표시.
  * v60 (진단, 동작 변경 없음): KDlg 7~9줄 = FtrGet 시스템 Feature 원시값(인코딩·인코딩 플래그·언어·국가·TSM 플래그)과 현재 CJKOS? 판정.
  * v59: 진단 첫 화면 제목의 옛 고정 글귀 "CJKOS OFF" 뺌(실제 상태는 사용자 화면 CJKOS? 표시).
  * v58: Hangul ON 반복 먹통 수정 — 켜짐 판정을 "연결 안에 있음"으로(BltFind), 이미 켜져 있으면 다시 끼우지 않고, 빠졌으면 맨 위에 다시 잇기.
@@ -304,10 +305,19 @@ static UInt16 DebugGet(void);
 static void   DrawUserMain(void);
 static void   DrawCheck(UInt16 row, const Char *label, Boolean on);
 
-/* v56: CJKOS(또는 다른 한글 시스템) 동작 중인가. CJKOS를 켜면 ROM 밖을 가리키는 시스템 함수 가운데(실측 1)
- *   MnHangul·MnSonyKbd가 바꾸지 않는 FntSetFont·FrmDrawForm·FldHandleEvent·StrCompare 중 하나라도 ROM 밖이면 true.
- *   같은 함수를 바꾸는 다른 프로그램도 걸리므로 화면에는 'CJKOS?'로 표시. 리셋 알림에서도 부르므로 전역 없음 */
-static Boolean CjkOn(void)
+/* v61: CJKOS 동작 감지. CJKOS는 켜질 때 크리에이터 'dCJK' Feature(#0, #1968)를 등록하고 끄면 지운다
+ *   (ClieDiag v24 Ftr 페이지 실측 2026-10-21: 끔 254개 → 켬 256개 → 끔 254개, 나머지 같음). 공개 함수 FtrGet 하나로 판정.
+ *   시험 기간에는 v56의 함수 4개 방식(CJKOS가 바꾸고 MnHangul·MnSonyKbd는 안 바꾸는 FntSetFont·FrmDrawForm·
+ *   FldHandleEvent·StrCompare 중 하나라도 ROM 밖)도 함께 보고, 둘 중 하나라도 맞으면 동작 중으로 본다(안전 쪽).
+ *   두 결과가 계속 같으면 함수 4개 방식은 뺀다. 리셋 알림에서도 부르므로 전역 없음 */
+static inline Boolean CjkFtr(void)
+{
+    UInt32 v = 0;
+
+    return FtrGet('dCJK', 0, &v) == errNone;
+}
+
+static inline Boolean CjkTraps(void)
 {
     UInt16 k;
 
@@ -320,6 +330,11 @@ static Boolean CjkOn(void)
             return true;
     }
     return false;
+}
+
+static Boolean CjkOn(void)
+{
+    return CjkFtr() || CjkTraps();
 }
 
 static void LockGlyphs(void)
@@ -691,7 +706,7 @@ static void DrawWidthPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 Width [tap: Win]", 29, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 Width [tap: Win]", 29, 0, 0);
     StrPrintF(s, "width %s intl %s  (calls / hangul)", GetF(kFtrWidthC) ? "ON" : "off",
               GetF(kFtrIntlC) ? "ON" : "off");
     Row(0, s);
@@ -943,7 +958,7 @@ static void DrawCallsPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 Calls [tap: Width]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 Calls [tap: Width]", 31, 0, 0);
     StrPrintF(s, "[tap] count %s: %s", GetF(kFtrCountC) ? "ON" : "off", gMsg);
     Row(0, s);
     for (i = 0; i < kCountN; i++) {   /* 줄 1~12, 두 칸씩 */
@@ -1058,7 +1073,7 @@ static void DrawFontPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 Font [tap: Sizes]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 Font [tap: Sizes]", 30, 0, 0);
     DumpFont(0, "last p6", GetF(3));
     DumpFont(6, "hi p6", GetF(18));
 }
@@ -1095,7 +1110,7 @@ static void DrawSizesPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 Sizes [tap: Calls]", 31, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 Sizes [tap: Calls]", 31, 0, 0);
     Row(0, "hangul calls by font h / rect h");
     for (i = 30; i <= 37; i++) {
         UInt32 v = GetF(i);
@@ -1133,7 +1148,7 @@ static void DrawWinPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 Win [tap: Kbd]", 27, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 Win [tap: Kbd]", 27, 0, 0);
     Row(0, "draw window: W=width 1=x1 2=x2 ?=other");
     for (i = 0; i < 4; i++) {
         UInt32 w = GetF(72 + i), b = GetF(76 + i), f = GetF(80 + i);
@@ -1185,7 +1200,7 @@ static void DrawKbdPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 Kbd [tap: KDlg]", 28, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 Kbd [tap: KDlg]", 28, 0, 0);
     StrPrintF(s, "kbd build %lu  events %lu", GetSk(55) & 0xFFFF, idx);
     Row(0, s);
     Row(1, "evt ev14>hires +ticks (old->new)");
@@ -1238,7 +1253,7 @@ static void DrawKbdDlgPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 KDlg [tap: SetSt]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 KDlg [tap: SetSt]", 30, 0, 0);
     Button(0, GetF(kFtrKbdC) ? "Hooks: ON" : "Hooks: off");
     ButtonAt(100, 0, "Clear");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
@@ -1291,7 +1306,7 @@ static void DrawKbdDlgPage(void)
         Row(7, s);
         StrPrintF(s, "lang %lu%s ctry %lu%s tsm %lx%s", v[2], e[2] ? "!" : "", v[3], e[3] ? "!" : "", v[4], e[4] ? "!" : "");
         Row(8, s);
-        StrPrintF(s, "now: CJKOS? %s (4 traps)", CjkOn() ? "running" : "no");
+        StrPrintF(s, "now: CJKOS ftr %s / traps %s", CjkFtr() ? "yes" : "no", CjkTraps() ? "yes" : "no");   /* v61 */
         Row(9, s);
     }
 }
@@ -1339,7 +1354,7 @@ static void Draw(void)
     }
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 [tap: Font]", 24, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 [tap: Font]", 24, 0, 0);
 
     ModeText(a, GetF(kFtrBox));
     StrPrintF(s, "patch %s  %s  font %s%s  prot %u%s", Installed() ? "ON" : "off", a,
@@ -1459,7 +1474,7 @@ static void DrawSetStPage(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnHangul v60 SetSt [tap: Main]", 30, 0, 0);
+    WinDrawInvertedChars("MnHangul v61 SetSt [tap: Main]", 30, 0, 0);
     if (kb == NULL) {
         Row(0, "Hooks off (KDlg page)");
         return;

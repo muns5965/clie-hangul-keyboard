@@ -115,7 +115,7 @@ Mn 가상 키보드·MnHangul 그림은 실제 캡처가 아니라 같은 자판
 | Sony 가상 키보드 한글(MnSonyKbd v10): `한A` 한/영, Shift 쌍자음, 키 글자 두벌식 자모 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
 | MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. v7에서 CJKOS 끈 뒤 ⇪ 켬·끔·켬 정상 (CloudpilotEmu 실측) |
 | 한글 표시(MnHangul v58): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `Hangul ON`, 리셋 뒤 자동 시작 |
-| MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56) |
+| MnHangul: CJKOS 감지(켜져 있으면 `Hangul ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정) |
 
 ## 설치·업데이트
 
@@ -246,7 +246,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
   한글이 라틴 문자 두 개로 깨져 보이고, BS가 2바이트 글자의 반쪽만 지울 수 있다. CJKOS 대신 MnHangul(시험 단계)을 쓸 수 있다(C·D).
 - **한글 범위**: KS X 1001 완성형(EUC-KR) 2,350자. 그 밖의 음절이 되면 앞 글자를 확정하고 마지막 자모부터 새로 조합한다(예: 똠 → `또ㅁ`).
 - **시험 범위**: CloudpilotEmu(NR70V ROM)의 런처·메모장·ClieDiag에서 시험했다. 다른 앱(주소록, 일정 등)과 실기는 검증 대상이다.
-- **NR70V 전용 부분**: MnSonyKbd는 NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 그리기 순서와 ROM 주소에 기댄다. MnHangul의 CJKOS 감지는 CJKOS가 바꾸는 함수 4개로 추정한다(`CJKOS?`).
+- **NR70V 전용 부분**: MnSonyKbd는 NR70V ROM의 Sony 가상 키보드(`SilkExtn`) 그리기 순서와 ROM 주소에 기댄다. MnHangul·MnSonyKbd의 CJKOS 감지는 CJKOS가 켜질 때 등록하는 Feature `dCJK`로 한다(v61·v11, 시험 기간에는 예전의 함수 4개 방식도 함께 봄).
 
 ## 문서
 
