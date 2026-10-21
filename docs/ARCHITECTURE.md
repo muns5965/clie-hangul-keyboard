@@ -136,6 +136,8 @@ MnSonyKbd는 거의 전부가 3단계(Sony 키보드 동작 관찰)에 기대므
 - 기록·설정 `FtrGet`/`FtrSet`, `PrefGetAppPreferences`/`PrefSetAppPreferences`
 - 리소스 잠금·보호 `DmGetResource`, `DmWrite`, `DmDatabaseProtect`
 - 입력 `EvtEnqueueKey`, `GrfGetState`, 이벤트 구조의 펜 좌표 / 리셋 알림 `sysAppLaunchCmdSystemReset`, `SysReset`
+- 조합 중 커서 이동 감지 `FrmGetActiveForm`·`FrmGetFocus`·`FrmGetObjectType`·`FrmGetObjectPtr`·`FldGetInsPtPosition`(`src/common/cursor_track.h`)
+- CJKOS 감지 `FtrGet('dCJK', 0)`: CJKOS가 켜질 때 등록하고 끌 때 지우는 자기 Feature(MnHangul v61·MnSonyKbd v11, ClieDiag Ftr 페이지 실측)
 
 **2단계: 비공개 함수 (존재하지만 문서·원형 없음, 역분석)**
 
