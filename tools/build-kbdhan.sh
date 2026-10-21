@@ -1,6 +1,6 @@
 #!/bin/bash
 # MnKbdHan(시스템 키보드 화면 한글) → bin/MnKbdHan.prc (크리에이터 MnKh)
-#   1) 자모 표시 코드(src/kbdhan/hook.c) → 리소스 KhHk 0. 오프셋 0 = 진입점 오프셋 표(3개), 12 = 원래 주소 칸, 24 = 버퍼 주소
+#   1) 자모 표시 코드(src/kbdhan/hook.c) → 리소스 KhHk 0. 오프셋 0 = 진입점 오프셋 표(4개), 16 = 원래 주소 칸, 32 = 버퍼 주소
 #   2) 앱(src/kbdhan/app.c)
 set -euo pipefail
 
@@ -15,7 +15,7 @@ m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar \
   "$root/src/kbdhan/hook.c" -o hook.coff
 data=$(m68k-palmos-size hook.coff | awk 'NR==2 {print $2 + $3}')
 [ "$data" = "0" ] || { echo "error: hook data+bss = $data" >&2; exit 1; }
-for s in KhBase:0 KhOrig:12 KhBuf:24; do
+for s in KhBase:0 KhOrig:16 KhBuf:32; do
   a=$(m68k-palmos-nm hook.coff | awk -v n="${s%%:*}" '$3==n {print $1}')
   [ "$((16#$a))" -eq "${s##*:}" ] || { echo "error: ${s%%:*} at $a (must be ${s##*:})" >&2; exit 1; }
 done
