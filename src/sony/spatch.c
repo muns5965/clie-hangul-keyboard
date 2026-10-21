@@ -179,7 +179,9 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                     FtrSet(kSyCr, 286, 0);
                 }
                 GrfGetState(&caps, &num, &temp, &autoS);
-                FtrSet(kSyCr, kFtrShift, ((c == '~' || c == '!') && !autoS) ? 1 : 0);
+                /* v48: 마지막 가상 실크 펜이 shift 키(#262)면 손 shift — 자동 대문자 값과 상관없이 쌍자음
+                 *   (v47 자동 시험: 빈 메모에서 처음 누른 shift가 자동 대문자로 보여 기본 자모로 들어감) */
+                FtrSet(kSyCr, kFtrShift, ((c == '~' || c == '!') && (!autoS || GetF(262) != 0)) ? 1 : 0);
                 {   /* v42 진단: 방금 기록 칸에 결과 shift 값 */
                     UInt16 k = (UInt16)((GetF(278) + 7) & 7);
 

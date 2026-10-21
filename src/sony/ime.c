@@ -506,6 +506,7 @@ void HgImGet(EventType *event, Int32 timeout)
 
         if (py >= 160) {
             FtrSet(kSyCr, kFtrShiftIn, GetShift());   /* v34: 누르는 순간(Sony 다시 그리기 전)의 shift = 이 키 입력의 쌍자음 여부 */
+            FtrSet(kSyCr, 262, kShiftKey(px, py) ? 1 : 0);   /* v48: 손으로 누른 shift(Sony가 다시 그리기 전에 기록) */
             SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
             {   /* v20 진단: 가상 실크 펜 누름 3개 */
                 UInt32 k = 0;
