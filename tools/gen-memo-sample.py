@@ -13,7 +13,7 @@ MEMOS = [
     "가나다 한글",
     "긴밤 달가 값읽 와의왜",
     "ABC 한글 mixed 123",
-    "뽐뿌질 똠방각하 쀍",
+    "뽐뿌질 꽃밭 읽기 닭",
     "한글 줄바꿈 시험: 동해물과 백두산이 마르고 닳도록 하느님이 보우하사 우리나라 만세",
     "1줄\n2줄 한글\n3줄 끝",
 ]
@@ -35,8 +35,11 @@ def appinfo():
 def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "build/MemoDB.pdb"
     recs = [m.encode("cp949") + b"\0" for m in MEMOS]
-    for m in MEMOS:   # KS X 1001 완성형 범위인지(cp949 확장 글자 금지)
-        m.encode("euc-kr")
+    for m in MEMOS:   # KS X 1001 완성형 2,350자만(cp949 확장·EUC-KR 8바이트 조합 표현 금지 — 똠·쀍 등)
+        for ch in m:
+            if ord(ch) >= 0xAC00:
+                b = ch.encode("euc-kr")
+                assert len(b) == 2 and 0xB0 <= b[0] <= 0xC8, (ch, b.hex())
     now = int(time.time()) + PALM_EPOCH
     n = len(recs)
     hdr_len = 78 + 8 * n + 2
