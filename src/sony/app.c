@@ -1,5 +1,5 @@
 /*
- * MnSonyKbd v12 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
+ * MnSonyKbd v13 — Sony 가상 키보드 한글 (NR70V ROM SilkExtn 키보드)
  *
  * MnHangul v35~v53의 Sony 가상 키보드 부분을 따로 뗀 모듈(MnHangul v54와 같이 나옴).
  * 한글 표시(글꼴)는 하지 않으므로 CJKOS 등 한글 시스템이나 MnHangul(한글 표시)과 같이 쓴다.
@@ -7,6 +7,7 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v13: 판 번호를 kSyVer 한 곳에. 첫 화면 한글 표시 줄: CJKOS와 MnHangul이 둘 다 켜져 있으면 'CJKOS (+MnHangul)'.
  * v12: CJKOS 감지는 'dCJK' Feature만(함수 4개 방식 뺌). 첫 화면 'CJKOS'.
  * v11: CJKOS 감지 = 'dCJK' Feature(MnHangul v61과 같음). 첫 화면은 Feature로 확인되면 'CJKOS', 함수 4개 방식만 맞으면 'CJKOS?'.
  * v10: 조합 중 커서 이동 감지(MnSkCore build 17과 같은 방식, src/common/cursor_track.h). 진단 화면 9줄 = fld 비교·다름 수·기대/실제.
@@ -27,6 +28,9 @@
  */
 
 #include <PalmOS.h>
+
+#define kSyVer "v13"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
 #define kSyCr        'MnSy'
@@ -431,7 +435,7 @@ static void DrawMain(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v12", 13, 0, 0);
+    SyTitle("");
     Row(0, "Hangul kbd on Sony virtual kbd");
     WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
     {
@@ -449,8 +453,9 @@ static void DrawMain(void)
         UInt32 e = 0;
 
         FtrGet('MnHg', 21, &e);
-        Row(6, e != 0 ? "Hangul display: MnHangul" : CjkFtr() ? "Hangul display: CJKOS" :
-                        "Hangul display: none (broken)");
+        /* v13: MnHangul을 켠 뒤 CJKOS를 켜면 실제 그리기는 CJKOS(10-18 실측) — 둘 다 켜져 있음을 숨기지 않는다 */
+        Row(6, CjkFtr() ? (e != 0 ? "Hangul display: CJKOS (+MnHangul)" : "Hangul display: CJKOS") :
+                e != 0 ? "Hangul display: MnHangul" : "Hangul display: none (broken)");
     }
     if (ih != NULL) {   /* 사용법: '한A' 그림(켜짐) = 한/영 */
         WinDrawBitmap((BitmapPtr)MemHandleLock(ih), 3, 8 * kLineH);   /* 22×18(저해상도 좌표로 2배) */
@@ -473,7 +478,7 @@ static void DrawDebug(void)
 
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnSonyKbd v12 Debug [tap: back]", 31, 0, 0);
+    SyTitle(" Debug [tap: back]");
     StrPrintF(s, "blt below %lx  jamo %lx", GetF(kFtrEntry) ? *(const UInt32 *)(GetF(kFtrEntry) - 4) : 0UL,
               GetF(kFtrBlt));
     Row(0, s);
