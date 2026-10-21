@@ -43,6 +43,7 @@ typedef void (*GetFn)(EventType *, Int32);
 void HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 7);
 void HRWinEraseRectangle(UInt16 ref, const RectangleType *r, UInt16 corner) SYS_TRAP(sysLibTrapCustom + 21);
 IndexedColorType HRWinGetPixel(UInt16 ref, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 28);
+void HRWinPaintBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 37);
 typedef void (*BmpFn)(BitmapPtr, Coord, Coord);
 
 static inline const UInt32 *Icons(void)
@@ -92,6 +93,119 @@ static inline void HcSend(UInt16 c)
 
 #define HC_FN static
 #include "../common/hangul_compose.h"
+
+/* v33: 한/영 누를 때 자판 영문 글자 키를 우리가 다시 그림(Sony는 이 단추를 몰라 다시 그리지 않음).
+ *   키 글자 패치가 기록한 글자·자리(#300 + 2i: x<<16 | y, #301 + 2i: 세대<<24 | 글자<<16 | 폭<<8 | 높이, i = 글자 a~z),
+ *   Sony 글꼴(#298), 글자 색(#297), 자판 다시 그리기 세대(#299)를 쓴다. 이번 세대에 그린 키만(sym 자판 등에서는 안 그림).
+ *   글자 칸을 키 바탕색으로 지우고, 1비트 그림(32 × 글꼴 높이)에 자모(SyJm, 임시 글꼴과 같은 자리) 또는 Sony 글꼴의 영문을 옮겨
+ *   겹쳐 그리기(winOverlay)로 그린다. 기록 #296 = 다시 그린 횟수<<16 | 마지막에 그린 키 수 */
+#define kRdCell 18
+static void RedrawKeys(UInt16 hr, Boolean han)
+{
+    UInt32        gen = 0, fp = 0, fg = 0, pk = 0, n = 0;
+    const Int16  *f;
+    BitmapPtr     bmp;
+    UInt16       *bits, fh, rb = 0, i, drawn = 0;
+    Err           e = 0;
+    IndexedColorType of, ot, ob;
+    WinDrawOperation om;
+
+    FtrGet(kSyCr, 299, &gen);
+    FtrGet(kSyCr, 298, &fp);
+    FtrGet(kSyCr, 297, &fg);
+    FtrGet(kSyCr, 3, &pk);
+    f = (const Int16 *)fp;
+    if (f == NULL || pk == 0 || (f[0] & 0x0200) != 0 || f[7] <= 0 || f[7] > 32 || f[12] <= 0 || f[12] > 16)
+        return;   /* 글꼴 모양이 예상과 다르면 그리지 않음 */
+    fh = (UInt16)f[7];
+    bmp = BmpCreate(32, fh, 1, NULL, &e);
+    if (bmp == NULL)
+        return;
+    BmpGetDimensions(bmp, NULL, NULL, &rb);
+    bits = (UInt16 *)BmpGetBits(bmp);
+    if (rb != 4 || bits == NULL) {
+        BmpDelete(bmp);
+        return;
+    }
+    of = WinSetForeColor((IndexedColorType)fg);
+    ot = WinSetTextColor((IndexedColorType)fg);
+    ob = WinSetBackColor(0);
+    om = WinSetDrawMode(winOverlay);
+    for (i = 0; i < 26; i++) {
+        UInt32 xy = 0, inf = 0;
+        Coord  x, y, jx, l, r;
+        UInt8  c, cw;
+        RectangleType rr;
+        UInt16 row;
+
+        FtrGet(kSyCr, 300 + 2 * i, &xy);
+        FtrGet(kSyCr, 301 + 2 * i, &inf);
+        if (inf == 0 || (UInt8)(inf >> 24) != (UInt8)gen || (UInt8)inf != fh)
+            continue;
+        c = (UInt8)(inf >> 16);
+        cw = (UInt8)(inf >> 8);
+        x = (Coord)(xy >> 16);
+        y = (Coord)xy;
+        jx = x + ((Int16)cw - kRdCell) / 2;
+        l = jx < x ? jx : x;
+        r = (jx + kRdCell > x + cw) ? jx + kRdCell : x + cw;
+        WinSetBackColor(HRWinGetPixel(hr, x, y));
+        RctSetRectangle(&rr, l, y, r - l, fh);
+        HRWinEraseRectangle(hr, &rr, 0);
+        MemSet(bits, fh * 4, 0);
+        if (han) {   /* 자모: spatch.c PutJamo와 같은 자리(세로 = 글꼴 ascent - 15, 칸 안 왼쪽 1칸 띄움) */
+            const UInt8 *p = (const UInt8 *)pk;
+            UInt8        t = Dubeol(HanLabelKey(c));
+            UInt16       H = p[3], w = p[2] >= 2 ? 4 : 2;
+            Int16        top = f[9] - 15;
+            const UInt8 *j;
+
+            if (t == 0)
+                continue;
+            j = p + (((UInt16)p[124] << 8) | p[125]) + (UInt16)(t - 0xA1) * H * w;
+            if (top > (Int16)fh - (Int16)H)
+                top = (Int16)fh - (Int16)H;
+            if (top < 0)
+                top = 0;
+            for (row = 0; row < H && row + top < fh; row++) {
+                UInt32 v = (((UInt32)j[row * w] << 8) | j[row * w + 1]) << 16;
+
+                if (w == 4)
+                    v |= ((UInt32)j[row * w + 2] << 8) | j[row * w + 3];
+                v >>= 1;
+                bits[(row + top) * 2] = (UInt16)(v >> 16);
+                bits[(row + top) * 2 + 1] = (UInt16)v;
+            }
+            HRWinPaintBitmap(hr, bmp, jx, y);
+        } else {     /* 영문: Sony 글꼴 그림 줄에서 글자 열을 옮김 */
+            UInt16        rw = (UInt16)f[12], x0, x1, k;
+            const UInt16 *img = (const UInt16 *)(f + 13), *loc = img + rw * fh;
+
+            if (c < (UInt16)f[1] || c > (UInt16)f[2])
+                continue;
+            x0 = loc[c - f[1]];
+            x1 = loc[c - f[1] + 1];
+            if (x1 <= x0 || x1 - x0 > 32)
+                continue;
+            for (row = 0; row < fh; row++)
+                for (k = 0; k < x1 - x0; k++) {
+                    UInt16 b = x0 + k;
+
+                    if (img[row * rw + (b >> 4)] & (0x8000 >> (b & 15)))
+                        bits[row * 2 + (k >> 4)] |= 0x8000 >> (k & 15);
+                }
+            HRWinPaintBitmap(hr, bmp, x, y);
+        }
+        drawn++;
+    }
+    WinSetDrawMode(om);
+    WinSetBackColor(ob);
+    WinSetTextColor(ot);
+    WinSetForeColor(of);
+    BmpDelete(bmp);
+    FtrGet(kSyCr, 296, &n);
+    FtrSet(kSyCr, 296, (((n >> 16) + 1) << 16) | drawn);
+}
 
 void HgImGet(EventType *event, Int32 timeout)
 {
@@ -158,9 +272,8 @@ void HgImGet(EventType *event, Int32 timeout)
                     return;
                 }
                 FtrSet(kSyCr, 252, now);
-                st[0] = 0;                        /* v32: 전환하면 조합 끝, 손 shift도 풀림 */
+                st[0] = 0;                        /* v32: 전환하면 조합 끝 */
                 CtUnknown(kSyCr, kSyFtrFld);
-                FtrSet(kSyCr, kFtrShift, 0);
                 v = 0;
                 FtrGet(kSyCr, kFtrHanTab, &v);
                 FtrSet(kSyCr, kFtrHanTab, v ? 0 : 1);
@@ -194,6 +307,7 @@ void HgImGet(EventType *event, Int32 timeout)
                         HRWinEraseRectangle((UInt16)hr, &rr, 0);
                         WinSetBackColor(ob);
                         HRWinDrawBitmap((UInt16)hr, (BitmapPtr)a, kMarkX, kMarkY);
+                        RedrawKeys((UInt16)hr, h != 0);   /* v33: 자판 영문 글자 키도 바로 자모↔영문 */
                         WinSetDrawWindow(old);
                         FtrSet(kSyCr, 243, bg);
                     }
@@ -227,10 +341,6 @@ void HgImGet(EventType *event, Int32 timeout)
         } else {  /* v48: 가상 키보드 일반 키 = 3(키 누름 중 순간 상태로 영문 내림 안 함)
                    * v50: 키 영역(y < 213)만 3. 아래 탭·상태 표시줄(키보드 띄우는 버튼 등)은 0 */
             FtrSet(kSyCr, kFtrPenCaps, py < kKeyAreaEnd ? 3 : 0);
-            if (kShiftKey(px, py)) {   /* v32: 손으로 누른 shift(Sony 일시 쉬프트처럼 누를 때마다 켜고 끔) */
-                FtrGet(kSyCr, kFtrShift, &v);
-                FtrSet(kSyCr, kFtrShift, v ? 0 : 1);
-            }
         }
         return;
     }
@@ -259,13 +369,8 @@ void HgImGet(EventType *event, Int32 timeout)
     if (event->eType != keyDownEvent || event->data.keyDown.keyCode == kImMark)
         return;
     ch = event->data.keyDown.chr;
-    {   /* v32: PC 두벌식 — 쌍자음 여부는 손 shift(#255)로. 키 하나 받으면 shift는 풀림(Sony 일시 쉬프트와 같음) */
-        UInt8 k = (ch < 0x80) ? HanKey((UInt8)ch) : 0;
-
-        FtrSet(kSyCr, kFtrShift, 0);
-        if (k != 0)
-            ch = k;
-    }
+    if (ch < 0x80)   /* v33: PC 두벌식 — 대문자는 화면 자모 판단(#255)대로 쌍자음 또는 기본 자모 */
+        ch = HanInKey((UInt8)ch);
     /* v10: 조합 중인데 커서가 옮겨졌거나 입력칸이 바뀌었으면(펜 없이 앱이 옮긴 경우 등) 조합 끝 */
     if (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0))
         st[0] = 0;

@@ -63,24 +63,39 @@ static inline Boolean HanMode(void)
     return v != 0;
 }
 
-/* v32: PC 두벌식 규칙 — 영문 글자 키를 기본 자모(소문자)·쌍자음(대문자) 중 어느 쪽으로 볼지.
- *   쌍자음 = shift 키를 손으로 눌렀고(#255, 자동 대문자는 누름이 아니므로 0) Sony 일시 쉬프트가 지금 걸려 있음
- *   (글자 대·소문자 ≠ ⇪). 그 밖(자동 대문자, ⇪만 켜짐)은 기본 자모. 글자 키가 아니면 그대로 */
+/* v33: PC 두벌식 규칙 — 영문 글자 키를 기본 자모(소문자)·쌍자음(대문자) 중 어느 쪽으로 볼지.
+ *   v32 실측: Graffiti ⇪·일시 쉬프트 상태로 판단하면 한 박자 늦음(Sony는 키 글자를 다시 그린 뒤 상태를 바꿈, v38 실측).
+ *   → 키 글자를 그리는 순간에는 Sony가 그리는 글자의 대·소문자로: 대문자이고 자동 대문자가 아니고 ⇪(#143, ⇪ 누름으로 미리 앎)도
+ *   아니면 쌍자음. 그 판단을 #255에 적어 두고, 입력(keyDown)은 대문자가 오면 #255대로 → 보이는 자모와 입력이 같다. */
 #define kFtrShift    255
-#define kShiftKey(x, y) ((x) >= 0 && (x) < 13 && (y) >= 192 && (y) < 202)
-static inline UInt8 HanKey(UInt8 c)
+static inline Boolean IsLetter(UInt8 c)
 {
-    Boolean caps = false, num = false, autoS = false, up;
-    UInt16  temp = 0;
-    UInt32  sf = 0;
+    return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
+}
 
-    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')))
+static inline UInt8 HanLabelKey(UInt8 c)
+{
+    Boolean caps = false, num = false, autoS = false;
+    UInt16  temp = 0;
+    UInt32  lock = 0, dbl;
+
+    if (!IsLetter(c) || c >= 'a')
         return c;
-    up = c <= 'Z';
     GrfGetState(&caps, &num, &temp, &autoS);
-    FtrGet(kSyCr, kFtrShift, &sf);
-    c |= 0x20;   /* 소문자 */
-    return (sf != 0 && up != caps) ? (UInt8)(c - 0x20) : c;
+    FtrGet(kSyCr, kFtrHan, &lock);
+    dbl = (!autoS && lock == 0) ? 1 : 0;
+    FtrSet(kSyCr, kFtrShift, dbl);
+    return dbl ? c : (UInt8)(c | 0x20);
+}
+
+static inline UInt8 HanInKey(UInt8 c)
+{
+    UInt32 dbl = 0;
+
+    if (!IsLetter(c) || c >= 'a')
+        return c;
+    FtrGet(kSyCr, kFtrShift, &dbl);
+    return dbl ? c : (UInt8)(c | 0x20);
 }
 
 #endif

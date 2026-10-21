@@ -149,6 +149,23 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
 
         FtrSet(kSyCr, 108, GetF(108) + 1);
         FtrSet(kSyCr, 151, c);
+        if (c != 0 && p6 != NULL && SilkWin()) {   /* v33: 한/영 누를 때 다시 그리려고 영문 글자 키 글자·자리 기록 */
+            const Int16 *rc = (const Int16 *)p2;
+
+            if (rc[0] < 20 && rc[1] < 10)   /* 자판 첫 키 = 자판 다시 그리기 시작(배치가 바뀌면 옛 기록 버림) */
+                FtrSet(kSyCr, 299, GetF(299) + 1);
+            if (IsLetter(c)) {
+                UInt16           i = (UInt16)((c | 0x20) - 'a');
+                IndexedColorType t = WinSetTextColor(0);
+
+                WinSetTextColor(t);
+                FtrSet(kSyCr, 300 + 2 * i, ((UInt32)(UInt16)rc[0] << 16) | (UInt16)rc[1]);
+                FtrSet(kSyCr, 301 + 2 * i, ((GetF(299) & 0xFF) << 24) | ((UInt32)c << 16) |
+                                           ((UInt32)(FntCharWidth((Char)c) & 0xFF) << 8) | (UInt8)rc[3]);
+                FtrSet(kSyCr, 298, (UInt32)p6);
+                FtrSet(kSyCr, 297, t);
+            }
+        }
         if (c != 0 && p6 != NULL && Dubeol(c) != 0 && GetF(kFtrJamo) != 0) {
             const Int16 *f = (const Int16 *)p6, *rc = (const Int16 *)p2;
             UInt16      *tmp = NULL;
@@ -170,7 +187,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 UInt32        res, b = GetF(kFtrBlt);
 
                 MakeTmpFont(tmp, f, kCell, fh);
-                PutJamo(tmp, (const UInt8 *)GetF(kFtrJamo), Dubeol(HanKey(c)), fh);   /* v32: PC 규칙 */
+                PutJamo(tmp, (const UInt8 *)GetF(kFtrJamo), Dubeol(HanLabelKey(c)), fh);   /* v33: PC 규칙(그리는 글자 기준) */
                 r.topLeft.x += ((Int16)FntCharWidth((Char)c) - kCell) / 2 / (Int16)ratio;   /* 키 글자 가운데에 맞춤(v15: 공개 함수) */
                 r.extent.x = kCell / ratio;
                 res = ((BltFn)(b != 0 ? b : orig))(p1, &r, p3, &one, 1, tmp, p7);
