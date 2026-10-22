@@ -1,6 +1,8 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v16: 한 모드 키 글자 자모를 그림으로(hook.c v16) — 켤 때 두벌식 키 자모(소문자·대문자 52 → 33자)를 KhJm 0(src/sony/data/
+ *   SyJm0000.bin, Neo둥근모 낱자모 16×16)에서 1비트 그림으로 만들어 #10 표에 둔다(주인 0, 끌 때 지움). #9 HR 참조는 못 찾으면 0(모름).
  * v15(진단): 키보드 화면에서 앱이 이벤트 하나를 처리한 시간(틱, #40~#48: 영문 키·넣은 키·펜 별 평균·수, 최대)과
  *   시험 스위치 #49(키 글자를 자모 대신 영문 — MnHangul 그리기 비용 빼기). 진단 9~11줄. v14 실측: MnHangul이 켜진 한 모드에서
  *   0.04~0.1초 간격 입력의 펜 누름이 빠짐(MnHangul을 끄면 모두 받음), 키 하나에 키 글자 그리기 약 50번.
@@ -32,9 +34,10 @@
  */
 
 #include <PalmOS.h>
+#include "../common/dubeol_map.h"
 
 #define kCr       'MnKh'
-#define kVer      "v15"
+#define kVer      "v16"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
@@ -138,6 +141,88 @@ static Boolean AppDB(UInt16 *card, LocalID *id)
     return DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, kCr, true, card, id) == errNone;
 }
 
+/* v16: 키 글자 자모 그림 표(#10) 만들기·지우기. 리셋 실행에서도 부름(전역 없음) */
+static void FreeJamo(void)
+{
+    UInt32 *t = (UInt32 *)GetF(10);
+    UInt16  o;
+
+    FtrSet(kCr, 10, 0);
+    if (t == NULL)
+        return;
+    for (o = 1; o <= 94; o++)
+        if (t[2 * o] != 0)
+            BmpDelete((BitmapPtr)t[2 * o]);
+    MemPtrFree(t);
+}
+
+static void BuildJamo(void)
+{
+    MemHandle    h = DmGetResource('KhJm', 0);
+    const UInt8 *d;
+    UInt32      *t;
+    UInt16       k;
+
+    if (h == NULL)
+        return;
+    d = MemHandleLock(h);
+    t = (d[2] < 2 && d[3] == 16) ? MemPtrNew(95 * 2 * 4) : NULL;   /* 판 1(줄 2바이트)·높이 16만 */
+    if (t != NULL) {
+        const UInt8 *g0 = d + (((UInt16)d[124] << 8) | d[125]);
+
+        MemSet(t, 95 * 2 * 4, 0);
+        MemPtrSetOwner(t, 0);
+        for (k = 0; k < 52; k++) {   /* a~z, A~Z (hook.c Jamo와 같이 대·소문자를 바꿔 Dubeol에 묻는다) */
+            UInt8        c = (UInt8)(k < 26 ? 'a' + k : 'A' + k - 26);
+            UInt8        j = Dubeol((UInt8)(k < 26 ? c - 'a' + 'A' : c - 'A' + 'a'));
+            UInt16       o = (UInt16)(j - 0xA0), r, cc, rmin = 16, rmax = 0, cmin = 16, cmax = 0, rb = 0;
+            const UInt8 *g;
+            BitmapPtr    bmp;
+            UInt8       *px;
+            Err          e = 0;
+
+            if (j < 0xA1 || o > 94 || t[2 * o] != 0)
+                continue;
+            g = g0 + (o - 1) * 32;
+            for (r = 0; r < 16; r++) {
+                UInt16 v = ((UInt16)g[2 * r] << 8) | g[2 * r + 1];
+
+                if (v == 0)
+                    continue;
+                if (r < rmin)
+                    rmin = r;
+                rmax = r;
+                for (cc = 0; cc < 16; cc++)
+                    if (v & (0x8000 >> cc)) {
+                        if (cc < cmin)
+                            cmin = cc;
+                        if (cc > cmax)
+                            cmax = cc;
+                    }
+            }
+            if (rmin > rmax)
+                continue;
+            bmp = BmpCreate(16, 16, 1, NULL, &e);
+            if (bmp == NULL)
+                continue;
+            BmpGetDimensions(bmp, NULL, NULL, &rb);
+            px = (UInt8 *)BmpGetBits(bmp);
+            if (rb != 2 || px == NULL) {
+                BmpDelete(bmp);
+                continue;
+            }
+            for (r = 0; r < 32; r++)
+                px[r] = g[r];
+            MemPtrSetOwner(bmp, 0);
+            t[2 * o] = (UInt32)bmp;
+            t[2 * o + 1] = ((UInt32)((cmin + cmax + 1) / 2) << 16) | (UInt16)((rmin + rmax + 1) / 2);
+        }
+        FtrSet(kCr, 10, (UInt32)t);
+    }
+    MemHandleUnlock(h);
+    DmReleaseResource(h);
+}
+
 /* v13: 결과 0 켬, 1 이미 켜짐, 2 지원 안 함, 3 리소스 없음, 4 메모리 없음. 리셋 실행에서도 부름(전역 없음) */
 static UInt16 HookOn(void)
 {
@@ -185,8 +270,9 @@ static UInt16 HookOn(void)
             FtrSet(kCr, 7 + k, (UInt32)ih);
             FtrSet(kCr, 5 + k, ih != NULL ? (UInt32)MemHandleLock(ih) : 0);
         }
-        FtrSet(kCr, 9, SysLibFind("Sony HR Library", &hr) == errNone ? 0x10000UL | hr : 0);
+        FtrSet(kCr, 9, SysLibFind("Sony HR Library", &hr) == errNone ? 0x10000UL | hr : 0);   /* v16: 못 찾으면 0 = 모름(hook이 다시 찾음) */
     }
+    BuildJamo();   /* v16 */
     for (i = 0; i < kHookN; i++)
         SysSetTrapAddress(HookTrap(i), code + ((UInt32 *)code)[i]);
     return 0;
@@ -220,6 +306,7 @@ static UInt16 HookOff(void)
     FtrSet(kCr, 2, 0);
     FtrSet(kCr, 3, 0);
     FtrSet(kCr, 4, 0);
+    FreeJamo();   /* v16 */
     {   /* v12 */
         UInt16 k;
 

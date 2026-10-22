@@ -34,6 +34,11 @@
  *   [14] 키 글자 표 수, [15] 한/영 표시를 그려야 함, [16 + 2k]·[17 + 2k] 키 글자 표(최대 40): x<<16 | y, 글자<<24 | 글꼴
  *   [96]·[97] 조합 상태(v9), [98] 받은 keyDown 수, [99] 마지막 keyDown chr<<16 | modifiers, [100] 마지막 조합 키 chr<<16 | 자모,
  *   [101] 손으로 누른 shift(v10)
+ * v16: 한 모드 키 글자 자모를 MnHangul 2바이트 글자 대신 미리 만든 16×16 그림(MnSonyKbd·Mn 키보드와 같은 Neo둥근모 낱자모,
+ *   'MnKh' #10 표 = 자모 번호 o(1~94)마다 [2o] 그림 주소·[2o+1] 그림 안 가운데 x<<16 | y, 앱 HookOn이 만듦)으로, HR 라이브러리로
+ *   고해상도에 겹쳐 그림(winOverlay, 글자색). v15 실측: 키보드 화면은 누를 때·뗄 때마다 키 글자 26개를 다시 그려, 자모를 MnHangul로
+ *   그리면 펜 이벤트 하나 11.8틱(영문 글자 5.3틱) → 빨리 치면 밀려 펜 누름이 버려짐. HR 라이브러리가 없으면(T600C) 예전처럼 글자.
+ *   #9 HR 참조 = 0 모름(리셋 실행에서 켜질 때는 아직 없을 수 있음 → 처음 쓸 때 찾음), 0x10000 | 번호, 0x20000 없음.
  * v15 진단(키보드 화면이 열려 있는 동안만): 앱이 이벤트 하나를 처리한 시간(EvtGetEvent에서 돌아간 뒤 다음 부를 때까지, 틱) —
  *   'MnKh' #40·#41 영문 keyDown 합·수, #42·#43 우리가 넣은 키(BS·완성형) 합·수, #44·#45 펜 이벤트 합·수, #46 최대,
  *   #47 앞 이벤트 종류(0 영문 키, 1 넣은 키, 2 펜, 3 기타), #48 앞 이벤트를 돌려준 틱. #49 = 1이면 시험: 키 글자를 자모 대신 영문으로.
@@ -185,6 +190,53 @@ static inline Boolean Letter(UInt8 c)
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
+/* v12·v16: Sony HR 라이브러리(소니 헤더 없이 순번만) */
+void HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 7);
+void HRWinEraseRectangle(UInt16 ref, const RectangleType *r, UInt16 corner) SYS_TRAP(sysLibTrapCustom + 21);
+void HRWinPaintBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 37);
+
+/* v16: HR 참조 번호(없으면 0xFFFF). #9가 0(모름)이면 지금 찾아 적는다(문자열 상수 금지 → 스택에 이름) */
+static UInt16 HrRef(void)
+{
+    UInt32 v = KhF(9);
+
+    if (v == 0) {
+        Char   n[16];
+        UInt16 ref = 0;
+
+        n[0] = 'S'; n[1] = 'o'; n[2] = 'n'; n[3] = 'y'; n[4] = ' '; n[5] = 'H'; n[6] = 'R'; n[7] = ' ';
+        n[8] = 'L'; n[9] = 'i'; n[10] = 'b'; n[11] = 'r'; n[12] = 'a'; n[13] = 'r'; n[14] = 'y'; n[15] = 0;
+        v = SysLibFind(n, &ref) == errNone ? 0x10000UL | ref : 0x20000UL;
+        FtrSet(kKhCr, 9, v);
+    }
+    return (v & 0x10000UL) ? (UInt16)v : 0xFFFF;
+}
+
+/* v16: 자모 그림을 글자 가운데(cx, cy = 저해상도 창 좌표)에 글자색으로 겹쳐 그림. 못 그리면 false */
+static Boolean JamoBmp(UInt8 j, Coord cx, Coord cy)
+{
+    const UInt32    *t = (const UInt32 *)KhF(10);
+    UInt16           o = (UInt16)(j - 0xA0), hr;
+    UInt32           c;
+    IndexedColorType tc, fc;
+    WinDrawOperation m;
+
+    if (t == NULL || j < 0xA1 || o > 94 || t[2 * o] == 0)
+        return false;
+    hr = HrRef();
+    if (hr == 0xFFFF)
+        return false;
+    c = t[2 * o + 1];
+    tc = WinSetTextColor(0);
+    WinSetTextColor(tc);
+    fc = WinSetForeColor(tc);
+    m = WinSetDrawMode(winOverlay);
+    HRWinPaintBitmap(hr, (BitmapPtr)t[2 * o], (Coord)(2 * cx - (Int16)(c >> 16)), (Coord)(2 * cy - (Int16)(UInt16)c));
+    WinSetDrawMode(m);
+    WinSetForeColor(fc);
+    return true;
+}
+
 /* v4: 소문자 = 기본 자모, 대문자 = 쌍자음(Dubeol 표는 MnSonyKbd 규칙이라 대·소문자를 바꿔 묻는다) */
 static inline UInt8 Jamo(UInt8 c)
 {
@@ -241,6 +293,11 @@ static void DrawKey(UInt32 *b, UInt8 c, Coord x, Coord y)
         Char  jm[2];
         Int16 w1 = FntCharWidth((Char)c), w2;
 
+        if (JamoBmp(j, x + w1 / 2, y + FntLineHeight() / 2)) {   /* v16: 그림 */
+            b[6] = 1;
+            b[2]++;
+            return;
+        }
         jm[0] = (Char)0xA4;
         jm[1] = (Char)j;
         w2 = FntCharsWidth(jm, 2);
@@ -266,9 +323,6 @@ void KhDraw(const Char *s, Int16 len, Coord x, Coord y)
     ((CharsFn)Orig(2))(s, len, x, y);
 }
 
-/* v12: Sony HR 라이브러리(소니 헤더 없이 순번만) — 표시 그림을 고해상도로 */
-void HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 7);
-void HRWinEraseRectangle(UInt16 ref, const RectangleType *r, UInt16 corner) SYS_TRAP(sysLibTrapCustom + 21);
 
 
 /* 한/영 표시(빈칸 왼쪽): 한글 모드 '한', 영문 'A'.
@@ -278,9 +332,10 @@ static void Mark(UInt32 *b)
 {
     RectangleType r;
     Char          m[2];
-    UInt32        hr = KhF(9), ic = KhF(b[8] != 0 ? 5 : 6);
+    UInt32        ic = KhF(b[8] != 0 ? 5 : 6);
+    UInt16        hr = ic != 0 ? HrRef() : 0xFFFF;   /* v16: 모르면 찾음 */
 
-    if (hr != 0 && ic != 0) {
+    if (hr != 0xFFFF) {
         RctSetRectangle(&r, 220, 246, 44, 32);   /* 아래 저해상도 지우기 자리의 2배 */
         HRWinEraseRectangle((UInt16)hr, &r, 0);
         HRWinDrawBitmap((UInt16)hr, (BitmapPtr)ic, 220 + (44 - 14) / 2, 246 + (32 - 18) / 2);
