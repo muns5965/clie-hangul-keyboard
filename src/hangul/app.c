@@ -42,6 +42,9 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v69: 네 앱 공용 사용자 화면(src/common/app_ui.h) — Now·[ON][OFF][All OFF]·Start at reset·Update·Soft Reset·모듈 상태 4줄·
+ *   사용법·[ ] Debug. Hangul ON/OFF → ON/OFF(OFF = 기존 Hangul OFF), All OFF는 세 모듈(MnSonyKbd·MnKbdHan), Update는 설치된
+ *   두 모듈 모두 다음 리셋 한 번 건너뛰기. 알림 줄은 비어 있으면 그리지 않음. 진단 화면은 그대로.
  * v68: 지원 기종 확인 — Palm OS 4.0 이상이고 문자 인코딩이 Latin(PalmLatin 3)일 때만 켜고 자동 시작한다(HgSupported, 공개 FtrGet).
  *   OS 3.5에는 IntlGetRoutineAddress·IntlSetRoutineAddress가 없고(SDK 3.5 헤더), Shift-JIS(N700C 일본어 3.5.2) 등은 2바이트 범위가
  *   한글과 겹친다. 아니면 아무것도 바꾸지 않고 'unsupported: OS 4 Latin only'(자동 시작 결과 #95 = 0x10000000).
@@ -134,7 +137,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v68"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v69"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -797,6 +800,7 @@ static UInt16 SelfOff(void)
 }
 
 #include "../common/mod_off.h"
+#include "../common/app_ui.h"
 
 /* v66: 지우기 알림('-pdb')에서 모두 끄기(전역 없음). 먼저 모두 맨 위인지 확인하고, 하나라도 아니면 아무것도 끄지 않는다.
  *   결과(#164): 1 끔, 2 위에 다른 패치(남김), 3 Count 켜짐(전역 표가 필요해 여기서 못 끔), 4 켜진 것 없음 */
@@ -1610,18 +1614,6 @@ static void Draw(void)
 
 /* v26: 3초 동안 누르고 있으면 SysReset(), 중간에 떼면 취소 (ClieDiag와 같은 방식) */
 static void SkipSet(UInt16 v);
-/* v57: Update = 설치되어 있는 다른 모듈(MnSonyKbd)도 다음 리셋 한 번 자동 시작 건너뛰기(앱 설정 3번).
- *   설치되어 있지 않으면 아무것도 저장하지 않는다(하나만 쓰는 경우는 그대로) */
-static void SkipOther(UInt32 cr)
-{
-    DmSearchStateType st;
-    UInt16            card, v = 1;
-    LocalID           id;
-
-    if (DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, cr, true, &card, &id) == errNone)
-        PrefSetAppPreferences(cr, 3, 1, &v, sizeof v, true);
-}
-
 static void HoldResetAt(UInt16 x0, UInt16 row, const Char *label, Boolean upd);
 
 static void HoldReset(UInt16 row)
@@ -1629,10 +1621,6 @@ static void HoldReset(UInt16 row)
     HoldResetAt(0, row, "Soft Reset (hold 3s)", false);
 }
 
-static void HoldResetAs(UInt16 row, const Char *label, Boolean upd)
-{
-    HoldResetAt(0, row, label, upd);
-}
 
 /* v53: upd = 다음 리셋 한 번 자동 시작 건너뛰기(업데이트 설치용)를 저장하고 리셋. v62: x0 = 버튼 왼쪽 위치 */
 static void HoldResetAt(UInt16 x0, UInt16 row, const Char *label, Boolean upd)
@@ -1663,7 +1651,7 @@ static void HoldResetAt(UInt16 x0, UInt16 row, const Char *label, Boolean upd)
         if (left <= 0) {
             if (upd) {
                 SkipSet(1);
-                SkipOther('MnSy');
+                UiSkipOthers(kHgCreator);
             }
             SysReset();
             return;
@@ -1757,12 +1745,7 @@ static void DrawCheck(UInt16 row, const Char *label, Boolean on)
     WinDrawChars(label, StrLen(label), 15, (row + 1) * kLineH);
 }
 
-/* v41: 사용자용 Main — Patch ON·All OFF, Auto·Sony, Soft Reset, 사용법, [ ] Debug */
-#define kURowOn    2
-#define kURowAuto  3
-#define kURowAll   4   /* v64 */
-#define kURowReset 5
-#define kURowUpd   6   /* v53 */
+/* v41: 사용자용 Main. v69: 네 앱 공용 화면(app_ui.h) */
 static void DrawUserMain(void)
 {
     RectangleType r;
@@ -1771,30 +1754,25 @@ static void DrawUserMain(void)
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
     HgTitle("");
-    StrPrintF(s, "Hangul %s  Reset %s  CJKOS %s", Installed() ? "ON" : "off", AutoGet() ? "ON" : "off",
-              CjkOn() ? "running" : "no");
-    Row(0, s);
-    Button(kURowOn, "Hangul ON");
-    ButtonAt(84, kURowOn, "Hangul OFF");
-    Button(kURowAuto, AutoGet() ? "Start at reset: ON" : "Start at reset: off");
-    Button(kURowAll, "All OFF (for install)");   /* v64 */
-    Button(kURowReset, "Soft Reset (hold 3s)");
-    Button(kURowUpd, "Update (hold 3s)");   /* v53 */
-    Row(7, "Hangul display, CJKOS replacement");
-    {   /* v55: Sony 가상 키보드 한글(MnSonyKbd) 상태 */
-        UInt32            on = 0;
-        DmSearchStateType st;
-        UInt16            card;
-        LocalID           id;
+    UiRow(0, "Hangul display (no CJKOS)");
+    UiMsg(gMsg);
+    StrPrintF(s, "Now: %s   CJKOS: %s", Installed() ? "ON" : "off", CjkOn() ? "running" : "no");
+    UiRow(kUiRowNow, s);
+    UiButton(kUiXOn, kUiRowBtn, "ON");
+    UiButton(kUiXOff, kUiRowBtn, "OFF");
+    UiButton(kUiXAll, kUiRowBtn, "All OFF");
+    UiButton(kUiXOn, kUiRowAuto, AutoGet() ? "Start at reset: ON" : "Start at reset: off");
+    UiButton(kUiXOn, kUiRowUpd, "Update (hold 3s)");
+    UiButton(kUiXOn, kUiRowReset, "Soft Reset (hold 3s)");
+    UiMods();   /* v55~v68의 Sony 키보드 줄은 모듈 상태로 */
+    UiRow(kUiRowUse, "Use either CJKOS or MnHangul");
+    UiCheck(kUiRowDebug, "Debug", false);
+}
 
-        FtrGet('MnSy', 1, &on);
-        Row(8, DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, 'MnSy', true, &card, &id) != errNone ?
-                   "Sony kbd Hangul: MnSonyKbd (none)" :
-                   on ? "Sony kbd Hangul: MnSonyKbd ON" : "Sony kbd Hangul: MnSonyKbd off");
-    }
-    Row(10, "Update: All OFF or [Update], install, ON");
-    DrawCheck(12, "Debug", false);
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
+static void BeforeUpdate(void)
+{
+    SkipSet(1);
+    UiSkipOthers(kHgCreator);
 }
 
 static UInt16 AutoGet(void)
@@ -1887,19 +1865,25 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 
             if (!DebugGet()) {   /* v41: 사용자용 Main */
                 gPage = 0;
-                if (row == kURowOn && e.screenX >= 84)
-                    AllOff();
-                else if (row == kURowOn)
-                    PatchOn();
-                else if (row == kURowAuto) {
+                if (row == kUiRowBtn) {
+                    UInt16 k = UiBtnHit(e.screenX);
+
+                    if (k == 0)
+                        PatchOn();
+                    else if (k == 1)
+                        AllOff();
+                    else if (k == 2)   /* v69: 세 모듈 순서대로 끄기 */
+                        ModOffMsg(gMsg, ModOffAll(SelfOff, kHgCreator), CjkOn());
+                } else if (row == kUiRowAuto && e.screenX < 100) {
                     AutoSet(AutoGet() ? 0 : 1);
                     StrCopy(gMsg, AutoGet() ? "start at reset: ON" : "start at reset: off");
-                } else if (row == kURowAll && e.screenX < 110)   /* v64: 두 모듈 순서대로 끄기 */
-                    ModOffMsg(gMsg, ModOffBoth(SelfOff, 'MnSy'), CjkOn());
-                else if (row == kURowReset && e.screenX < 108)
-                    HoldReset(kURowReset);
-                else if (row == kURowUpd && e.screenX < 90)   /* v53 */
-                    HoldResetAs(kURowUpd, "Update (hold 3s)", true);
+                } else if (row == kUiRowUpd && e.screenX < 90) {
+                    if (!UiHoldReset(kUiRowUpd, "Update (hold 3s)", BeforeUpdate))
+                        StrCopy(gMsg, "reset cancelled");
+                } else if (row == kUiRowReset && e.screenX < 100) {
+                    if (!UiHoldReset(kUiRowReset, "Soft Reset (hold 3s)", NULL))
+                        StrCopy(gMsg, "reset cancelled");
+                }
                 else if (row == 12 && e.screenX < 60) {
                     DebugSet(1);
                     StrCopy(gMsg, "debug pages: tap title");

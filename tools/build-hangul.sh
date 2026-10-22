@@ -42,7 +42,12 @@ orig=$(m68k-palmos-nm patch.coff | awk '$3=="PatchOrig" {print $1}')
 entry=$(m68k-palmos-nm patch.coff | awk '$3=="PatchBlt" {print $1}')
 [ "$((16#$orig))" -eq 0 ] || { echo "error: PatchOrig at $orig (must be 0)" >&2; exit 1; }
 [ "$((16#$entry))" -eq 4 ] || { echo "error: PatchBlt at $entry (must be 4)" >&2; exit 1; }
-if m68k-palmos-objdump -d patch.coff | grep -q '%a5'; then
+# v69: 코드 부분(KscBits 표 앞)만, 파일로 검사 — 파이프(objdump | grep -q)는 pipefail에서 grep이 먼저 끝나면 거짓 통과·
+#   그렇지 않으면 표 데이터를 명령으로 푼 '%a5'에 걸려 실패해, 결과가 그때그때 달랐다(build-kbdhan.sh와 같은 방식)
+stop=$(m68k-palmos-nm patch.coff | awk '$3=="KscBits" {print $1}')
+[ -n "$stop" ] || { echo "error: KscBits not found" >&2; exit 1; }
+m68k-palmos-objdump -d --stop-address=0x$stop patch.coff > patch.code.dis
+if grep -q '%a5' patch.code.dis; then
   echo "error: patch references %a5" >&2; exit 1
 fi
 if m68k-palmos-objdump -r patch.coff | grep -qE '^[0-9a-f]{8} '; then

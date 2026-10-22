@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v50: 네 앱 공용 화면(src/common/app_ui.h) — Soft Reset·모듈 상태 4줄·[ ] Debug(제목 누르기도 그대로), All OFF는 세 모듈
+ *   (MnHangul·MnKbdHan), Update는 설치된 두 모듈 모두 다음 리셋 한 번 건너뛰기. 알림 줄은 비어 있으면 그리지 않음.
  * v49: v48 자동 시험 — 한 모드이면 시스템 키보드 화면·Mn 키보드의 영문 키도 자모로 바꾸고, Mn 키보드 위에 자모·한/A를 그림.
  *   Sony 자판이 떠 있을 때(#260: 첫 키 ` @9,0·~ @5,0 = 1, Mn 키보드 여러 글자·Graffiti 판 = 0)만 그리기·한/A, Sony 키 누름 수(#261)만큼의 keyDown만 바꿈.
  * v48: v47 자동 시험 — 빈 메모에서 처음 누른 shift가 기본 자모. 마지막 가상 실크 펜이 shift 키면(#262) 자동 대문자와 상관없이 쌍자음.
@@ -97,7 +99,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v49"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v50"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -123,12 +125,8 @@
 
 
 #define kLineH        11
-#define kRowOn        3
-#define kRowAuto      4
-#define kRowUpd       5
-#define kResetHoldSec 3
 
-static Char    gMsg[40] = "-";
+static Char    gMsg[40] = "";
 static Boolean gDebug = false;
 
 /* 고해상도 모드 (소니 헤더 없이 필요한 트랩만, MnHangul과 같음) */
@@ -551,64 +549,12 @@ static void Row(UInt16 row, const Char *s)
     WinDrawChars(s, StrLen(s), 2, (row + 1) * kLineH);
 }
 
-static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
+#include "../common/app_ui.h"
+
+static void BeforeUpdate(void)
 {
-    RectangleType r;
-
-    RctSetRectangle(&r, x, (row + 1) * kLineH + 1, FntCharsWidth(s, StrLen(s)) + 6, kLineH - 2);
-    WinDrawChars(s, StrLen(s), x + 3, (row + 1) * kLineH);
-    WinDrawRectangleFrame(roundFrame, &r);
-}
-
-/* v57: Update = 설치되어 있는 다른 모듈(MnHangul)도 다음 리셋 한 번 자동 시작 건너뛰기(앱 설정 3번).
- *   설치되어 있지 않으면 아무것도 저장하지 않는다(하나만 쓰는 경우는 그대로) */
-static void SkipOther(UInt32 cr)
-{
-    DmSearchStateType st;
-    UInt16            card, v = 1;
-    LocalID           id;
-
-    if (DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, cr, true, &card, &id) == errNone)
-        PrefSetAppPreferences(cr, 3, 1, &v, sizeof v, true);
-}
-
-/* 3초 누르면 리셋(중간에 떼면 취소). upd = 다음 리셋 한 번 자동 시작 건너뛰기 */
-static void HoldReset(UInt16 row, const Char *label, Boolean upd)
-{
-    UInt32        t0 = TimGetTicks(), tps = SysTicksPerSecond();
-    Int16         x, y, shown = -1, left;
-    Boolean       down = true;
-    RectangleType r, b;
-    Char          s[24];
-    UInt16        w = FntCharsWidth(label, StrLen(label)) + 6;
-
-    RctSetRectangle(&r, 0, (row + 1) * kLineH, w + 6, kLineH);
-    RctSetRectangle(&b, 3, (row + 1) * kLineH + 1, w, kLineH - 2);
-    while (down) {
-        left = (Int16)(kResetHoldSec - (TimGetTicks() - t0) / tps);
-        if (left <= 0)
-            StrCopy(s, "Resetting...");
-        else
-            StrPrintF(s, "Hold... %ds", left);
-        if (left != shown || left <= 0) {
-            WinEraseRectangle(&r, 0);
-            WinDrawChars(s, StrLen(s), 6, (row + 1) * kLineH);
-            WinDrawRectangleFrame(roundFrame, &b);
-            WinInvertRectangle(&b, 0);
-            shown = left;
-        }
-        if (left <= 0) {
-            if (upd) {
-                PrefPut(3, 1);
-                SkipOther('MnHg');
-            }
-            SysReset();
-            return;
-        }
-        SysTaskDelay(tps / 20);
-        EvtGetPen(&x, &y, &down);
-    }
-    StrCopy(gMsg, "reset cancelled");
+    PrefPut(3, 1);
+    UiSkipOthers(kSyCr);
 }
 
 /* v2: 쓰는 것만 — 켜기/끄기, 리셋 뒤 자동 시작, Update, 사용법('한A' 그림). 판정 기록은 제목을 누르면 */
@@ -620,31 +566,23 @@ static void DrawMain(void)
     RctSetRectangle(&r, 0, 0, 160, 160);
     WinEraseRectangle(&r, 0);
     SyTitle("");
-    Row(0, "Hangul kbd on Sony virtual kbd");
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
+    UiRow(0, "Hangul on Sony virtual kbd");
+    UiMsg(gMsg);
     {
         static const Char *nm[4] = { "off", "ON", "ON (other patch above)", "broken: tap ON" };
-        UInt16             st = Status();
 
-        StrPrintF(s, "Now: %s", nm[st]);
+        StrPrintF(s, "Now: %s", nm[Status()]);
     }
-    Row(2, s);
-    ButtonAt(3, kRowOn, "ON");
-    ButtonAt(40, kRowOn, "OFF");
-    ButtonAt(80, kRowOn, "All OFF");   /* v14 */
-    ButtonAt(3, kRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");
-    ButtonAt(3, kRowUpd, "Update (hold 3s)");
-    {   /* v4: 한글 표시 모듈(없으면 입력한 한글이 깨져 보임) */
-        UInt32 e = 0;
-
-        FtrGet('MnHg', 21, &e);
-        /* v13: MnHangul을 켠 뒤 CJKOS를 켜면 실제 그리기는 CJKOS(10-18 실측) — 둘 다 켜져 있음을 숨기지 않는다 */
-        Row(6, CjkFtr() ? (e != 0 ? "Hangul display: CJKOS (+MnHangul)" : "Hangul display: CJKOS") :
-                e != 0 ? "Hangul display: MnHangul" : "Hangul display: none (broken)");
-    }
-    Row(8, "Tap right of sym: Hangul / English");   /* v32: 한/영 단추(⇪ 아님) */
-    Row(9, "Shift in Hangul = double cons.");
-    Row(10, "Update: All OFF or [Update], install, ON");
+    UiRow(kUiRowNow, s);
+    UiButton(kUiXOn, kUiRowBtn, "ON");
+    UiButton(kUiXOff, kUiRowBtn, "OFF");
+    UiButton(kUiXAll, kUiRowBtn, "All OFF");
+    UiButton(kUiXOn, kUiRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");
+    UiButton(kUiXOn, kUiRowUpd, "Update (hold 3s)");
+    UiButton(kUiXOn, kUiRowReset, "Soft Reset (hold 3s)");
+    UiMods();   /* v50: 한글 표시 줄(v4~v13)은 모듈 상태 Display 줄로 */
+    UiRow(kUiRowUse, "Tap right of sym: Hangul / English");
+    UiCheck(kUiRowDebug, "Debug", false);
 }
 
 /* 판정 기록(MnHangul KDlg 7~11줄과 같음) */
@@ -762,7 +700,8 @@ static void DrawDebug(void)
     StrPrintF(s, "why%u H%lu S%lx p%lu ic%lu@%lu", (UInt16)(w >> 24), GetF(143), GetF(150), GetF(144),
               GetF(147), GetF(146));
     Row(11, s);
-    Row(12, "[tap here: clear diag]");
+    UiCheck(kUiRowDebug, "Debug", true);
+    UiButton(70, kUiRowDebug, "Clear diag");
 }
 
 static void Draw(void)
@@ -806,10 +745,11 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < 160) {
             Int16 row = e.screenY / kLineH - 1;
 
-            if (e.screenY < kLineH)   /* 제목 = 판정 기록 화면 ↔ 첫 화면 */
+            if (e.screenY < kLineH || (row == kUiRowDebug && e.screenX < 60)) {   /* 제목·Debug = 판정 기록 화면 ↔ 첫 화면 */
                 gDebug = !gDebug;
-            else if (gDebug) {
-                if (row == 12) {   /* v8: 진단 기록 지우기(v9: #188~#190, v10: #191~#194, v15: #198·#199 포함) */
+                gMsg[0] = 0;
+            } else if (gDebug) {
+                if (row == kUiRowDebug && e.screenX >= 70) {   /* v8: 진단 기록 지우기(v9: #188~#190, v10: #191~#194, v15: #198·#199 포함) */
                     UInt16 n;
 
                     for (n = 180; n <= 194; n++)
@@ -817,20 +757,22 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                     FtrSet(kSyCr, 198, 0);
                     FtrSet(kSyCr, 199, 0);
                 }
-            }
-            else if (row == kRowOn && e.screenX >= 78)   /* v14: 두 모듈 순서대로 끄기 */
-                ModOffMsg(gMsg, ModOffBoth(SelfOff, 'MnHg'), CjkFtr());
-            else if (row == kRowOn && e.screenX >= 40)
-                SonyOff();
-            else if (row == kRowOn) {
-                if (Status() == 0) {
+            } else if (row == kUiRowBtn) {
+                UInt16 k = UiBtnHit(e.screenX);
+
+                gMsg[0] = 0;
+                if (k == 2)   /* v50: 세 모듈 순서대로 끄기 */
+                    ModOffMsg(gMsg, ModOffAll(SelfOff, kSyCr), CjkFtr());
+                else if (k == 1)
+                    SonyOff();
+                else if (k == 0 && Status() == 0) {
                     UInt16 rr = SonyOn();
 
                     if (rr == kOnNoSilk)
                         StrCopy(gMsg, "no Sony virtual silk");   /* v17 */
                     else
                         StrPrintF(gMsg, rr == 0 || rr == 0x11 ? "ON" : "ON: result %x", rr);
-                } else {   /* v3: 빠진 연결 다시 잇기 */
+                } else if (k == 0) {   /* v3: 빠진 연결 다시 잇기 */
                     UInt16 n = (SyBltHeal() ? 1 : 0) + SyImHeal();
 
                     if (n != 0)
@@ -838,11 +780,13 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                     else
                         StrCopy(gMsg, Status() == 3 ? "broken: use Update" : "already ON");
                 }
-            } else if (row == kRowAuto) {
+            } else if (row == kUiRowAuto && e.screenX < 100) {
                 PrefPut(0, PrefGet(0, 1) ? 0 : 1);
                 StrCopy(gMsg, PrefGet(0, 1) ? "start at reset: ON" : "start at reset: off");
-            } else if (row == kRowUpd && e.screenX < 90)
-                HoldReset(kRowUpd, "Update (hold 3s)", true);
+            } else if (row == kUiRowUpd && e.screenX < 90) {
+                StrCopy(gMsg, UiHoldReset(kUiRowUpd, "Update (hold 3s)", BeforeUpdate) ? "" : "reset cancelled");
+            } else if (row == kUiRowReset && e.screenX < 100)
+                StrCopy(gMsg, UiHoldReset(kUiRowReset, "Soft Reset (hold 3s)", NULL) ? "" : "reset cancelled");
             Draw();
             continue;
         }

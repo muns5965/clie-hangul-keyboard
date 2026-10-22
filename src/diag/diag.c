@@ -1,5 +1,8 @@
 /*
- * ClieDiag v27 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 상태·진단 프로그램
+ * ClieDiag v28 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 진단 프로그램
+ *
+ * v28: 진단 전용 — Mn 키보드 켜기/끄기·상태·업데이트는 MnSkKbd 앱(src/skkbd)으로 옮김. 첫 화면 제목에 판 번호, 아래 안내 두 줄
+ *      (core/loader 업데이트 순서) 대신 'settings: MnSkKbd app'. 첫 화면의 로더·본체 기록은 진단으로 그대로 둔다.
  *
  * v14: 기본 화면(Main) 한 페이지만 보인다. Main의 "[ ] debug" 줄을 탭하면 아래 진단 페이지가 나타난다
  *      (체크 상태는 앱 설정에 저장). 복구용 DiagRescue(To Do 대체)는 폐기 — 로더 11부터 DisS가 필요 없다.
@@ -884,8 +887,8 @@ static void DrawMainPage(void)
     Row2(6, "keyboard: ", SkFtr(58) ? "on" : "off");
     DrawWideButton(kMainRowReset, "Soft Reset (hold 3s)");
     DrawCheck(kMainRowDebug, "Debug", gDebug);
-    DrawRow(10, "core: off > install > on");
-    DrawRow(11, "loader: off > install > reset");
+    DrawRow(10, "diagnostics only");
+    DrawRow(11, "settings: MnSkKbd app");
 }
 
 /* "가나다 한글" (KS X 1001, EUC-KR) */
@@ -965,7 +968,7 @@ static void Draw(void)
 
     switch (kind) {
     case kPgMain:
-        StrPrintF(title, "%u/%u MnSk keyboard%s", gPage + 1, TotalPages(),
+        StrPrintF(title, "%u/%u ClieDiag v28%s", gPage + 1, TotalPages(),
                   (gHrRef != 0xFFFF) ? "" : " (lo-res)");
         DrawMainPage();
         break;

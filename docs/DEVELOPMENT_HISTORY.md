@@ -80,6 +80,7 @@
 Main의 `Debug` 체크박스를 탭하면 아래 진단 페이지가 나타난다(체크 상태는 앱 설정에 저장).
 v14부터 복구용 DiagRescue(크리에이터 `todo`, To Do 버튼 대체)는 폐기 — 로더 11은 DisS 없이 교체된다.
 기기에 남은 DiagRescue는 SkWr 진단 페이지의 `Delete DiagRescue` 버튼으로 지운다(런처 삭제는 같은 크리에이터 `todo`의 To Do 데이터까지 지울 수 있음).
+v28: 진단 전용 — Mn 키보드 켜기/끄기·상태·업데이트는 설정 앱 MnSkKbd(`src/skkbd/`, 크리에이터 `MnSw`)로 옮김. 제목에 판 번호, 아래 업데이트 안내 두 줄 대신 `diagnostics only` / `settings: MnSkKbd app`. Main의 로더·본체 기록은 진단으로 그대로.
 v17: 누를 수 있는 줄은 둥근 테두리 버튼(누르면 반전), 디버그는 네모 체크박스로 표시.
 v22: 진단 Trap 페이지 — ROM 밖을 가리키는 시스템 트랩과 Intl 디스패치(Txt 계열) 목록. CJKOS 켜고/끄고 비교용.
 v21: 진단 Font 페이지 — KS X 1001 "가나다 한글"을 기존 함수(std·bold·large)와 HR 함수(HR std·bold·small)로 그려 CJKOS 처리 여부 확인.

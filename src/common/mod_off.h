@@ -1,5 +1,5 @@
 /*
- * MnHangul v64 · MnSonyKbd v14 공용: 설치 전 두 모듈을 순서대로 끄기 (앱 화면에서만 씀).
+ * MnHangul v64 · MnSonyKbd v14 공용: 설치 전 모듈을 순서대로 끄기 (앱 화면에서만 씀). v69·v50·MnKbdHan v13·MnSkKbd v2: 세 모듈(ModOffAll).
  *
  * 두 모듈이 같은 시스템 함수(BltDrawChars)에 차례로 끼면 나중에 켠 쪽이 위에 있고, 아래쪽은 위가 먼저 빠지기 전에는
  * 안전하게 풀 수 없다("kept"). 그래서 "자기 끄기 → 다른 모듈 끄기"를 두 번 돌린다: 첫 바퀴에서 위에 있는 쪽이 풀리고,
@@ -26,14 +26,28 @@ static UInt16 ModOff(UInt32 creator)
     return (UInt16)r;
 }
 
-/* self = 자기 끄기(결과 0·2), other = 다른 모듈 크리에이터. 결과 = 자기 | 다른 모듈 << 4 (마지막 바퀴) */
-static UInt16 ModOffBoth(UInt16 (*self)(void), UInt32 other)
+/* 세 패치 모듈(MnHangul·MnSonyKbd·MnKbdHan) 모두 끄기(공용 화면 All OFF). self = 자기 끄기(없으면 NULL, MnSkKbd),
+ *   selfCr = 자기 크리에이터(다른 모듈 목록에서 뺌). 셋이 같은 함수에 차례로 낄 수 있어 최대 세 바퀴.
+ *   결과 = 자기 | 다른 모듈 중 가장 나쁜 결과(3 실행 실패 > 2 남김 > 0) << 4 */
+static UInt16 ModOffAll(UInt16 (*self)(void), UInt32 selfCr)
 {
-    UInt16 a = 0, b = 0, k;
+    UInt16 a = 0, b = 0, k, i;
 
-    for (k = 0; k < 2; k++) {
-        a = self();
-        b = ModOff(other);
+    for (k = 0; k < 3; k++) {
+        a = self != NULL ? self() : 0;
+        b = 0;
+        for (i = 0; i < 3; i++) {
+            UInt32 cr = i == 0 ? 'MnHg' : i == 1 ? 'MnSy' : 'MnKh';
+            UInt16 r;
+
+            if (cr == selfCr)
+                continue;
+            r = ModOff(cr);
+            if (r == 3)
+                b = 3;
+            else if (r == 2 && b != 3)
+                b = 2;
+        }
         if (a != 2 && b != 2)
             break;
     }

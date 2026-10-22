@@ -35,6 +35,8 @@ FIGS = {   # 세 키보드 같은 말: 부제 = "모듈 · 한/A 단추 자리 =
     'sony-keyboard.png': ('3. Sony 가상 키보드로 한글', 'MnSonyKbd · sym 탭 오른쪽 한/A = 한/영',
                           [('sony_han', '한: 두벌식 자모'), ('sony_shift', 'Shift: 쌍자음'),
                            ('sony_eng', 'A: 영문'), ('sony_sym', 'sym: 기호(그대로)')]),
+    'apps.png': ('설정 앱 네 개 — 같은 화면', 'MnHangul · MnSonyKbd · MnKbdHan · MnSkKbd · 모듈 상태 4줄은 어느 앱에서나 같음',
+                 [('app_hg', 'MnHangul (한글 표시)'), ('app_sy', 'MnSonyKbd'), ('app_kh', 'MnKbdHan'), ('app_sk', 'MnSkKbd (Mn 키보드)')]),
     'mnhangul.png': ('CJKOS 없이 한글 표시', 'MnHangul · 조합형 글꼴(24×24) · 2바이트 글자 경계·줄바꿈',
                      [('hg_memo', '메모장(24×24 글꼴)')]),
 }

@@ -1,6 +1,9 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v13: 네 앱 공용 화면(src/common/app_ui.h) — [ON][OFF][All OFF]·Start at reset(앱 설정 0번, 기본 ON)·Update(hold 3s, 설정 3번 =
+ *   다음 리셋 한 번 건너뛰기)·Soft Reset·모듈 상태 4줄. 다른 앱의 All OFF가 부르면(kCmdModOff) 스스로 끔.
+ *   켜기·끄기는 결과 번호를 돌려주고 알림 글은 화면 쪽에서(리셋 실행에는 전역변수가 없음).
  * v12: 한/영 표시를 MnSonyKbd와 같은 그림으로(KhIc 0·1, tools/gen-kbd-mark.py) — HR 라이브러리가 있으면 고해상도, 없으면 글자.
  *   기록: #5·#6 그림 주소(한·A), #7·#8 핸들, #9 HR 참조 번호(0x10000 | 번호, 없으면 0).
  * v11: 앱 화면 정리 — 고해상도(Sony HR 320, 없는 기종은 그대로), MnSonyKbd와 같은 배치(제목·설명·알림·Now·ON/OFF·한글 표시·사용법),
@@ -27,17 +30,14 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v12"
+#define kVer      "v13"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
 #define kOrigOff  16
 #define kBufOff   32
-#define kLineH    11
-#define kRowBtn   3   /* v11: MnSonyKbd와 같은 줄 */
-#define kRowDebug 12
 
-static Char    gMsg[40] = "-";
+static Char    gMsg[40] = "";
 static UInt16 gHrRef = 0xFFFF;
 
 /* v11: 고해상도 모드(MnSonyKbd·MnHangul과 같음, 소니 헤더 없이 필요한 트랩만). HR 라이브러리가 없으면(T600C 등) 그대로 */
@@ -84,6 +84,21 @@ static void DebugSet(UInt16 v)
     PrefSetAppPreferences(kCr, 2, 1, &v, sizeof v, true);
 }
 
+/* v13: 앱 설정 0번 = Start at reset(기본 ON), 3번 = 다음 리셋 한 번 건너뛰기(Update). 리셋 실행에서도 부름(전역 없음) */
+static UInt16 PrefGet(UInt16 id, UInt16 def)
+{
+    UInt16 v = 0, size = sizeof v;
+
+    if (PrefGetAppPreferences(kCr, id, &v, &size, true) == noPreferenceFound || size != sizeof v)
+        v = def;
+    return v;
+}
+
+static void PrefPut(UInt16 id, UInt16 v)
+{
+    PrefSetAppPreferences(kCr, id, 1, &v, sizeof v, true);
+}
+
 static UInt16 HookTrap(UInt16 i)
 {
     switch (i) {
@@ -119,7 +134,8 @@ static Boolean AppDB(UInt16 *card, LocalID *id)
     return DmGetNextDatabaseByTypeCreator(true, &st, sysFileTApplication, kCr, true, card, id) == errNone;
 }
 
-static void HookOn(void)
+/* v13: 결과 0 켬, 1 이미 켜짐, 2 지원 안 함, 3 리소스 없음, 4 메모리 없음. 리셋 실행에서도 부름(전역 없음) */
+static UInt16 HookOn(void)
 {
     MemHandle h;
     UInt8    *code;
@@ -128,24 +144,17 @@ static void HookOn(void)
     UInt16    i, card;
     LocalID   id;
 
-    if (!Supported()) {
-        StrCopy(gMsg, "unsupported: OS 4 Latin only");
-        return;
-    }
-    if (GetF(2) != 0) {
-        StrCopy(gMsg, "already ON");
-        return;
-    }
+    if (!Supported())
+        return 2;
+    if (GetF(2) != 0)
+        return 1;
     h = DmGetResource(kHookRes, 0);
-    if (h == NULL) {
-        StrCopy(gMsg, "hook res missing");
-        return;
-    }
+    if (h == NULL)
+        return 3;
     buf = MemPtrNew(kBufN * 4);
     if (buf == NULL) {
         DmReleaseResource(h);
-        StrCopy(gMsg, "no memory");
-        return;
+        return 4;
     }
     MemSet(buf, kBufN * 4, 0);
     MemPtrSetOwner(buf, 0);
@@ -176,27 +185,24 @@ static void HookOn(void)
     }
     for (i = 0; i < kHookN; i++)
         SysSetTrapAddress(HookTrap(i), code + ((UInt32 *)code)[i]);
-    StrCopy(gMsg, "ON");
+    return 0;
 }
 
-static void HookOff(void)
+/* v13: 결과 0 꺼짐(또는 원래 꺼짐), 2 위에 다른 패치(남김) — mod_off.h 자기 끄기와 같은 번호 */
+static UInt16 HookOff(void)
 {
     UInt8  *code = (UInt8 *)GetF(2);
     void   *buf = (void *)GetF(1), *z = NULL;
     UInt16  i, kept = 0, card;
     LocalID id;
 
-    if (code == NULL) {
-        StrCopy(gMsg, "not ON");
-        return;
-    }
+    if (code == NULL)
+        return 0;
     for (i = 0; i < kHookN; i++)
         if ((UInt8 *)SysGetTrapAddress(HookTrap(i)) != code + ((UInt32 *)code)[i])
             kept++;
-    if (kept != 0) {   /* 위에 다른 패치: 풀면 안 된다 */
-        StrPrintF(gMsg, "kept %u: other patch on top", kept);
-        return;
-    }
+    if (kept != 0)   /* 위에 다른 패치: 풀면 안 된다 */
+        return 2;
     for (i = 0; i < kHookN; i++)
         SysSetTrapAddress(HookTrap(i), (void *)((UInt32 *)code)[kOrigOff / 4 + i]);
     DmWrite(code, kBufOff, &z, 4);
@@ -225,35 +231,23 @@ static void HookOff(void)
             FtrSet(kCr, 7 + k, 0);
         }
     }
-    StrCopy(gMsg, "OFF: ready to install");
+    return 0;
 }
 
-static void Row(UInt16 row, const Char *s)
+#include "../common/mod_off.h"
+#include "../common/app_ui.h"
+
+static void OnMsg(UInt16 r)
 {
-    WinDrawChars(s, StrLen(s), 2, (row + 1) * kLineH);
+    static const Char *m[5] = { "ON", "already ON", "unsupported: OS 4 Latin only", "hook res missing", "no memory" };
+
+    StrCopy(gMsg, m[r < 5 ? r : 4]);
 }
 
-static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
+static void BeforeUpdate(void)
 {
-    RectangleType r;
-
-    RctSetRectangle(&r, x, (row + 1) * kLineH + 1, FntCharsWidth(s, StrLen(s)) + 6, kLineH - 2);
-    WinDrawChars(s, StrLen(s), x + 3, (row + 1) * kLineH);
-    WinDrawRectangleFrame(roundFrame, &r);
-}
-
-/* 네모 체크박스 + 이름(MnHangul과 같음) */
-static void DrawCheck(UInt16 row, const Char *label, Boolean on)
-{
-    RectangleType r;
-
-    RctSetRectangle(&r, 4, (row + 1) * kLineH + 2, 7, 7);
-    WinDrawRectangleFrame(rectangleFrame, &r);
-    if (on) {
-        WinDrawLine(5, (row + 1) * kLineH + 5, 7, (row + 1) * kLineH + 8);
-        WinDrawLine(7, (row + 1) * kLineH + 8, 10, (row + 1) * kLineH + 2);
-    }
-    WinDrawChars(label, StrLen(label), 15, (row + 1) * kLineH);
+    PrefPut(3, 1);
+    UiSkipOthers(kCr);
 }
 
 /* v11: 진단 줄(v1~v10의 화면 4~13줄) — Debug 체크일 때만 */
@@ -263,23 +257,23 @@ static void DrawDiag(void)
     Char          s[48], ch[2];
 
     if (b == NULL) {
-        Row(1, "hook off: no diag");
+        UiRow(1, "hook off: no diag");
         return;
     }
     StrPrintF(s, "kbd opens %lu  letters %lu  jamo %lu", b[1], b[3], b[2]);
-    Row(1, s);
+    UiRow(1, s);
     StrPrintF(s, "han %lu  han taps %lu  keys %lu", b[8], b[13], b[14]);
-    Row(2, s);
+    UiRow(2, s);
     ch[0] = (Char)(b[4] >> 24);
     ch[1] = 0;
     if (ch[0] == 0)
         StrCopy(ch, "-");
     StrPrintF(s, "last %s caps %u temp %u auto %u why %lu", ch, (UInt16)((b[4] >> 16) & 1), (UInt16)((b[4] >> 8) & 0xFF),
               (UInt16)(b[4] & 1), b[6]);
-    Row(3, s);
+    UiRow(3, s);
     StrPrintF(s, "at %d,%d  width jamo %u / abc %u", (Int16)(b[5] >> 16), (Int16)b[5], (UInt16)(b[7] >> 16),
               (UInt16)b[7]);
-    Row(4, s);
+    UiRow(4, s);
     {   /* v2: 화면 안 펜 누름 3개(오래된 것부터) */
         UInt16 k;
 
@@ -291,7 +285,7 @@ static void DrawDiag(void)
             StrPrintF(t, " %d,%d", (Int16)(v >> 16), (Int16)v);
             StrCat(s, t);
         }
-        Row(5, s);
+        UiRow(5, s);
     }
     {   /* v9: 입력 */
         Char a[12], c[12];
@@ -302,17 +296,16 @@ static void DrawDiag(void)
             StrPrintF(a, "%x", (UInt16)(b[99] >> 16));
         StrPrintF(c, "%lx", b[96]);
         StrPrintF(s, "keys %lu last %s mod %x comp %s", b[98], a, (UInt16)b[99], c);
-        Row(6, s);
+        UiRow(6, s);
     }
     StrPrintF(s, "shift %lu  ct %lu bad %lu", b[101], GetF(20), GetF(21));   /* v10 손 shift, 커서 비교 */
-    Row(7, s);
+    UiRow(7, s);
 }
 
-/* v11: 사용자 화면 — MnSonyKbd와 같은 배치. Debug 체크면 진단 줄 */
+/* v13: 네 앱 공용 화면(app_ui.h). Debug 체크면 진단 줄 */
 static void Draw(void)
 {
     RectangleType r;
-    UInt32        hg = 0, v = 0;
     Boolean       dbg = DebugGet() != 0;
 
     RctSetRectangle(&r, 0, 0, 160, 160);
@@ -320,30 +313,36 @@ static void Draw(void)
     WinDrawInvertedChars("MnKbdHan " kVer, sizeof("MnKbdHan " kVer) - 1, 0, 0);
     if (dbg) {
         DrawDiag();
-        DrawCheck(kRowDebug, "Debug", true);
+        UiCheck(kUiRowDebug, "Debug", true);
         return;
     }
-    Row(0, "Hangul on system keyboard");
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
-    Row(2, GetF(2) ? "Now: ON" : "Now: off");
-    ButtonAt(2, kRowBtn, "ON");
-    ButtonAt(40, kRowBtn, "OFF");
-    if (!Supported())
-        Row(5, "unsupported: OS 4 Latin only");
-    FtrGet('MnHg', 21, &hg);
-    Row(6, FtrGet('dCJK', 0, &v) == errNone ? (hg ? "Hangul display: CJKOS (+MnHangul)" : "Hangul display: CJKOS") :
-           hg ? "Hangul display: MnHangul" : "Hangul display: none");
-    Row(8, "Memo > Edit > Keyboard");
-    Row(9, "Tap right of Int'l: Hangul / English");
-    Row(10, "Shift in Hangul = double cons.");
-    Row(11, "Update: OFF, install, ON");
-    DrawCheck(kRowDebug, "Debug", false);
+    UiRow(0, "Hangul on Edit > Keyboard");
+    UiMsg(gMsg);
+    UiRow(kUiRowNow, !Supported() ? "Now: unsupported (OS 4 Latin only)" : GetF(2) ? "Now: ON" : "Now: off");
+    UiButton(kUiXOn, kUiRowBtn, "ON");
+    UiButton(kUiXOff, kUiRowBtn, "OFF");
+    UiButton(kUiXAll, kUiRowBtn, "All OFF");
+    UiButton(kUiXOn, kUiRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");
+    UiButton(kUiXOn, kUiRowUpd, "Update (hold 3s)");
+    UiButton(kUiXOn, kUiRowReset, "Soft Reset (hold 3s)");
+    UiMods();
+    UiRow(kUiRowUse, "Tap right of Int'l: Hangul / English");
+    UiCheck(kUiRowDebug, "Debug", false);
 }
 
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 {
     EventType e;
 
+    if (cmd == sysAppLaunchCmdSystemReset) {   /* v13: 전역 없음 */
+        if (PrefGet(3, 0))   /* Update 리셋: 이번 한 번 켜지 않음(잠금 없음 → 바로 설치 가능) */
+            PrefPut(3, 0);
+        else if (PrefGet(0, 1))
+            HookOn();
+        return 0;
+    }
+    if (cmd == kCmdModOff)   /* v13: 다른 앱의 All OFF */
+        return HookOff();
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
     StartHires();
@@ -351,16 +350,32 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
     do {
         EvtGetEvent(&e, evtWaitForever);
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < 160) {
-            Int16 row = e.screenY / kLineH - 1;
+            Int16 row = e.screenY / kUiH - 1;
 
-            if (row == kRowDebug && e.screenX < 60)
+            gMsg[0] = 0;
+            if (row == kUiRowDebug && e.screenX < 60)
                 DebugSet(DebugGet() ? 0 : 1);
             else if (DebugGet())
                 ;   /* 진단 화면에서는 버튼 없음 */
-            else if (row == kRowBtn && e.screenX < 36)
-                HookOn();
-            else if (row == kRowBtn && e.screenX < 80)
-                HookOff();
+            else if (row == kUiRowBtn) {
+                UInt16 k = UiBtnHit(e.screenX);
+
+                if (k == 0)
+                    OnMsg(HookOn());
+                else if (k == 1)
+                    StrCopy(gMsg, HookOff() == 2 ? "kept: use Update, then install" : "off: ready to install");
+                else if (k == 2)
+                    ModOffMsg(gMsg, ModOffAll(HookOff, kCr), UiCjkos());
+            } else if (row == kUiRowAuto && e.screenX < 100) {
+                PrefPut(0, PrefGet(0, 1) ? 0 : 1);
+                StrCopy(gMsg, PrefGet(0, 1) ? "start at reset: ON" : "start at reset: off");
+            } else if (row == kUiRowUpd && e.screenX < 90) {
+                if (!UiHoldReset(kUiRowUpd, "Update (hold 3s)", BeforeUpdate))
+                    StrCopy(gMsg, "reset cancelled");
+            } else if (row == kUiRowReset && e.screenX < 100) {
+                if (!UiHoldReset(kUiRowReset, "Soft Reset (hold 3s)", NULL))
+                    StrCopy(gMsg, "reset cancelled");
+            }
             Draw();
             continue;
         }
