@@ -34,6 +34,9 @@
  *   [14] 키 글자 표 수, [15] 한/영 표시를 그려야 함, [16 + 2k]·[17 + 2k] 키 글자 표(최대 40): x<<16 | y, 글자<<24 | 글꼴
  *   [96]·[97] 조합 상태(v9), [98] 받은 keyDown 수, [99] 마지막 keyDown chr<<16 | modifiers, [100] 마지막 조합 키 chr<<16 | 자모,
  *   [101] 손으로 누른 shift(v10)
+ * v15 진단(키보드 화면이 열려 있는 동안만): 앱이 이벤트 하나를 처리한 시간(EvtGetEvent에서 돌아간 뒤 다음 부를 때까지, 틱) —
+ *   'MnKh' #40·#41 영문 keyDown 합·수, #42·#43 우리가 넣은 키(BS·완성형) 합·수, #44·#45 펜 이벤트 합·수, #46 최대,
+ *   #47 앞 이벤트 종류(0 영문 키, 1 넣은 키, 2 펜, 3 기타), #48 앞 이벤트를 돌려준 틱. #49 = 1이면 시험: 키 글자를 자모 대신 영문으로.
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  */
 
@@ -81,6 +84,14 @@ static inline UInt32 Orig(UInt16 i)
 
     asm("lea KhOrig(%%pc),%0" : "=a" (p));
     return p[i];
+}
+
+static inline UInt32 KhF(UInt16 n)
+{
+    UInt32 v = 0;
+
+    FtrGet(kKhCr, n, &v);
+    return v;
 }
 
 /* ---------------- 한글 조합 (공용) ---------------- */
@@ -220,6 +231,8 @@ static void DrawKey(UInt32 *b, UInt8 c, Coord x, Coord y)
     b[5] = ((UInt32)(UInt16)x << 16) | (UInt16)y;
     if (b[8] == 0)
         b[6] = 2;
+    else if (KhF(49) != 0)   /* v15 시험: 자모 대신 영문 키 글자(MnHangul 그리기 비용 빼기) */
+        b[6] = 5;
     else if (hg == 0)
         b[6] = 3;
     else if (j == 0)
@@ -257,13 +270,6 @@ void KhDraw(const Char *s, Int16 len, Coord x, Coord y)
 void HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 7);
 void HRWinEraseRectangle(UInt16 ref, const RectangleType *r, UInt16 corner) SYS_TRAP(sysLibTrapCustom + 21);
 
-static inline UInt32 KhF(UInt16 n)
-{
-    UInt32 v = 0;
-
-    FtrGet(kKhCr, n, &v);
-    return v;
-}
 
 /* 한/영 표시(빈칸 왼쪽): 한글 모드 '한', 영문 'A'.
  * v12: HR 라이브러리가 있으면(#9) MnSonyKbd와 같은 그림(KhIc 0·1, Galmuri11 14×18, 검정 글자 — #5·#6)을 고해상도로.
@@ -330,7 +336,54 @@ static void Redraw(UInt32 *b)
     FntSetFont(f0);
 }
 
+/* v15 진단: 앞 이벤트 처리 시간 더하기(부르기 전) */
+static void BusyIn(void)
+{
+    UInt32 t = TimGetTicks(), r = KhF(48), c = KhF(47), d, s = 0, n = 0;
+
+    if (r == 0 || c > 3)
+        return;
+    d = t - r;
+    if (c < 3) {
+        FtrGet(kKhCr, 40 + 2 * (UInt16)c, &s);
+        FtrSet(kKhCr, 40 + 2 * (UInt16)c, s + d);
+        FtrGet(kKhCr, 41 + 2 * (UInt16)c, &n);
+        FtrSet(kKhCr, 41 + 2 * (UInt16)c, n + 1);
+    }
+    if (d > KhF(46))
+        FtrSet(kKhCr, 46, d);
+}
+
+/* v15 진단: 돌려주는 이벤트 종류·시각(우리 처리 뒤) */
+static void BusyOut(const EventType *e)
+{
+    UInt32 c = 3;
+
+    if (e->eType == keyDownEvent)
+        c = e->data.keyDown.keyCode == kKhMark ? 1 : 0;
+    else if (e->eType == penDownEvent || e->eType == penUpEvent || e->eType == penMoveEvent)
+        c = 2;
+    FtrSet(kKhCr, 47, c);
+    FtrSet(kKhCr, 48, TimGetTicks());
+}
+
+static void KhGetEvent2(EventType *event, Int32 timeout);
+
 void KhGetEvent(EventType *event, Int32 timeout)
+{
+    UInt32 *b = Buf();
+
+    if (b != NULL && b[0] != 0)
+        BusyIn();
+    KhGetEvent2(event, timeout);
+    b = Buf();
+    if (b != NULL && b[0] != 0 && event != NULL)
+        BusyOut(event);
+    else
+        FtrSet(kKhCr, 48, 0);   /* 키보드 화면 밖: 재지 않음 */
+}
+
+static void KhGetEvent2(EventType *event, Int32 timeout)
 {
     UInt32 *b;
 

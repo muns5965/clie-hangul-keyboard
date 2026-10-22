@@ -1,6 +1,9 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v15(진단): 키보드 화면에서 앱이 이벤트 하나를 처리한 시간(틱, #40~#48: 영문 키·넣은 키·펜 별 평균·수, 최대)과
+ *   시험 스위치 #49(키 글자를 자모 대신 영문 — MnHangul 그리기 비용 빼기). 진단 9~11줄. v14 실측: MnHangul이 켜진 한 모드에서
+ *   0.04~0.1초 간격 입력의 펜 누름이 빠짐(MnHangul을 끄면 모두 받음), 키 하나에 키 글자 그리기 약 50번.
  * v14(진단): 키 큐 넣기(EvtEnqueueKey) 실패 기록 — #32 넣은 수, #30 실패 수, #31 마지막 오류. 진단 8줄. 동작은 그대로.
  * v13: 네 앱 공용 화면(src/common/app_ui.h) — [ON][OFF][All OFF]·Start at reset(앱 설정 0번, 기본 ON)·Update(hold 3s, 설정 3번 =
  *   다음 리셋 한 번 건너뛰기)·Soft Reset·모듈 상태 4줄. 다른 앱의 All OFF가 부르면(kCmdModOff) 스스로 끔.
@@ -31,7 +34,7 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v14"
+#define kVer      "v15"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
@@ -305,6 +308,29 @@ static void DrawDiag(void)
     UiRow(8, s);
 }
 
+/* v15 진단: 이벤트 처리 시간(틱, 평균은 소수 한 자리), 시험 스위치 */
+static void Avg(Char *o, UInt16 k)
+{
+    UInt32 sum = GetF(40 + 2 * k), n = GetF(41 + 2 * k), a10 = n ? sum * 10 / n : 0;
+
+    StrPrintF(o, "%lu.%lu", a10 / 10, a10 % 10);
+}
+
+static void DrawTiming(void)
+{
+    Char s[48], a[3][12];
+    UInt16 k;
+
+    for (k = 0; k < 3; k++)
+        Avg(a[k], k);
+    StrPrintF(s, "tk/evt key %s ins %s pen %s", a[0], a[1], a[2]);
+    UiRow(9, s);
+    StrPrintF(s, "n key %lu ins %lu pen %lu max %lu", GetF(41), GetF(43), GetF(45), GetF(46));
+    UiRow(10, s);
+    UiButton(kUiXOn, 11, GetF(49) ? "Test abc labels: ON" : "Test abc labels: off");
+    UiButton(100, 11, "Clear");
+}
+
 /* v13: 네 앱 공용 화면(app_ui.h). Debug 체크면 진단 줄 */
 static void Draw(void)
 {
@@ -316,6 +342,7 @@ static void Draw(void)
     WinDrawInvertedChars("MnKbdHan " kVer, sizeof("MnKbdHan " kVer) - 1, 0, 0);
     if (dbg) {
         DrawDiag();
+        DrawTiming();   /* v15 */
         UiCheck(kUiRowDebug, "Debug", true);
         return;
     }
@@ -358,8 +385,16 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             gMsg[0] = 0;
             if (row == kUiRowDebug && e.screenX < 60)
                 DebugSet(DebugGet() ? 0 : 1);
-            else if (DebugGet())
-                ;   /* 진단 화면에서는 버튼 없음 */
+            else if (DebugGet()) {   /* v15 진단 화면: 시험 스위치·시간 기록 지우기 */
+                if (row == 11 && e.screenX < 96)
+                    FtrSet(kCr, 49, GetF(49) ? 0 : 1);
+                else if (row == 11 && e.screenX >= 100) {
+                    UInt16 n;
+
+                    for (n = 40; n <= 48; n++)
+                        FtrSet(kCr, n, 0);
+                }
+            }
             else if (row == kUiRowBtn) {
                 UInt16 k = UiBtnHit(e.screenX);
 
