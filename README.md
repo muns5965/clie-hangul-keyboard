@@ -70,15 +70,15 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 
 ### 1. 화면 안 키보드 — MnKbdHan (진단 판)
 
-<img src="docs/images/system-keyboard.png" width="760" alt="시스템 키보드 화면에서 두벌식 한글(MnKbdHan): 한, shift 쌍자음, 영문">
+<img src="docs/images/system-keyboard.png" width="760" alt="시스템 키보드 화면(MnKbdHan): 한 두벌식 자모, Shift 쌍자음, A 영문 — Int'l 탭 오른쪽 한/A">
 
 ### 2. 화면 밖 실크스크린에 자체 키보드 — Mn 가상 키보드
 
-<img src="docs/images/mn-keyboard.png" width="760" alt="Mn 가상 키보드: 한글 단모음, Shift 쌍자음, 영문, 숫자·기호">
+<img src="docs/images/mn-keyboard.png" width="760" alt="Mn 가상 키보드: 한 단모음 자모, Shift 쌍자음, A 영문, 123 숫자·기호 — 왼쪽 아래 한/A 키">
 
 ### 3. 화면 밖 Sony 키보드를 한글 자판으로 — MnSonyKbd
 
-<img src="docs/images/sony-keyboard.png" width="760" alt="Sony 가상 키보드로 한글(MnSonyKbd): 한, Shift 쌍자음, A 영문, sym 자판">
+<img src="docs/images/sony-keyboard.png" width="760" alt="Sony 가상 키보드(MnSonyKbd): 한 두벌식 자모, Shift 쌍자음, A 영문, sym 기호 — sym 탭 오른쪽 한/A">
 
 ### 한글 표시 — MnHangul (입력 방법과 별개)
 
