@@ -1,5 +1,8 @@
 /*
- * ClieDiag v28 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 진단 프로그램
+ * ClieDiag v29 - Sony CLIE NR70V (Palm OS 4.1S) MnSk 한글 키보드 진단 프로그램
+ *
+ * v29: Events 페이지에 "FLD" 줄 추가 — 누르면 동적 폼과 1줄 입력칸을 만들고 포커스를 준다(다른 페이지로 가면 지움).
+ *      입력칸 내용이 바뀌면 fld="..." 줄을 기록해, 키 이벤트 없이 들어온 입력(TG50 그래피티 대화상자 등)도 보인다.
  *
  * v28: 진단 전용 — Mn 키보드 켜기/끄기·상태·업데이트는 MnSkKbd 앱(src/skkbd)으로 옮김. 첫 화면 제목에 판 번호, 아래 안내 두 줄
  *      (core/loader 업데이트 순서) 대신 'settings: MnSkKbd app'. 첫 화면의 로더·본체 기록은 진단으로 그대로 둔다.
@@ -158,6 +161,10 @@ static void MeasureFonts(const Char *tag);
 #define kSkRowFirst   8
 #define kSkRowRescue  4
 #define kEvRowInt     11
+#define kEvRowFld     10          /* Events 페이지 입력칸(FLD) 줄 */
+#define kFldFormID    9000
+#define kFldID        9001
+#define kFldMax       32
 #define kRescueName   "DiagRescue"
 
 typedef struct {
@@ -188,6 +195,8 @@ static Boolean  gHoldLast = false;  /* 조작 결과를 바로 뒤 penUp이 덮�
 static Boolean  gDebug = false;     /* 진단 페이지 표시 (앱 설정 kPrefDebug) */
 static Int16    gBtnW[kVisible];    /* 줄별 버튼 너비(0 = 버튼 없음). Draw 때마다 새로 정한다 */
 static Boolean  gBtnWide[kVisible]; /* 넓은 버튼(리셋) */
+static FormType *gFldForm = NULL;   /* FLD 진단: 동적 폼 + 입력칸 1개. Events 페이지에서만 존재 */
+static Char     gFldSnap[kFldMax + 1]; /* 마지막으로 기록한 입력칸 내용 */
 
 static SkwrInfo gSkwr[kMaxSkwr];
 static UInt16   gSkwrN = 0;
@@ -951,6 +960,63 @@ static void DrawFontPage(void)
     HrFontRow(11, "HR small", 2);
 }
 
+/* ---------------------------------------------------------------- FLD 진단 */
+/* Events 페이지에서 FLD를 누르면 동적 폼과 1줄 입력칸을 만들고 포커스를 준다.
+ * 키·그래피티 입력이 이벤트로 오는지, 입력칸에 직접 들어가는지를 기록하기 위한 것.
+ * 다른 페이지로 가면 폼을 지운다 (다른 진단 기능에는 폼이 없다) */
+static FieldType *FldObj(void)
+{
+    return gFldForm ? (FieldType *)FrmGetObjectPtr(gFldForm, FrmGetObjectIndex(gFldForm, kFldID)) : NULL;
+}
+
+static void FldCheckText(void)
+{
+    FieldType *f = FldObj();
+    Char      *t;
+
+    if (!f)
+        return;
+    t = FldGetTextPtr(f);
+    if (!t) t = "";
+    if (StrCompare(t, gFldSnap) != 0) {
+        StrNCopy(gFldSnap, t, kFldMax);
+        gFldSnap[kFldMax] = 0;
+        StrPrintF(NextLine(&gLog), "fld=\"%s\"", gFldSnap);
+    }
+}
+
+static void FldOpen(void)
+{
+    if (gFldForm)
+        return;
+    gFldForm = FrmNewForm(kFldFormID, "", 0, 0, kScreenW, kScreenW, false, 0, 0, 0);
+    if (!gFldForm) {
+        StrCopy(NextLine(&gLog), "== FLD: form failed ==");
+        return;
+    }
+    if (!FldNewField((void **)&gFldForm, kFldID, 3, (kEvRowFld + 1) * kLineH, kScreenW - 6, kLineH,
+                     stdFont, kFldMax, true, true, true, false, leftAlign, false, false, false)) {
+        FrmDeleteForm(gFldForm);
+        gFldForm = NULL;
+        StrCopy(NextLine(&gLog), "== FLD: field failed ==");
+        return;
+    }
+    FrmSetActiveForm(gFldForm);
+    FrmSetFocus(gFldForm, FrmGetObjectIndex(gFldForm, kFldID));
+    gFldSnap[0] = 0;
+    StrCopy(NextLine(&gLog), "== FLD ON ==");
+}
+
+static void FldClose(void)
+{
+    if (!gFldForm)
+        return;
+    FrmSetFocus(gFldForm, noFocus);
+    FrmDeleteForm(gFldForm);
+    gFldForm = NULL;
+    StrCopy(NextLine(&gLog), "== FLD off ==");
+}
+
 static void Draw(void)
 {
     RectangleType r;
@@ -968,7 +1034,7 @@ static void Draw(void)
 
     switch (kind) {
     case kPgMain:
-        StrPrintF(title, "%u/%u ClieDiag v28%s", gPage + 1, TotalPages(),
+        StrPrintF(title, "%u/%u ClieDiag v29%s", gPage + 1, TotalPages(),
                   (gHrRef != 0xFFFF) ? "" : " (lo-res)");
         DrawMainPage();
         break;
@@ -1002,9 +1068,13 @@ static void Draw(void)
     default:
         StrPrintF(title, "%u/%u Events INT:%s", gPage + 1, TotalPages(),
                   gIntercept ? "ON" : "off");
-        start = (gLog.n > kEvRowInt) ? (Int16)(gLog.n - kEvRowInt) : 0;
-        for (i = 0; i < kEvRowInt && start + i < (Int16)gLog.n; i++)
+        start = (gLog.n > kEvRowFld) ? (Int16)(gLog.n - kEvRowFld) : 0;
+        for (i = 0; i < kEvRowFld && start + i < (Int16)gLog.n; i++)
             DrawRow((UInt16)i, gLog.t[start + i]);
+        if (gFldForm)
+            FldDrawField(FldObj());
+        else
+            DrawButton(kEvRowFld, "FLD: off (tap = text field)");
         DrawButton(kEvRowInt, gIntercept ? "INT: ON (silk blocked)" : "INT: off");
         break;
     }
@@ -1023,6 +1093,13 @@ static void GoPage(Int16 delta)
 
     while (p < 0) p += n;
     gPage = (UInt16)(p % n);
+    if (gFldForm) {
+        LineBuf *b;
+        UInt16   sub, subN;
+
+        if (PageKind(&b, &sub, &subN) != kPgEvents)
+            FldClose();
+    }
     Draw();
 }
 
@@ -1098,7 +1175,10 @@ static void HandleAppTap(Int16 x, Int16 y)
     }
 
     if (kind == kPgEvents) {
-        if (row == kEvRowInt) {
+        if (row == kEvRowFld && !gFldForm) {
+            FldOpen();
+            Draw();
+        } else if (row == kEvRowInt) {
             gIntercept = !gIntercept;
             StrPrintF(NextLine(&gLog), "== INT %s ==", gIntercept ? "ON" : "off");
             Draw();
@@ -1174,6 +1254,13 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             }
         }
 
+        if (gFldForm && e.eType == penDownEvent && e.screenY / kLineH - 1 == kEvRowFld) {
+            FldHandleEvent(FldObj(), &e);   /* 입력칸 안 탭: 커서 이동 */
+            FldCheckText();
+            Draw();
+            continue;
+        }
+
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < kSilkTopY
             && e.screenX >= 0 && e.screenX < kScreenW) {
             HandleAppTap(e.screenX, e.screenY);
@@ -1190,12 +1277,24 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                 if (e.data.keyDown.chr == vchrPageDown) { GoPage(1);  continue; }
                 if (e.data.keyDown.chr == vchrPageUp)   { GoPage(-1); continue; }
             }
+            if (gFldForm)
+                FldHandleEvent(FldObj(), &e);
+        }
+
+        if (gFldForm) {
+            Char before[kFldMax + 1];
+
+            StrCopy(before, gFldSnap);
+            FldCheckText();               /* 이벤트 없이 바뀐 내용(그래피티 Done 등)도 기록된다 */
+            if (StrCompare(before, gFldSnap) != 0)
+                logged = true;
         }
 
         if (logged)
             Draw();
     } while (e.eType != appStopEvent);
 
+    FldClose();
     StopHires();
     return 0;
 }
