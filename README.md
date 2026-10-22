@@ -373,6 +373,7 @@ Mn 가상 키보드(MnSkKbd)의 `ON`/`OFF`는 리셋 뒤 적용되고 `All OFF`�
 | [docs/RECOVERY.md](docs/RECOVERY.md) | 문제가 생겼을 때 복구(먹통, 설치 실패, 연결 빠짐, 리셋 종류), 옛 DisS 절차 |
 | [docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md) | CJKOS 의존성, 대체 모듈(MnHangul)·Sony 가상 키보드 한글(MnSonyKbd) 검토와 판별 시험 기록 |
 | [docs/DEVELOPMENT_HISTORY.md](docs/DEVELOPMENT_HISTORY.md) | 1~12단계 개발 기록, ROM 역분석, ClieDiag 변경 기록, 실패한 가설 |
+| [docs/OS5_RESEARCH.md](docs/OS5_RESEARCH.md) | Palm OS 5(TG50) 한글 구현 조사: 물리 키 이벤트, 68k 트랩 기록, ARM 함수 주소표(표 8·12)와 교체 시험, OS5 모듈 구상 |
 
 ## 시험 환경
 
