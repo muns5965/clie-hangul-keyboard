@@ -32,7 +32,8 @@
  *   [6] 마지막 판정(1 바꿈, 2 한글 모드 아님, 3 MnHangul 꺼짐, 4 자모 아님), [7] 바꾼 자모 폭<<16 | 영문 폭
  *   [8] 한글 모드, [9] 다음 펜 칸, [10]~[12] 화면 안 펜 누름 3개 x<<16 | y, [13] 한/영 빈칸 누름 수,
  *   [14] 키 글자 표 수, [15] 한/영 표시를 그려야 함, [16 + 2k]·[17 + 2k] 키 글자 표(최대 40): x<<16 | y, 글자<<24 | 글꼴
- *   [96]·[97] 조합 상태(v9), [98] 받은 keyDown 수, [99] 마지막 keyDown chr<<16 | modifiers, [100] 마지막 조합 키 chr<<16 | 자모
+ *   [96]·[97] 조합 상태(v9), [98] 받은 keyDown 수, [99] 마지막 keyDown chr<<16 | modifiers, [100] 마지막 조합 키 chr<<16 | 자모,
+ *   [101] 손으로 누른 shift(v10)
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  */
 
@@ -59,6 +60,8 @@ typedef void (*CharsFn)(const Char *, Int16, Coord, Coord);
 typedef void (*GetFn)(EventType *, Int32);
 
 #define kHanKey(x, y)  ((x) >= 110 && (x) <= 131 && (y) >= 121 && (y) <= 141)
+/* v10: shift 키(창 기준, 자동 시험 펜 기록으로 잰 자리 — 아래 줄 맨 왼쪽). 손으로 누른 shift = 버퍼 [101] */
+#define kShiftKeyD(x, y) ((x) >= 0 && (x) <= 31 && (y) >= 107 && (y) <= 121)
 #define kMarkX   113
 #define kMarkY   126
 #define kTabN    40
@@ -123,6 +126,7 @@ static void Enter(void)
             b[14] = 0;
             b[15] = 1;
             b[kSt] = 0;                /* v9: 조합은 새로 */
+            b[101] = 0;                /* v10: 손 shift 없음 */
             CtReset(kKhCr, kKhFld);
             if (b[8] != 0)
                 NoAutoShift();         /* v9: 키보드가 그리기 전에 자동 대문자 풀기 */
@@ -190,7 +194,9 @@ static void Remember(UInt32 *b, UInt8 c, Coord x, Coord y)
 /* 키 글자 하나 그리기(한글 모드면 자모). 키 가운데에 맞춘다 */
 static void DrawKey(UInt32 *b, UInt8 c, Coord x, Coord y)
 {
-    UInt8   j = Jamo((c >= 'A' && c <= 'Z' && AutoShifted()) ? (UInt8)(c - 'A' + 'a') : c);   /* v9: 자동 대문자는 기본 자모 */
+    /* v9: 자동 대문자는 기본 자모. v10: 손으로 누른 shift(버퍼 [101])가 아니면 대문자도 기본 자모 — 키보드 화면은 빈 입력칸 첫 글자에
+     *   자기 shift를 걸어 두고(Graffiti autoShifted 아님, GrfSetState로 안 풀림) A→한 직후 쌍자음으로 보이고 들어갔음(v9 자동 시험) */
+    UInt8   j = Jamo((c >= 'A' && c <= 'Z' && (AutoShifted() || b[101] == 0)) ? (UInt8)(c - 'A' + 'a') : c);
     UInt32  hg = 0;
     Boolean caps = false, num = false, autoS = false;
     UInt16  temp = 0;
@@ -318,11 +324,14 @@ void KhGetEvent(EventType *event, Int32 timeout)
         b[10 + k] = ((UInt32)(UInt16)event->screenX << 16) | (UInt16)event->screenY;
         b[9] = (k + 1 > 2) ? 0 : k + 1;
     }
+    if (event->eType == penDownEvent && kShiftKeyD(event->screenX, event->screenY))
+        b[101] = b[101] ? 0 : 1;   /* v10: 손 shift(누를 때마다 켜고 끔, 글자 하나 넣으면 풀림) */
     if (kHanKey(event->screenX, event->screenY)) {
         if (event->eType == penDownEvent) {
             b[8] = b[8] ? 0 : 1;
             b[13]++;
             b[kSt] = 0;                 /* v9: 전환하면 조합 끝 */
+            b[101] = 0;                 /* v10 */
             Redraw(b);                  /* 자동 대문자 상태면 기본 자모로 그림 */
             if (b[8] != 0)
                 NoAutoShift();
@@ -362,6 +371,10 @@ static void Key(UInt32 *b, EventType *event)
             CtUnknown(kKhCr, kKhFld);
         return;
     }
+    if (ch >= 'A' && ch <= 'Z' && b[101] == 0)   /* v10: 손 shift가 아니면 대문자도 기본 자모 */
+        ch = (WChar)(ch - 'A' + 'a');
+    if (ch < 0x80 && Letter((UInt8)ch))
+        b[101] = 0;                               /* v10: 글자 하나 넣으면 손 shift 풀림 */
     j = (ch < 0x80 && Letter((UInt8)ch)) ? Jamo((UInt8)ch) : 0;
     if (j == 0) {   /* 숫자·기호·space·Enter 등: 조합 끝, 그대로 넘김 */
         st[0] = 0;

@@ -1,6 +1,8 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v10: 쌍자음은 손으로 누른 shift(키 x 0~31, y 107~121)일 때만 — v9 자동 시험: 새 메모에서 A→한 직후 키보드 화면 자체 shift로
+ *   키 글자가 쌍자음으로 보이고 첫 글자가 쌍자음으로 들어감(rk → 까).
  * v9: 두벌식 조합 입력(한글 모드, 키보드 화면 안) + 한글 모드에서 자동 대문자 풀기. 진단 줄 = keyDown 수·마지막 키·조합 상태.
  * v8: 키 글자 표를 키 단위로(같은 줄 x 4 이내 덮어씀). v7 실측: 전환 때 쌍자음이 보였다가 기본 자모로 바뀜.
  * v7: 키 글자만 바꿈(키보드 화면 창 + 키 세 줄 y 60~100). v6 실측: 메뉴 명령 글자도 자모로 그려짐.
@@ -21,7 +23,7 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v9"
+#define kVer      "v10"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
