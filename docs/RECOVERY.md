@@ -1,7 +1,7 @@
 # 복구
 
 > 문제가 생겼을 때 되살리는 방법. 평소 설치·업데이트 절차는 [README](../README.md#설치업데이트)에 있다
-> (Mn 가상 키보드: 설치 A·C, MnHangul·MnSonyKbd: [공통 절](../README.md#mnhangulmnsonykbd-공통-켜기업데이트cjkos-전환)).
+> (Mn 가상 키보드: [2. Mn 가상 키보드](../README.md#2-mn-가상-키보드mnskpluginmnskcore), MnHangul·MnSonyKbd·MnKbdHan: [설정 앱 공통](../README.md#설정-앱-공통-화면켜기업데이트)).
 > 구조 설명은 [ARCHITECTURE.md](ARCHITECTURE.md), 시험 기록은 [KOREAN_SUPPORT.md](KOREAN_SUPPORT.md).
 > 시험은 CloudpilotEmu **백업 복사본 세션**에서 한다. 아래 방법으로도 안 되면 백업을 복원한다.
 
