@@ -1,6 +1,7 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v14(진단): 키 큐 넣기(EvtEnqueueKey) 실패 기록 — #32 넣은 수, #30 실패 수, #31 마지막 오류. 진단 8줄. 동작은 그대로.
  * v13: 네 앱 공용 화면(src/common/app_ui.h) — [ON][OFF][All OFF]·Start at reset(앱 설정 0번, 기본 ON)·Update(hold 3s, 설정 3번 =
  *   다음 리셋 한 번 건너뛰기)·Soft Reset·모듈 상태 4줄. 다른 앱의 All OFF가 부르면(kCmdModOff) 스스로 끔.
  *   켜기·끄기는 결과 번호를 돌려주고 알림 글은 화면 쪽에서(리셋 실행에는 전역변수가 없음).
@@ -30,7 +31,7 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v13"
+#define kVer      "v14"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
@@ -300,6 +301,8 @@ static void DrawDiag(void)
     }
     StrPrintF(s, "shift %lu  ct %lu bad %lu", b[101], GetF(20), GetF(21));   /* v10 손 shift, 커서 비교 */
     UiRow(7, s);
+    StrPrintF(s, "enq %lu fail %lu e%lx  open %lu", GetF(32), GetF(30), GetF(31), b[0]);   /* v14 */
+    UiRow(8, s);
 }
 
 /* v13: 네 앱 공용 화면(app_ui.h). Debug 체크면 진단 줄 */

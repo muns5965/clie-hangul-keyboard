@@ -86,9 +86,20 @@ static inline UInt32 Orig(UInt16 i)
 /* ---------------- 한글 조합 (공용) ---------------- */
 #include "../common/cursor_track.h"
 
+/* v14 진단: 키 큐 넣기 — #32 넣은 수, #30 실패 수, #31 마지막 오류. 동작은 그대로 */
 static inline void HcSend(UInt16 c)
 {
-    EvtEnqueueKey(c, kKhMark, 0);
+    UInt32 n = 0;
+    Err    err = EvtEnqueueKey(c, kKhMark, 0);
+
+    FtrGet(kKhCr, 32, &n);
+    FtrSet(kKhCr, 32, n + 1);
+    if (err != errNone) {
+        n = 0;
+        FtrGet(kKhCr, 30, &n);
+        FtrSet(kKhCr, 30, n + 1);
+        FtrSet(kKhCr, 31, (UInt16)err);
+    }
     CtDelta(kKhCr, kKhFld, c);
 }
 

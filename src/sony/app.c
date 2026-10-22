@@ -7,6 +7,9 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v51(진단): 키 큐 넣기(EvtEnqueueKey) 실패 기록 — #352 조합 결과 실패 수, #353 미루기 실패 수, #354 마지막(곳<<16 | 오류).
+ *   진단 8줄(v20 sym 줄 자리) = q 보낸 수(#266)·앱에 간 수(#267)·실패 F(#352)·D(#353)·e(#354)·p Sony 키 누름(#355)·
+ *   k Sony 키로 받은 keyDown(#356)·z 누름 없이 온 keyDown(#357)·c 누름 수 상한 8에 걸림(#358). 동작은 그대로.
  * v50: 네 앱 공용 화면(src/common/app_ui.h) — Soft Reset·모듈 상태 4줄·[ ] Debug(제목 누르기도 그대로), All OFF는 세 모듈
  *   (MnHangul·MnKbdHan), Update는 설치된 두 모듈 모두 다음 리셋 한 번 건너뛰기. 알림 줄은 비어 있으면 그리지 않음.
  * v49: v48 자동 시험 — 한 모드이면 시스템 키보드 화면·Mn 키보드의 영문 키도 자모로 바꾸고, Mn 키보드 위에 자모·한/A를 그림.
@@ -99,7 +102,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v50"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v51"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
@@ -649,11 +652,9 @@ static void DrawDebug(void)
         Row(6, s);
     }
     {   /* v16: 8·10줄의 v8 비교 진단은 뺌(창·글꼴은 공개 함수로 바꿈, KOREAN_SUPPORT v8·v15 실측) */
-        {   /* v20 진단: sym 탭·한/영 빈칸 */
-            UInt32 xy = GetF(217), wh = GetF(218);
-
-            StrPrintF(s, "sym %lu @%d,%d %ux%u han %lu t%lu", GetF(216), (Int16)(xy >> 16), (Int16)xy,
-                      (UInt16)(wh >> 16), (UInt16)wh, GetF(214), GetF(219));   /* #214 = dubeol.h kFtrHanTab */
+        {   /* v51 진단: 키 큐 넣기 — 보낸 수·앱에 간 수·실패(조합 F, 미루기 D)·마지막 실패(곳·오류). v20 sym 줄 자리 */
+            StrPrintF(s, "q%lu/%lu F%lu D%lu e%lx p%lu k%lu z%lu c%lu", GetF(266), GetF(267), GetF(352), GetF(353),
+                      GetF(354), GetF(355), GetF(356), GetF(357), GetF(358));
             Row(8, s);
         }
         {   /* v20 진단: 가상 실크 펜 누름 3개(오래된 것부터), 빈칸 누른 뒤 다른 창 글자 그리기 수 차이 */
@@ -756,6 +757,8 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
                         FtrSet(kSyCr, n, 0);
                     FtrSet(kSyCr, 198, 0);
                     FtrSet(kSyCr, 199, 0);
+                    for (n = 352; n <= 358; n++)   /* v51 */
+                        FtrSet(kSyCr, n, 0);
                 }
             } else if (row == kUiRowBtn) {
                 UInt16 k = UiBtnHit(e.screenX);

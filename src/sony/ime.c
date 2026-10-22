@@ -86,13 +86,34 @@ static inline GetFn OrigGet(void)
 #define kSyFtrFld 191   /* #191~#197 조합 중 커서 이동 감지(src/common/cursor_track.h, MnSonyKbd v10) */
 #include "../common/cursor_track.h"
 
-static inline void HcSend(UInt16 c)
+/* v51 진단: 키 큐 넣기 실패 기록 — #352 조합 결과(HcSend) 실패 수, #353 미루기 실패 수, #354 마지막 실패(곳<<16 | 오류). 동작은 그대로 */
+static inline void EnqFail(UInt16 site, Err err)
 {
     UInt32 n = 0;
 
+    FtrGet(kSyCr, site == 1 ? 352 : 353, &n);
+    FtrSet(kSyCr, site == 1 ? 352 : 353, n + 1);
+    FtrSet(kSyCr, 354, ((UInt32)site << 16) | (UInt16)err);
+}
+
+static inline void Cnt(UInt16 k)   /* v51 진단 카운터 */
+{
+    UInt32 n = 0;
+
+    FtrGet(kSyCr, k, &n);
+    FtrSet(kSyCr, k, n + 1);
+}
+
+static inline void HcSend(UInt16 c)
+{
+    UInt32 n = 0;
+    Err    err;
+
     FtrGet(kSyCr, 266, &n);   /* v46: 우리가 넣은 키 수(#267 = 앱에 간 수와 비교) */
     FtrSet(kSyCr, 266, n + 1);
-    EvtEnqueueKey(c, kImMark, 0);
+    err = EvtEnqueueKey(c, kImMark, 0);
+    if (err != errNone)
+        EnqFail(1, err);
     CtDelta(kSyCr, kSyFtrFld, c);
 }
 
@@ -521,6 +542,9 @@ void HgImGet(EventType *event, Int32 timeout)
 
                 FtrGet(kSyCr, 261, &n);
                 FtrSet(kSyCr, 261, n < 8 ? n + 1 : 8);
+                Cnt(355);              /* v51 진단: Sony 키 누름 */
+                if (n >= 8)
+                    Cnt(358);          /* v51 진단: 상한 8에 걸려 버린 누름 */
             }
             SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
             {   /* v20 진단: 가상 실크 펜 누름 3개 */
@@ -661,7 +685,10 @@ void HgImGet(EventType *event, Int32 timeout)
         FtrGet(kSyCr, 267, &seen);
         FtrGet(kSyCr, 265, &streak);
         if (sent != seen && streak < 20) {
-            EvtEnqueueKey(event->data.keyDown.chr, event->data.keyDown.keyCode, event->data.keyDown.modifiers);
+            Err err = EvtEnqueueKey(event->data.keyDown.chr, event->data.keyDown.keyCode, event->data.keyDown.modifiers);
+
+            if (err != errNone)
+                EnqFail(2, err);   /* v51 진단 */
             FtrSet(kSyCr, 265, streak + 1);
             FtrGet(kSyCr, 264, &seen);
             FtrSet(kSyCr, 264, seen + 1);   /* 진단: 미룬 수 */
@@ -678,6 +705,7 @@ void HgImGet(EventType *event, Int32 timeout)
 
         FtrGet(kSyCr, 261, &n);
         if (n == 0) {
+            Cnt(357);   /* v51 진단: Sony 키 누름 없이 온 keyDown(그대로 넘김) */
             EndLog(st, 6, event->data.keyDown.chr);
             st[0] = 0;
             CtUnknown(kSyCr, kSyFtrFld);
@@ -685,6 +713,7 @@ void HgImGet(EventType *event, Int32 timeout)
             return;
         }
         FtrSet(kSyCr, 261, n - 1);
+        Cnt(356);   /* v51 진단: Sony 키로 받은 keyDown */
     }
     ch = event->data.keyDown.chr;
     if (ch < 0x80)   /* v34: PC 두벌식 — 누를 때의 shift(#256)대로 쌍자음 또는 기본 자모, 쓰고 나면 0 */
