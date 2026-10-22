@@ -114,6 +114,14 @@ static inline UInt32 GetShift(void)
 }
 
 /* v34: 건너뛴 까닭 #295(1 기록 없음, 2 글꼴 v2, 3 글꼴 크기, 4 그림 못 만듦, 5 그림 줄 폭) */
+static inline UInt32 GetF260(void)   /* v49: Sony 가상 키보드가 떠 있음(spatch.c가 첫 키·여러 글자로 판단) */
+{
+    UInt32 v = 0;
+
+    FtrGet(kSyCr, 260, &v);
+    return v;
+}
+
 static inline UInt32 GetLog293(void)
 {
     UInt32 v = 0;
@@ -432,7 +440,7 @@ static UInt16 RedrawIn(UInt8 nm)
 }
 
 /* v45 진단: 조합 중에 조합이 끝난 까닭 최근 3개(#280~#282, #279 다음 칸) = 까닭<<24 | 키<<16 | 초성<<8 | 중성.
- *   까닭 1 한/A 전환, 2 앱 화면 누름, 3 커서 이동 감지(CtCheck), 4 명령 키·영문 모드, 5 글자 아닌 키 */
+ *   까닭 1 한/A 전환, 2 앱 화면 누름, 3 커서 이동 감지(CtCheck), 4 명령 키·영문 모드, 5 글자 아닌 키, 6 Sony 자판 키 아님(v49) */
 static void EndLog(UInt32 *st, UInt16 why, WChar ch)
 {
     UInt32 k = 0;
@@ -507,6 +515,13 @@ void HgImGet(EventType *event, Int32 timeout)
         if (py >= 160) {
             FtrSet(kSyCr, kFtrShiftIn, GetShift());   /* v34: 누르는 순간(Sony 다시 그리기 전)의 shift = 이 키 입력의 쌍자음 여부 */
             FtrSet(kSyCr, 262, kShiftKey(px, py) ? 1 : 0);   /* v48: 손으로 누른 shift(Sony가 다시 그리기 전에 기록) */
+            if (GetF260() != 0 && py < kKeyAreaEnd && !kShiftKey(px, py) && !kCapsKey(px, py)) {
+                /* v49: Sony 자판 키 누름 수(#261) — 이 수만큼의 keyDown만 Sony 키로 보고 두벌식으로 바꿈 */
+                UInt32 n = 0;
+
+                FtrGet(kSyCr, 261, &n);
+                FtrSet(kSyCr, 261, n < 8 ? n + 1 : 8);
+            }
             SyBltHeal();   /* MnSonyKbd v6: 가상 실크를 누르면 Sony가 다시 그리기 전에 키 글자 연결부터 확인·복구 */
             {   /* v20 진단: 가상 실크 펜 누름 3개 */
                 UInt32 k = 0;
@@ -517,7 +532,7 @@ void HgImGet(EventType *event, Int32 timeout)
                 FtrSet(kSyCr, 211 + (UInt16)k, ((UInt32)(UInt16)px << 16) | (UInt16)py);
                 FtrSet(kSyCr, 210, k + 1 > 2 ? 0 : k + 1);
             }
-            if (kHanTab(px, py)) {   /* v20 진단: 한/영 단추 후보 — 시험 표시만 바꾸고 Sony에는 넘기지 않음 */
+            if (kHanTab(px, py) && GetF260() != 0) {   /* v49: Sony 자판이 떠 있을 때만(Graffiti·Mn 키보드에서는 그 자리를 넘김) */
                 UInt32 now = TimGetTicks(), last = 0;
 
                 /* v29: 한 번 누름이 두 번 처리됨(v28 실측: 누름 하나에 t +2, 값이 제자리) → 마지막 전환 뒤 0.5초 안의 누름은 무시 */
@@ -577,6 +592,7 @@ void HgImGet(EventType *event, Int32 timeout)
             }
         }
         if (py < 160) {
+            FtrSet(kSyCr, 261, 0);   /* v49: 앱 화면 누름 — 남은 Sony 키 누름 수 버림 */
             EndLog(st, 2, 0);
             st[0] = 0;
             CtUnknown(kSyCr, kSyFtrFld);     /* v10: 앱 화면 누름은 커서를 옮길 수 있음(조합은 이미 끝) */
@@ -606,7 +622,7 @@ void HgImGet(EventType *event, Int32 timeout)
         }
         return;
     }
-    if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(px, py)) {
+    if ((event->eType == penUpEvent || event->eType == penMoveEvent) && kHanTab(px, py) && GetF260() != 0) {
         event->eType = nilEvent;                 /* v25: 한/영 자리 누름은 Sony에 넘기지 않음 */
         return;
     }
@@ -656,6 +672,20 @@ void HgImGet(EventType *event, Int32 timeout)
             FtrSet(kSyCr, 267, sent);
         FtrSet(kSyCr, 265, 0);
     }
+    {   /* v49: Sony 자판 키 누름에서 온 키만 바꿈(시스템 키보드 화면·Mn 키보드·Graffiti 키는 그대로, 조합만 끝)
+         *   v48 자동 시험: 한 모드이면 다른 키보드의 영문 키도 자모로 바꿨음 */
+        UInt32 n = 0;
+
+        FtrGet(kSyCr, 261, &n);
+        if (n == 0) {
+            EndLog(st, 6, event->data.keyDown.chr);
+            st[0] = 0;
+            CtUnknown(kSyCr, kSyFtrFld);
+            FtrSet(kSyCr, kFtrShiftIn, 0);
+            return;
+        }
+        FtrSet(kSyCr, 261, n - 1);
+    }
     ch = event->data.keyDown.chr;
     if (ch < 0x80)   /* v34: PC 두벌식 — 누를 때의 shift(#256)대로 쌍자음 또는 기본 자모, 쓰고 나면 0 */
         ch = HanInKey((UInt8)ch);
@@ -703,6 +733,8 @@ static void BmpLog(BitmapPtr bmp, Coord x, Coord y)
             Coord  bw = 0, bh = 0;
 
             BmpGetDimensions(bmp, &bw, &bh, NULL);
+            if (bw == 320 && bh == 130)   /* v49: Graffiti 판 그림(v22 실측) = Sony 자판 닫힘 */
+                FtrSet(kSyCr, 260, 0);
             FtrGet(kSyCr, 220, &k);
             k &= 3;
             FtrSet(kSyCr, 221 + 3 * (UInt16)k, (UInt32)bmp);

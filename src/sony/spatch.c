@@ -162,7 +162,22 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                                    ((UInt32)(autoS ? 1 : 0) << 19) | ((UInt32)(rc[1] & 0x7F) << 11) | (rc[0] & 0x7FF));
             FtrSet(kSyCr, 278, k + 1);
         }
-        if (c != 0 && p6 != NULL && SilkWin()) {   /* v33: 한/영 누를 때 다시 그리려고 영문 글자 키 글자·자리 기록 */
+        if (chars != NULL && len >= 2 && SilkWin()) {
+            /* v49: 가상 실크에 여러 글자(시계 'hh:mm' 말고) = Mn 가상 키보드(BS·Ent·123 등) → Sony 자판 아님(#260 = 0).
+             *   v48 자동 시험: MnSonyKbd가 Mn 키보드 글자를 자모로 바꾸고 한/A 표시를 그 위에 그림 */
+            UInt16 i;
+            Boolean clock = false;
+
+            for (i = 0; i < len && i < 5; i++)
+                if (chars[i] == ':')
+                    clock = true;
+            if (!clock)
+                FtrSet(kSyCr, 260, 0);
+        }
+        if (c != 0 && p6 != NULL && SilkWin() && (c == '`' || c == '~') && ((const Int16 *)p2)[0] < 20 &&
+            ((const Int16 *)p2)[1] < 10)
+            FtrSet(kSyCr, 260, 1);   /* v49: Sony 자판 첫 키(` @9,0 · ~ @5,0) = Sony 가상 키보드가 떠 있음 */
+        if (c != 0 && p6 != NULL && SilkWin() && GetF(260) != 0) {   /* v33: 한/영 누를 때 다시 그리려고 영문 글자 키 글자·자리 기록 */
             const Int16 *rc = (const Int16 *)p2;
 
             if (c == '`' || c == '~' || c == '1' || c == '!') {
@@ -237,7 +252,7 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
                 Reject(3, fh, rc);
             else if (!SilkWin())
                 Reject(4, fh, rc);
-            else if (!HanMode())
+            else if (!HanMode() || GetF(260) == 0)   /* v49: Sony 자판이 아닐 때(Mn 키보드 등)는 바꾸지 않음 */
                 Reject(6, fh, rc);
             else if ((tmp = MemPtrNew(TmpWords(fh) * 2)) == NULL)
                 Reject(5, fh, rc);
@@ -266,7 +281,8 @@ UInt32 PatchBlt(void *p1, void *p2, void *p3, const UInt8 *chars, UInt16 len, vo
          *   v23 실측: 가상 실크에 글자로 그리는 것은 키 글자(한 글자)와 시계뿐 — space·탭 글자는 자판 그림 안. */
         UInt32 res = ((BltFn)orig)(p1, p2, p3, chars, len, p6, p7);
 
-        if (p2 != NULL && len == 1 && chars != NULL && GetF(106) == 0 && ((const Int16 *)p2)[1] >= 80 && SilkWin()) {
+        if (p2 != NULL && len == 1 && chars != NULL && GetF(106) == 0 && ((const Int16 *)p2)[1] >= 80 && SilkWin() &&
+            GetF(260) != 0) {   /* v49: 한/영 표시는 Sony 자판일 때만 */
             /* v25: 맨 아래 키 줄(고해상도 y 80 이상) 글자를 그릴 때마다 고정 자리(143,105)에 한/영 표시 — v24는 '=' 기준이라
              *   sym 자판('='가 한 줄 위)에서 표시가 키 위로 옮겨 그려짐(실측) */
             const Int16 *rc = (const Int16 *)p2;

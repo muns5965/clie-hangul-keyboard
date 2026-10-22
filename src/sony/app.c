@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v49: v48 자동 시험 — 한 모드이면 시스템 키보드 화면·Mn 키보드의 영문 키도 자모로 바꾸고, Mn 키보드 위에 자모·한/A를 그림.
+ *   Sony 자판이 떠 있을 때(#260: 첫 키 ` @9,0·~ @5,0 = 1, Mn 키보드 여러 글자·Graffiti 판 = 0)만 그리기·한/A, Sony 키 누름 수(#261)만큼의 keyDown만 바꿈.
  * v48: v47 자동 시험 — 빈 메모에서 처음 누른 shift가 기본 자모. 마지막 가상 실크 펜이 shift 키면(#262) 자동 대문자와 상관없이 쌍자음.
  * v47: sym·int'l 자판에서 한/A를 누르면 영문 키 자리(이제 기호)에 자모를 그릴 위험 → 영문 키 줄 안에 영문 아닌 글자를 그리면
  *   영문 키 기록 무효(#263), abc 자판 다시 그리기(`·~)에서 다시 유효. 무효면 다시 그리기 안 함(6줄 w 9 → rd 기록 그대로).
@@ -95,7 +97,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v48"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v49"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 
