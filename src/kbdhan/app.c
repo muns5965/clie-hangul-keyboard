@@ -1,6 +1,8 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v11: 앱 화면 정리 — 고해상도(Sony HR 320, 없는 기종은 그대로), MnSonyKbd와 같은 배치(제목·설명·알림·Now·ON/OFF·한글 표시·사용법),
+ *   진단 줄은 [ ] Debug 체크(앱 설정 2번)일 때만.
  * v10: 쌍자음은 손으로 누른 shift(키 x 0~31, y 107~121)일 때만 — v9 자동 시험: 새 메모에서 A→한 직후 키보드 화면 자체 shift로
  *   키 글자가 쌍자음으로 보이고 첫 글자가 쌍자음으로 들어감(rk → 까).
  * v9: 두벌식 조합 입력(한글 모드, 키보드 화면 안) + 한글 모드에서 자동 대문자 풀기. 진단 줄 = keyDown 수·마지막 키·조합 상태.
@@ -23,16 +25,62 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v10"
+#define kVer      "v11"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
 #define kOrigOff  16
 #define kBufOff   32
 #define kLineH    11
-#define kRowBtn   2
+#define kRowBtn   3   /* v11: MnSonyKbd와 같은 줄 */
+#define kRowDebug 12
 
-static Char gMsg[40] = "diag: jamo labels only";
+static Char    gMsg[40] = "-";
+static UInt16 gHrRef = 0xFFFF;
+
+/* v11: 고해상도 모드(MnSonyKbd·MnHangul과 같음, 소니 헤더 없이 필요한 트랩만). HR 라이브러리가 없으면(T600C 등) 그대로 */
+Err HROpen(UInt16 ref)  SYS_TRAP(sysLibTrapOpen);
+Err HRClose(UInt16 ref) SYS_TRAP(sysLibTrapClose);
+Err HRWinScreenMode(UInt16 ref, WinScreenModeOperation op, UInt32 *w, UInt32 *h,
+                    UInt32 *depth, Boolean *color) SYS_TRAP(sysLibTrapCustom + 48);
+
+static void StartHires(void)
+{
+    UInt16 ref;
+    UInt32 w = 320, h = 320;
+
+    if (SysLibFind("Sony HR Library", &ref) != errNone || HROpen(ref) != errNone)
+        return;
+    if (HRWinScreenMode(ref, winScreenModeSet, &w, &h, NULL, NULL) != errNone) {
+        HRClose(ref);
+        return;
+    }
+    gHrRef = ref;
+}
+
+static void StopHires(void)
+{
+    if (gHrRef == 0xFFFF)
+        return;
+    HRWinScreenMode(gHrRef, winScreenModeSetToDefaults, NULL, NULL, NULL, NULL);
+    HRClose(gHrRef);
+    gHrRef = 0xFFFF;
+}
+
+/* v11: Debug 체크(앱 설정 2번, 저장형) */
+static UInt16 DebugGet(void)
+{
+    UInt16 v = 0, size = sizeof v;
+
+    if (PrefGetAppPreferences(kCr, 2, &v, &size, true) == noPreferenceFound || size != sizeof v)
+        v = 0;
+    return v;
+}
+
+static void DebugSet(UInt16 v)
+{
+    PrefSetAppPreferences(kCr, 2, 1, &v, sizeof v, true);
+}
 
 static UInt16 HookTrap(UInt16 i)
 {
@@ -115,7 +163,7 @@ static void HookOn(void)
     FtrSet(kCr, 4, mask);
     for (i = 0; i < kHookN; i++)
         SysSetTrapAddress(HookTrap(i), code + ((UInt32 *)code)[i]);
-    StrCopy(gMsg, "ON: keyboard, tap right of Int'l");
+    StrCopy(gMsg, "ON");
 }
 
 static void HookOff(void)
@@ -166,41 +214,44 @@ static void ButtonAt(UInt16 x, UInt16 row, const Char *s)
     WinDrawRectangleFrame(roundFrame, &r);
 }
 
-static void Draw(void)
+/* 네모 체크박스 + 이름(MnHangul과 같음) */
+static void DrawCheck(UInt16 row, const Char *label, Boolean on)
 {
     RectangleType r;
+
+    RctSetRectangle(&r, 4, (row + 1) * kLineH + 2, 7, 7);
+    WinDrawRectangleFrame(rectangleFrame, &r);
+    if (on) {
+        WinDrawLine(5, (row + 1) * kLineH + 5, 7, (row + 1) * kLineH + 8);
+        WinDrawLine(7, (row + 1) * kLineH + 8, 10, (row + 1) * kLineH + 2);
+    }
+    WinDrawChars(label, StrLen(label), 15, (row + 1) * kLineH);
+}
+
+/* v11: 진단 줄(v1~v10의 화면 4~13줄) — Debug 체크일 때만 */
+static void DrawDiag(void)
+{
     const UInt32 *b = (const UInt32 *)GetF(1);
-    UInt32        hg = 0;
     Char          s[48], ch[2];
 
-    RctSetRectangle(&r, 0, 0, 160, 160);
-    WinEraseRectangle(&r, 0);
-    WinDrawInvertedChars("MnKbdHan " kVer " (diag)", sizeof("MnKbdHan " kVer " (diag)") - 1, 0, 0);
-    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, kLineH);
-    ButtonAt(2, kRowBtn, "ON");
-    ButtonAt(40, kRowBtn, "OFF");
-    FtrGet('MnHg', 21, &hg);
-    StrPrintF(s, "hook %s  MnHangul %s  %s", GetF(2) ? "ON" : "off", hg ? "ON" : "off",
-              Supported() ? "OS ok" : "unsupported");
-    Row(4, s);
-    Row(5, "Memo > keyboard > tap right of Int'l:");
-    Row(6, "type gks rmf -> Hangul");
-    if (b == NULL)
+    if (b == NULL) {
+        Row(1, "hook off: no diag");
         return;
+    }
     StrPrintF(s, "kbd opens %lu  letters %lu  jamo %lu", b[1], b[3], b[2]);
-    Row(7, s);
+    Row(1, s);
     StrPrintF(s, "han %lu  han taps %lu  keys %lu", b[8], b[13], b[14]);
-    Row(8, s);
+    Row(2, s);
     ch[0] = (Char)(b[4] >> 24);
     ch[1] = 0;
     if (ch[0] == 0)
         StrCopy(ch, "-");
     StrPrintF(s, "last %s caps %u temp %u auto %u why %lu", ch, (UInt16)((b[4] >> 16) & 1), (UInt16)((b[4] >> 8) & 0xFF),
               (UInt16)(b[4] & 1), b[6]);
-    Row(9, s);
+    Row(3, s);
     StrPrintF(s, "at %d,%d  width jamo %u / abc %u", (Int16)(b[5] >> 16), (Int16)b[5], (UInt16)(b[7] >> 16),
               (UInt16)b[7]);
-    Row(10, s);
+    Row(4, s);
     {   /* v2: 화면 안 펜 누름 3개(오래된 것부터) */
         UInt16 k;
 
@@ -212,7 +263,7 @@ static void Draw(void)
             StrPrintF(t, " %d,%d", (Int16)(v >> 16), (Int16)v);
             StrCat(s, t);
         }
-        Row(11, s);
+        Row(5, s);
     }
     {   /* v9: 입력 */
         Char a[12], c[12];
@@ -223,8 +274,42 @@ static void Draw(void)
             StrPrintF(a, "%x", (UInt16)(b[99] >> 16));
         StrPrintF(c, "%lx", b[96]);
         StrPrintF(s, "keys %lu last %s mod %x comp %s", b[98], a, (UInt16)b[99], c);
-        Row(12, s);
+        Row(6, s);
     }
+    StrPrintF(s, "shift %lu  ct %lu bad %lu", b[101], GetF(20), GetF(21));   /* v10 손 shift, 커서 비교 */
+    Row(7, s);
+}
+
+/* v11: 사용자 화면 — MnSonyKbd와 같은 배치. Debug 체크면 진단 줄 */
+static void Draw(void)
+{
+    RectangleType r;
+    UInt32        hg = 0, v = 0;
+    Boolean       dbg = DebugGet() != 0;
+
+    RctSetRectangle(&r, 0, 0, 160, 160);
+    WinEraseRectangle(&r, 0);
+    WinDrawInvertedChars("MnKbdHan " kVer, sizeof("MnKbdHan " kVer) - 1, 0, 0);
+    if (dbg) {
+        DrawDiag();
+        DrawCheck(kRowDebug, "Debug", true);
+        return;
+    }
+    Row(0, "Hangul on system keyboard");
+    WinDrawInvertedChars(gMsg, StrLen(gMsg), 0, 2 * kLineH);
+    Row(2, GetF(2) ? "Now: ON" : "Now: off");
+    ButtonAt(2, kRowBtn, "ON");
+    ButtonAt(40, kRowBtn, "OFF");
+    if (!Supported())
+        Row(5, "unsupported: OS 4 Latin only");
+    FtrGet('MnHg', 21, &hg);
+    Row(6, FtrGet('dCJK', 0, &v) == errNone ? (hg ? "Hangul display: CJKOS (+MnHangul)" : "Hangul display: CJKOS") :
+           hg ? "Hangul display: MnHangul" : "Hangul display: none");
+    Row(8, "Memo > Edit > Keyboard");
+    Row(9, "Tap right of Int'l: Hangul / English");
+    Row(10, "Shift in Hangul = double cons.");
+    Row(11, "Update: OFF, install, ON");
+    DrawCheck(kRowDebug, "Debug", false);
 }
 
 UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
@@ -233,13 +318,18 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
 
     if (cmd != sysAppLaunchCmdNormalLaunch)
         return 0;
+    StartHires();
     Draw();
     do {
         EvtGetEvent(&e, evtWaitForever);
         if (e.eType == penDownEvent && e.screenY >= 0 && e.screenY < 160) {
             Int16 row = e.screenY / kLineH - 1;
 
-            if (row == kRowBtn && e.screenX < 36)
+            if (row == kRowDebug && e.screenX < 60)
+                DebugSet(DebugGet() ? 0 : 1);
+            else if (DebugGet())
+                ;   /* 진단 화면에서는 버튼 없음 */
+            else if (row == kRowBtn && e.screenX < 36)
                 HookOn();
             else if (row == kRowBtn && e.screenX < 80)
                 HookOff();
@@ -248,5 +338,6 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
         }
         SysHandleEvent(&e);
     } while (e.eType != appStopEvent);
+    StopHires();
     return 0;
 }
