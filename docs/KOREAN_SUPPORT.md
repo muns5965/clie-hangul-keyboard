@@ -246,3 +246,4 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
   남은 문제: 11/11 ×1 칸은 폭을 잴 때 글꼴(11)이 2배 그리기 칸과 같아 폭 9로 계산됨(실제 12) → 앱 확인 후 구분 방법 결정.
 - 진행 순서(디버그 먼저): ① 바뀐 함수 조사(**완료**, 실측 1) ② `BltDrawChars` 하나만 교체해 표시 시험(CJKOS 끈 복사본 세션)
   ③ 폭·글자 경계 ④ 글꼴 3벌(16 → 12 → 24).
+- PEG-N710C ROM(Palm OS 4.1 영문, 사용자 제공 `Sony-Clie-N710C-4.1-en.bin`, CloudpilotEmu 기종 PEG-N700C/N710C로 새로 부팅, 2026-10-22): KbdScan `rom 4103000 enc 3 lang 0 ctry 17 oem sony ysm2` — 일본어판이 아니라 영문(Latin). 인쇄 실크스크린(가상 실크 없음)이라 MnSonyKbd·Mn 가상 키보드는 해당 없음(설정 앱 모듈 상태 none). MnHangul v69 + MnHgFont24 + MnKbdHan v16 설치·ON: 설정 앱 고해상도 화면 정상, Edit > Keyboard 화면 배치가 NR70V와 같고 키 글자 자모 그림·한/A 그림 정상, 입력 시험 9개 통과, 0.1초 간격 48키 '안녕하세요'×4 정상. 일본어판 시험은 일본어 ROM(N700C 4.1 업그레이드판·N750C 등)이 있어야 함.
