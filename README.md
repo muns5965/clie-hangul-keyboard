@@ -8,13 +8,16 @@
 > two-set (Dubeolsik) Hangul keyboard by intercepting system traps (`BltDrawChars`, `EvtGetEvent`,
 > `WinDrawBitmap`): key labels are redrawn as Hangul jamo, a Hangul/English button is drawn next to the
 > `sym` tab, and keystrokes are composed into KS X 1001 (EUC-KR) syllables with the PC two-set rule
-> (Shift = double consonants). An experimental fourth module, *MnKbdHan*, does the same for the system
-> keyboard dialog on Palm OS 4 devices without a virtual silkscreen. (3) *MnHangul* is an experimental replacement for
+> (Shift = double consonants). A fourth module, *MnKbdHan*, does the same for the system keyboard dialog
+> (also usable on Palm OS 4 devices without a virtual silkscreen); on hi-res devices its jamo key labels are
+> pre-built 16×16 bitmaps, which keeps Hangul typing as fast as English. (3) *MnHangul* is an experimental replacement for
 > the commercial CJKOS system that renders double-byte Hangul from compact Johab-style glyph packs and
 > patches the text-width and character-boundary routines. All runtime code is position-independent and
-> installed as RAM trap patches without ROM modification. The two patch-based modules need no reset and
+> installed as RAM trap patches without ROM modification. The patch-based modules need no reset and
 > re-attach patches that other system extensions have unhooked; MnSonyKbd also works alongside CJKOS,
-> while MnHangul detects CJKOS and stays off.
+> while MnHangul detects CJKOS and stays off. Four settings apps (MnHangul, MnSonyKbd, MnKbdHan, MnSkKbd)
+> share one screen layout; MnSkKbd turns the Mn virtual keyboard on or off by switching its plug-in
+> database type, effective after a reset.
 > **Test environment.** All development and verification were done in the CloudpilotEmu web emulator
 > running a PEG-NR70V (Palm OS 4.1S) ROM image, mainly in Memo Pad, with and without CJKOS installed.
 > The screenshots in this README are real emulator captures, taken by driving the emulator
@@ -56,6 +59,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 - [현재 상태](#현재-상태)
 - [설치·업데이트](#설치업데이트) — 설치 경우 A~D, 배포 파일, 업데이트, 리셋이 필요한 이유
 - [Sony 가상 키보드로 한글(MnSonyKbd)](#sony-가상-키보드로-한글mnsonykbd) — sym 오른쪽 한/A, 리셋 없음
+- [시스템 키보드 화면 한글(MnKbdHan)](#시스템-키보드-화면-한글mnkbdhan) — Int'l 오른쪽 한/A, 리셋 없음
 - [한글 표시(MnHangul)](#한글-표시mnhangul)
 - [설정 앱 공통: 화면·켜기·업데이트](#설정-앱-공통-화면켜기업데이트) — 네 앱 같은 화면, All OFF·Update, Mn 키보드 켜기/끄기
 - [제한사항](#제한사항)
@@ -67,7 +71,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 ## 소개
 
 [한글 입력 방법](#한글-입력-방법)의 분류대로 그림을 나눈다. 모든 그림은 CloudpilotEmu(PEG-NR70V, Palm OS 4.1S)의 **실제 화면 캡처**다
-(MnSonyKbd v47·MnSkCore build 19·MnKbdHan v9·MnHangul v67, CJKOS 없이 MnHangul로 한글 표시).
+(MnSonyKbd v47·MnSkCore build 19·MnKbdHan v16·MnHangul v67, 설정 앱 그림은 MnHangul v69·MnSonyKbd v50·MnKbdHan v13·MnSkKbd v2, CJKOS 없이 MnHangul로 한글 표시).
 캡처는 에뮬레이터를 브라우저 없이 돌리고 펜 누름을 스크립트로 재생해 얻었다. 원본은 `docs/images/capture/`, 그림 다시 만들기: `python3 tools/gen-readme-captures.py`.
 
 ### 1. 화면 안 키보드 — MnKbdHan
@@ -130,6 +134,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | Sony 가상 키보드 한글(MnSonyKbd, MnHangul v35에서 시작해 v54에 분리): 키 글자 두벌식 자모, 조합 입력 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
 | MnSonyKbd: 한/영을 ⇪에서 sym 오른쪽 `한`/`A` 단추로(누르면 자판 바로 바뀜), PC 두벌식 규칙(Shift = 쌍자음, ⇪·자동 대문자 = 기본 자모) | v32~v49 (CloudpilotEmu 실측. v49 자동 시험: Sony 입력 9개·자판 표시 모두 통과 — 0~0.3초 간격, Shift, 조합 중 BS, 한/A 섞어 쓰기, 겹받침. MnSonyKbd를 켠 채 Mn 가상 키보드 9개도 통과) |
 | 시스템 키보드 화면 한글(MnKbdHan): 키 글자 자모, 두벌식 조합 입력(Shift = 쌍자음, 키보드 화면이 스스로 건 대문자는 기본 자모), Int'l 오른쪽 `한`/`A`(NR70V는 Sony 키보드와 같은 그림) | v12~. v13부터 `Start at reset`(리셋 뒤 자동 시작)·`Update`. v16부터 NR70V는 키 글자 자모를 그림으로 그려 한 모드가 영문만큼 빠름(전에는 빨리 치면 밀려 키가 빠짐). T600C·NR70V 메모장 실측, 자동 시험 9개·속도별 4개 통과(v15까지는 빨리 치면 화면 반영이 늦고 키가 빠질 수 있었음 — v16에서 개선, 초당 약 6회까지 시험 정상) |
+| 키 큐 넣기·빠른 입력 점검(MnSonyKbd v51·MnKbdHan v14~v15 진단) | 자동 시험에서 `EvtEnqueueKey` 실패 0(Sony 719번·MnKbdHan 443번, 간격 0 포함). Sony 키보드는 0.04초 간격 96키 정상. MnKbdHan 키 빠짐은 키 글자를 MnHangul로 그리는 비용 때문이었고 v16에서 개선. 사람이 칠 수 없는 속도(초당 약 12~33회)에서는 아직 몇 자모 빠짐 |
 | MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. 키 글자 v3~, 입력 v9~ (CloudpilotEmu 실측) |
 | 조합 중 커서 이동 감지 | Mn 가상 키보드 build 17~, MnSonyKbd v10~ (메모장 실측) |
 | 리셋 없는 업데이트 `All OFF`(세 모듈 순서대로 끄기) | MnHangul v64~·MnSonyKbd v14~, 세 모듈은 MnHangul v69·MnSonyKbd v50·MnKbdHan v13·MnSkKbd v2 (CloudpilotEmu 실측) |
@@ -165,9 +170,10 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | `MnSkKbd.prc` | A·C 중 선택 (Mn 가상 키보드 설정) | Mn 가상 키보드 켜기/끄기(리셋 1번)·상태·업데이트. 없어도 Mn 키보드는 동작한다(설치하면 켜진 상태) |
 | `MnHangul.prc` | C·D (한글 표시를 MnHangul로 할 때) | 한글 표시 모듈(시험 단계). 한글 시스템(CJKOS 등)이 없을 때 한글 표시 |
 | `MnHgFont24.prc` | C·D 중 선택 (MnHangul 큰 글꼴) | MnHangul 24×24 추가 글꼴(큰 글꼴용) |
+| `KbdScan.prc` | 개발용 | 다른 기종(N700C·T600C 등) 화면 키보드 진단(v2). 키보드 동작에는 필요 없다 |
 | `ClieDiag.prc` | 개발용 | 진단 전용(v28): 로더·본체 기록, SkWr·SkEv 페이지, 복구 스위치(DisS), Feature·트랩 목록. 사용자 설정은 `MnSkKbd`. 키보드 동작에는 필요 없다 |
 
-`MnSkKbd`·`ClieDiag`는 선택이다. 네 설정 앱의 화면과 켜기·업데이트는 [공통](#설정-앱-공통-화면켜기업데이트) 절에 있다.
+`MnSkKbd`·`ClieDiag`·`KbdScan`은 선택이다. 네 설정 앱의 화면과 켜기·업데이트는 [공통](#설정-앱-공통-화면켜기업데이트) 절에 있다.
 
 **Mn 가상 키보드(A·C) 업데이트**
 
@@ -200,7 +206,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 ## Sony 가상 키보드로 한글(MnSonyKbd)
 
 Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 한글을 넣는다(설치 B·D). `MnSonyKbd.prc` 하나, 리셋 없음.
-한글 표시는 하지 않으므로 CJKOS 등 한글 시스템(B)이나 MnHangul(D)과 같이 쓴다(첫 화면에 `Hangul display: CJKOS / MnHangul / none` 표시). v54에 MnHangul에서 분리했다.
+한글 표시는 하지 않으므로 CJKOS 등 한글 시스템(B)이나 MnHangul(D)과 같이 쓴다(첫 화면 모듈 상태의 `Display` 줄에 CJKOS / MnHangul / none 표시). v54에 MnHangul에서 분리했다.
 
 <img src="docs/images/sony-keyboard.png" width="760" alt="Sony 가상 키보드: 한 두벌식 자모, Shift 쌍자음, A 영문, sym 자판">
 
@@ -234,6 +240,32 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 - Sony 자판이 떠 있을 때만 동작한다(v49). Mn 가상 키보드·시스템 키보드 화면·Graffiti 입력에는 끼어들지 않는다(자동 시험으로 확인).
 - 한글 범위는 완성형 2,350자(Mn 키보드와 같음).
 - 메모장에서만 시험했다. 다른 앱과 실기기는 검증 대상이다.
+
+## 시스템 키보드 화면 한글(MnKbdHan)
+
+메모 등에서 메뉴 Edit > Keyboard로 여는 시스템 키보드 화면(`SysKeyboardDialog`)에 두벌식 한글을 넣는다. `MnKbdHan.prc` 하나, 리셋 없음.
+Sony 가상 실크가 없는 OS 4 영문 기종(T600C 등)용으로 만들었고 NR70V에서도 동작한다. 한글 표시는 하지 않으므로 CJKOS 등이나 MnHangul과 같이 쓴다.
+
+<img src="docs/images/system-keyboard.png" width="760" alt="시스템 키보드 화면(MnKbdHan): 한 두벌식 자모, Shift 쌍자음, A 영문 — Int'l 탭 오른쪽 한/A">
+
+**쓰는 법**
+
+| 동작 | 결과 |
+| --- | --- |
+| Edit > Keyboard | 키보드 화면. Int'l 탭 오른쪽에 `한` 또는 `A`가 보인다(닫았다 열어도 유지) |
+| `한`/`A` 누름 | 한/영 전환. 키 글자가 바로 두벌식 자모 ↔ 영문으로 바뀌고, 조합 중이던 글자는 확정된다 |
+| 한글에서 `shift` | 쌍자음 ㅃㅉㄸㄲㅆ, ㅒㅖ (한 글자 넣으면 풀림). 키보드 화면이 스스로 건 대문자(빈 입력칸 첫 글자)·`cap`은 기본 자모 |
+| ← | 조합 중이면 자모 단위로 지움 |
+| `123`·`Int'l` 탭 | 그대로 쓴다 |
+| `Done` | 키보드 화면의 글이 앱 입력칸으로 간다 |
+
+**첫 화면**: `ON` / `OFF` = 키보드 화면 한글 켬 / 끔. 나머지는 [공통 화면](#설정-앱-공통-화면켜기업데이트)과 같고, `[ ] Debug` = 진단 화면(키 큐 넣기 수·실패, 이벤트 처리 시간, 키 글자를 영문으로 그리는 시험 스위치).
+
+**제한**
+
+- 키보드 화면은 키를 누를 때·뗄 때마다 키 글자 26개를 다시 그린다. v16부터 NR70V(Sony HR 라이브러리가 있는 기종)는 한글 키 글자를 미리 만든 16×16 자모 그림(MnSonyKbd·Mn 키보드와 같은 데이터)으로 그려 한글 입력이 영문만큼 빠르다(펜 이벤트 처리 11.8 → 5.7틱, 초당 약 6회 48키 정상). HR 라이브러리가 없는 기종(T600C 등)은 예전처럼 한글 표시 모듈이 그리는 글자라 빨리 치면 늦게 반영되거나 키가 빠질 수 있다(v16 T600C는 미시험).
+- 키 자리·한/A 자리는 영문 키보드 화면 배치(T600C·NR70V 실측)에 맞춘 고정 좌표다. 다른 배치(일본어 등)에서는 켜지 않는다(OS 4 이상 + 문자 인코딩 PalmLatin일 때만).
+- 메모장에서만 시험했다.
 
 ## 한글 표시(MnHangul)
 
