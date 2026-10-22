@@ -29,7 +29,7 @@ NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 
 - 그릴 대상 창 지정(`WinSetDrawWindow`, Open 때 받은 실크 창) → 그리기 → 원래 창으로 복구. Start·Draw·DispChange 때 전체를 다시 그린다.
 - 고해상도: `SilkExtn`이 부팅 때 `Sony HR Library`를 열어 두므로, 이름으로 라이브러리를 찾는 `SysLibFind`로 참조 번호만 얻어 HR 함수를 쓴다.
   창은 저해상도 크기 그대로 두고 **좌표만 2배**로 넘긴다(`SilkExtn` 자신도 이렇게 그림). 고해상도 여부는 Start/DispChange +14로 판단.
-- 한글 키 이름: CJKOS 글꼴은 저해상도라 고해상도에서 굵게 보이므로, 자모를 12×12 격자 선분으로 그린다(`HRWinDrawLine`, `tools/gen-jamo-glyphs.py`).
+- 한글 키 이름: CJKOS 글꼴은 저해상도라 고해상도에서 굵게 보이므로 글자로 그리지 않는다. build 12~18은 자모를 12×12 격자 선분으로 그렸고(`HRWinDrawLine`), build 19부터는 MnSonyKbd·MnHangul과 같은 Neo둥근모 낱자모 16×16 그림(`src/sony/data/SyJm0000.bin`의 자모표, `.text` 끝에 `.incbin`)을 1비트 그림으로 그리며 글자 점 범위를 키 가운데에 맞춘다(`HRWinDrawBitmap`).
 
 ### 3. 글자 보내기
 - `EvtEnqueueKey()`는 지정한 문자 코드를 Palm OS 키 이벤트 큐에 넣는다. 현재 앱은 이를 `keyDownEvent`(키 입력 이벤트)로 처리한다.
@@ -71,7 +71,7 @@ NX 이후의 Silklet(`Slkw`)·Vsk API인데 **NR70V에는 없다**(호출하면 
   Stop: 본체에 넘긴 뒤 `MemHandleUnlock`으로 잠금 해제 → 본체 DB를 바꿀 수 있는 상태.
 - 본체는 위치 독립 코드(전역·A5·재배치 없음)라 다른 DB에서 불러와 그대로 실행된다. 빌드 스크립트가 검사.
 - 리소스 타입을 `code`가 아닌 `MnCo`로 한 것은 본체 DB가 열린 동안 앱의 `DmGetResource('code', …)`에 걸리지 않게 하려는 것.
-- 데이터 표(KS X 1001 판정표 `tools/gen-ksc-table.py`, 자모 선 글꼴 `tools/gen-jamo-glyphs.py`)는 `.text` 끝에 어셈블리로 넣고 PC 상대로 읽는다.
+- 데이터 표(KS X 1001 판정표 `tools/gen-ksc-table.py`, 자모 그림 `src/sony/data/SyJm0000.bin`, build 19~)는 `.text` 끝에 어셈블리로 넣고 PC 상대로 읽는다.
 
 ### 6. 조합 중 커서 이동
 본문 탭은 앱으로 가는 펜 입력이라 SkWr 플러그인에는 오지 않는다. 그래서 조합 중 커서가 옮겨져도 입력기는 알 수 없고,

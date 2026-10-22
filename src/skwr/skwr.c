@@ -57,7 +57,7 @@
  *   → 11: 아랫줄 경계 계산의 16비트 곱셈 넘침 수정(Scale).
  * 11 실측: 영문·숫자는 저해상도로도 원래 선명(시스템이 고해상도 글꼴로 그림), 한글 키 이름은 CJKOS 저해상도 글꼴이라 굵다.
  * 12: 고해상도일 때 한글 자모 키 이름을 선(벡터)으로 그린다(12x12 격자, 2픽셀 굵기, HRWinDrawLine).
- *   글꼴 데이터는 tools/gen-jamo-glyphs.py → jamo_glyphs.h (.text 끝, PC 상대로 읽음).
+ * 19: 선 대신 Neo둥근모 낱자모 16×16 그림(MnSonyKbd·MnHangul과 같은 자료, src/sony/data/SyJm0000.bin, .text 끝에 .incbin), 키 가운데 맞춤.
  */
 
 #ifdef MNSK_HOST_TEST
@@ -68,7 +68,7 @@
 
 #define kSkCreator    'MnSk'
 #define kSkMagic      0x534BUL
-#define kSkBuild      18   /* 18: 커서 이동 감지를 src/common/cursor_track.h(MnSonyKbd와 공용)로, 동작 같음. 17: 조합 중 커서 이동·입력칸 바뀜이면 조합 끝. 16: 그 진단. 15: 한글 조합 공용 */
+#define kSkBuild      19   /* 19: 자모 키 이름을 선 대신 16×16 낱자모 그림으로. 18: 커서 이동 감지를 src/common/cursor_track.h(MnSonyKbd와 공용)로, 동작 같음. 17: 조합 중 커서 이동·입력칸 바뀜이면 조합 끝. 16: 그 진단. 15: 한글 조합 공용 */
 
 #define kEvtOpen      1
 #define kEvtStart     3
@@ -426,7 +426,9 @@ static inline UInt16 KeyLabel(UInt16 code, Char *s)
 #define HRT(n)        SYS_TRAP(sysLibTrapCustom + (n))
 #define kHrStdFont    8
 void   HRWinDrawChars(UInt16 ref, const Char *s, Int16 len, Coord x, Coord y) HRT(9);
-void   HRWinDrawLine(UInt16 ref, Coord x1, Coord y1, Coord x2, Coord y2) HRT(13);
+#ifndef MNSK_HOST_TEST
+void   HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) HRT(7);   /* build 19 */
+#endif
 void   HRWinDrawRectangleFrame(UInt16 ref, FrameType f, RectangleType *r) HRT(16);
 void   HRWinEraseRectangle(UInt16 ref, RectangleType *r, UInt16 corner) HRT(21);
 void   HRWinGetWindowExtent(UInt16 ref, Coord *w, Coord *h) HRT(30);
@@ -450,51 +452,71 @@ static inline UInt16 HrRef(void)
 }
 
 #ifndef MNSK_HOST_TEST
-static inline const UInt8 *JamoOffPtr(void)
+static inline const UInt8 *Jamo16Ptr(void)
 {
     const UInt8 *p;
 
-    asm("lea JamoOff(%%pc),%0" : "=a" (p));
-    return p;
-}
-
-static inline const UInt8 *JamoSegPtr(void)
-{
-    const UInt8 *p;
-
-    asm("lea JamoSeg(%%pc),%0" : "=a" (p));
+    asm("lea Jamo16(%%pc),%0" : "=a" (p));
     return p;
 }
 #endif
 
-/* 자모(호환 자모 번호 o)를 선으로 그린다. 12x12 상자 왼쪽 위 (ox,oy), 굵기 2픽셀. 글꼴에 없으면 false */
+/* 자모(KS X 1001 0xA4A1부터 번호 o = 1~94)를 16×16 그림으로 그린다. (ox, oy) = 키 가운데 − 6(옛 12×12 상자 왼쪽 위).
+ * build 19: 선 그림(12×12, HRWinDrawLine) 대신 MnSonyKbd·MnHangul과 같은 Neo둥근모 낱자모 그림(src/sony/data/SyJm0000.bin의
+ *   자모표, HgJ16에서 뽑은 것)을 1비트 그림으로(검정 글자·흰 바탕 = 기본 색). 글자 점의 실제 범위를 키 가운데에 맞춤
+ *   (원래 낱자모는 ㅗ·ㅜ·ㅡ가 아래쪽에 그려져 있음). 글꼴에 없거나 그림을 못 만들면 false(글자로 그림) */
+#ifdef MNSK_HOST_TEST
 static inline Boolean DrawJamo(UInt16 hr, UInt16 o, Coord ox, Coord oy)
 {
-    const UInt8 *off = JamoOffPtr();
+    (void)hr; (void)o; (void)ox; (void)oy;
+    return false;
+}
+#else
+static inline Boolean DrawJamo(UInt16 hr, UInt16 o, Coord ox, Coord oy)
+{
     const UInt8 *g;
-    UInt16       at, n, i;
+    BitmapPtr    bmp;
+    UInt8       *px;
+    Err          e = 0;
+    UInt16       rb = 0, r, c, rmin = 16, rmax = 0, cmin = 16, cmax = 0;
 
-    if (o == 0 || o > 51)
+    if (o == 0 || o > 94)
         return false;
-    at = ((UInt16)off[o * 2] << 8) | off[o * 2 + 1];
-    if (at == 0xFFFF)
-        return false;
-    g = JamoSegPtr() + at;
-    n = g[0];
-    for (i = 0; i < n; i++) {
-        Coord x1 = ox + (g[1 + i * 2] >> 4), y1 = oy + (g[1 + i * 2] & 15);
-        Coord x2 = ox + (g[2 + i * 2] >> 4), y2 = oy + (g[2 + i * 2] & 15);
-        Coord dx = (x2 > x1) ? x2 - x1 : x1 - x2;
-        Coord dy = (y2 > y1) ? y2 - y1 : y1 - y2;
+    g = Jamo16Ptr() + (o - 1) * 32;
+    for (r = 0; r < 16; r++) {
+        UInt16 v = ((UInt16)g[r * 2] << 8) | g[r * 2 + 1];
 
-        HRWinDrawLine(hr, x1, y1, x2, y2);
-        if (dx >= dy)
-            HRWinDrawLine(hr, x1, y1 + 1, x2, y2 + 1);
-        else
-            HRWinDrawLine(hr, x1 + 1, y1, x2 + 1, y2);
+        if (v == 0)
+            continue;
+        if (r < rmin)
+            rmin = r;
+        rmax = r;
+        for (c = 0; c < 16; c++)
+            if (v & (0x8000 >> c)) {
+                if (c < cmin)
+                    cmin = c;
+                if (c > cmax)
+                    cmax = c;
+            }
     }
+    if (rmin > rmax)
+        return false;   /* 빈 그림 */
+    bmp = BmpCreate(16, 16, 1, NULL, &e);
+    if (bmp == NULL)
+        return false;
+    BmpGetDimensions(bmp, NULL, NULL, &rb);
+    px = (UInt8 *)BmpGetBits(bmp);
+    if (rb != 2 || px == NULL) {
+        BmpDelete(bmp);
+        return false;
+    }
+    for (r = 0; r < 32; r++)
+        px[r] = g[r];
+    HRWinDrawBitmap(hr, bmp, ox + 6 - (Coord)((cmin + cmax + 1) / 2), oy + 6 - (Coord)((rmin + rmax + 1) / 2));
+    BmpDelete(bmp);
     return true;
 }
+#endif
 
 /* 그리기 준비(현재 그리기 창이 실크 창일 때). HR로 그리면 참조 번호, 아니면 0xFFFF.
  * w,h = 배치 계산 크기: 저해상도 창 크기, HR이면 그 2배(고해상도 좌표) */
@@ -824,5 +846,5 @@ Err SkwrEntry(UInt32 *slot, UInt8 *event, void *out)
 
 #ifndef MNSK_HOST_TEST
 #include "ksc_table.h"
-#include "jamo_glyphs.h"
+asm(".text\n.even\nJamo16:\n .incbin \"SyJm0000.bin\", 126, 3008\n.even\n");   /* build 19: 낱자모 94자 × 16줄 × 2바이트 */
 #endif

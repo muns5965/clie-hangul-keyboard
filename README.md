@@ -65,7 +65,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 ## 소개
 
 [한글 입력 방법](#한글-입력-방법)의 분류대로 그림을 나눈다. 모든 그림은 CloudpilotEmu(PEG-NR70V, Palm OS 4.1S)의 **실제 화면 캡처**다
-(MnSonyKbd v47·MnSkCore·MnKbdHan v9·MnHangul v67, CJKOS 없이 MnHangul로 한글 표시).
+(MnSonyKbd v47·MnSkCore build 19·MnKbdHan v9·MnHangul v67, CJKOS 없이 MnHangul로 한글 표시).
 캡처는 에뮬레이터를 브라우저 없이 돌리고 펜 누름을 스크립트로 재생해 얻었다. 원본은 `docs/images/capture/`, 그림 다시 만들기: `python3 tools/gen-readme-captures.py`.
 
 ### 1. 화면 안 키보드 — MnKbdHan (진단 판)
@@ -109,7 +109,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | --- | --- |
 | Mn 가상 키보드: 가상 실크스크린 자리에 자판 표시(고해상도 320×130) | 구현 완료 (런처·메모장·ClieDiag에서 실측) |
 | Mn 가상 키보드: 영문 QWERTY, 숫자·특수문자 | 구현 완료 |
-| Mn 가상 키보드: 한글 단모음 (Shift 쌍자음, 모음 연타 ㅑㅕㅛㅠㅒㅖ) | 구현 완료, 안정화 단계 |
+| Mn 가상 키보드: 한글 단모음 (Shift 쌍자음, 모음 연타 ㅑㅕㅛㅠㅒㅖ) | 구현 완료, 안정화 단계. build 19부터 자모 키 이름을 다른 키보드와 같은 Neo둥근모 낱자모로 그림(자동 입력 시험 9개 통과) |
 | 한글 조합: 초성·중성·종성, 복합모음, 겹받침, 받침 넘김, 조합 중 자모 단위 BS | 구현 완료 (메모장 실측, PC 조합 시험 41개 통과) |
 | Mn 가상 키보드: 리셋 없는 본체(`MnSkCore`) 업데이트 / 리셋 1번 로더(`MnSkPlugin`) 업데이트 | 구현 완료 (CloudpilotEmu 실측) |
 | Mn 가상 키보드: 나랏글 / 키 반복 | 개발 보류 / 미구현 |

@@ -27,7 +27,7 @@ rm -rf "$out"
 mkdir -p "$out" "$root/bin"
 cd "$out"
 
-m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar \
+m68k-palmos-gcc -palmos4 $DFLAG -Wa,-I"$root/src/sony/data" -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,SkwrEntry \
   "$root/src/skwr/skwr.c" -o skwr.coff
