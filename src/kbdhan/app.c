@@ -1,6 +1,8 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v12: 한/영 표시를 MnSonyKbd와 같은 그림으로(KhIc 0·1, tools/gen-kbd-mark.py) — HR 라이브러리가 있으면 고해상도, 없으면 글자.
+ *   기록: #5·#6 그림 주소(한·A), #7·#8 핸들, #9 HR 참조 번호(0x10000 | 번호, 없으면 0).
  * v11: 앱 화면 정리 — 고해상도(Sony HR 320, 없는 기종은 그대로), MnSonyKbd와 같은 배치(제목·설명·알림·Now·ON/OFF·한글 표시·사용법),
  *   진단 줄은 [ ] Debug 체크(앱 설정 2번)일 때만.
  * v10: 쌍자음은 손으로 누른 shift(키 x 0~31, y 107~121)일 때만 — v9 자동 시험: 새 메모에서 A→한 직후 키보드 화면 자체 shift로
@@ -25,7 +27,7 @@
 #include <PalmOS.h>
 
 #define kCr       'MnKh'
-#define kVer      "v11"
+#define kVer      "v12"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
@@ -161,6 +163,17 @@ static void HookOn(void)
     FtrSet(kCr, 2, (UInt32)code);
     FtrSet(kCr, 3, (UInt32)h);
     FtrSet(kCr, 4, mask);
+    {   /* v12: 한/영 표시 그림·HR 라이브러리 */
+        UInt16 k, hr = 0;
+
+        for (k = 0; k < 2; k++) {
+            MemHandle ih = DmGetResource('KhIc', k);
+
+            FtrSet(kCr, 7 + k, (UInt32)ih);
+            FtrSet(kCr, 5 + k, ih != NULL ? (UInt32)MemHandleLock(ih) : 0);
+        }
+        FtrSet(kCr, 9, SysLibFind("Sony HR Library", &hr) == errNone ? 0x10000UL | hr : 0);
+    }
     for (i = 0; i < kHookN; i++)
         SysSetTrapAddress(HookTrap(i), code + ((UInt32 *)code)[i]);
     StrCopy(gMsg, "ON");
@@ -197,6 +210,21 @@ static void HookOff(void)
     FtrSet(kCr, 2, 0);
     FtrSet(kCr, 3, 0);
     FtrSet(kCr, 4, 0);
+    {   /* v12 */
+        UInt16 k;
+
+        FtrSet(kCr, 9, 0);
+        for (k = 0; k < 2; k++) {
+            MemHandle ih = (MemHandle)GetF(7 + k);
+
+            FtrSet(kCr, 5 + k, 0);
+            if (ih != NULL) {
+                MemHandleUnlock(ih);
+                DmReleaseResource(ih);
+            }
+            FtrSet(kCr, 7 + k, 0);
+        }
+    }
     StrCopy(gMsg, "OFF: ready to install");
 }
 

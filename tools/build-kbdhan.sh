@@ -35,5 +35,6 @@ m68k-palmos-objdump -d hook.coff > hook.dis
 
 m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar "$root/src/kbdhan/app.c" -o app 2>&1 | tee build.log
 m68k-palmos-obj-res app
-build-prc "$root/bin/MnKbdHan.prc" "MnKbdHan" MnKh *.app.grc KhHk0000.bin
+cp "$root/src/kbdhan/data/KhIc0000.bin" "$root/src/kbdhan/data/KhIc0001.bin" .   # v12: 한/영 표시 그림(tools/gen-kbd-mark.py)
+build-prc "$root/bin/MnKbdHan.prc" "MnKbdHan" MnKh *.app.grc KhHk0000.bin KhIc0000.bin KhIc0001.bin
 ls -l "$root/bin/MnKbdHan.prc"

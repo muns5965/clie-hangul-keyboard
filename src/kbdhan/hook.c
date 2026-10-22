@@ -242,12 +242,33 @@ void KhDraw(const Char *s, Int16 len, Coord x, Coord y)
     ((CharsFn)Orig(2))(s, len, x, y);
 }
 
-/* 한/영 표시(빈칸 왼쪽): 한글 모드 '한'(C7D1, MnHangul이 그림), 영문 'A' */
+/* v12: Sony HR 라이브러리(소니 헤더 없이 순번만) — 표시 그림을 고해상도로 */
+void HRWinDrawBitmap(UInt16 ref, BitmapPtr bmp, Coord x, Coord y) SYS_TRAP(sysLibTrapCustom + 7);
+void HRWinEraseRectangle(UInt16 ref, const RectangleType *r, UInt16 corner) SYS_TRAP(sysLibTrapCustom + 21);
+
+static inline UInt32 KhF(UInt16 n)
+{
+    UInt32 v = 0;
+
+    FtrGet(kKhCr, n, &v);
+    return v;
+}
+
+/* 한/영 표시(빈칸 왼쪽): 한글 모드 '한', 영문 'A'.
+ * v12: HR 라이브러리가 있으면(#9) MnSonyKbd와 같은 그림(KhIc 0·1, Galmuri11 14×18, 검정 글자 — #5·#6)을 고해상도로.
+ *   없으면(T600C 등) 예전처럼 글자('한' C7D1은 한글 표시 시스템이 그림) */
 static void Mark(UInt32 *b)
 {
     RectangleType r;
     Char          m[2];
+    UInt32        hr = KhF(9), ic = KhF(b[8] != 0 ? 5 : 6);
 
+    if (hr != 0 && ic != 0) {
+        RctSetRectangle(&r, 220, 246, 44, 32);   /* 아래 저해상도 지우기 자리의 2배 */
+        HRWinEraseRectangle((UInt16)hr, &r, 0);
+        HRWinDrawBitmap((UInt16)hr, (BitmapPtr)ic, 220 + (44 - 14) / 2, 246 + (32 - 18) / 2);
+        return;
+    }
     RctSetRectangle(&r, 110, 123, 22, 16);   /* v6: 위쪽 space 줄 테두리(y 약 120)를 지우지 않게 */
     WinEraseRectangle(&r, 0);
     if (b[8] != 0) {
