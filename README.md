@@ -127,7 +127,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | Mn 가상 키보드: 나랏글 / 키 반복 | 개발 보류 / 미구현 |
 | Sony 가상 키보드 한글(MnSonyKbd, MnHangul v35에서 시작해 v54에 분리): 키 글자 두벌식 자모, 조합 입력 | 시험 단계. CloudpilotEmu 메모장에서 CJKOS와 같이(B)·MnHangul과 같이(D) 실측 |
 | MnSonyKbd: 한/영을 ⇪에서 sym 오른쪽 `한`/`A` 단추로(누르면 자판 바로 바뀜), PC 두벌식 규칙(Shift = 쌍자음, ⇪·자동 대문자 = 기본 자모) | v32~v49 (CloudpilotEmu 실측. v49 자동 시험: Sony 입력 9개·자판 표시 모두 통과 — 0~0.3초 간격, Shift, 조합 중 BS, 한/A 섞어 쓰기, 겹받침. MnSonyKbd를 켠 채 Mn 가상 키보드 9개도 통과) |
-| 시스템 키보드 화면 한글(MnKbdHan): 키 글자 자모, 두벌식 조합 입력(Shift = 쌍자음, 키보드 화면이 스스로 건 대문자는 기본 자모), Int'l 오른쪽 `한`/`A` | 진단 판 v10. T600C·NR70V 메모장 실측, 자동 시험 9개·속도별 4개 통과(아주 빠르게 치면 화면 반영이 1~4초 늦음 — 다 반영된 뒤 Done) |
+| 시스템 키보드 화면 한글(MnKbdHan): 키 글자 자모, 두벌식 조합 입력(Shift = 쌍자음, 키보드 화면이 스스로 건 대문자는 기본 자모), Int'l 오른쪽 `한`/`A`(NR70V는 Sony 키보드와 같은 그림) | v12.  T600C·NR70V 메모장 실측, 자동 시험 9개·속도별 4개 통과(아주 빠르게 치면 화면 반영이 1~4초 늦음 — 다 반영된 뒤 Done) |
 | MnSonyKbd: CJKOS를 켜거나 끈 뒤 빠진 연결 자동 복구 | 시험 단계. 키 글자 v3~, 입력 v9~ (CloudpilotEmu 실측) |
 | 조합 중 커서 이동 감지 | Mn 가상 키보드 build 17~, MnSonyKbd v10~ (메모장 실측) |
 | 리셋 없는 업데이트 `All OFF`(두 모듈 순서대로 끄기) | MnHangul v64~·MnSonyKbd v14~ (CloudpilotEmu 실측) |
