@@ -18,9 +18,9 @@
 > while MnHangul detects CJKOS and stays off. Four settings apps (MnHangul, MnSonyKbd, MnKbdHan, MnSkKbd)
 > share one screen layout; MnSkKbd turns the Mn virtual keyboard on or off by switching its plug-in
 > database type, effective after a reset.
-> *MnHangul5* brings Hangul display and two-set hardware-keyboard input to the Palm OS 5 Sony PEG-TG50
+> *MnHangul5* brings Hangul display and two-set hardware-keyboard input to the Palm OS 5 Sony PEG-TG50 and PEG-NX70V
 > by replacing entries in the RAM function table of the ARM system (68k trap patching is refused on OS 5);
-> it was tested only in a TG50 port of CloudpilotEmu.
+> it was tested only in TG50/NX70V ports of CloudpilotEmu.
 > **Test environment.** All development and verification were done in the CloudpilotEmu web emulator
 > running a PEG-NR70V (Palm OS 4.1S) ROM image, mainly in Memo Pad, with and without CJKOS installed.
 > The screenshots in this README are real emulator captures, taken by driving the emulator
@@ -41,7 +41,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 화면 안 팝업(Edit > Keyboard), 두벌식 | 화면 밖 실크스크린에 자체 자판, 단모음 | 화면 밖 Sony 자판, 두벌식 |
 | Int'l 오른쪽 `한`/`A`, 리셋 없음 | 왼쪽 아래 `한/A` 키, 리셋 1번(등록) | sym 오른쪽 `한`/`A`, 리셋 없음 |
 
-**한글 표시** — [OS 4: MnHangul](#한글-표시mnhangul)(CJKOS 대신) · [OS 5 TG50: MnHangul5](#palm-os-5-tg50-한글mnhangul5)(표시 + 키보드 입력)
+**한글 표시** — [OS 4: MnHangul](#한글-표시mnhangul)(CJKOS 대신) · [OS 5 TG50·NX70V: MnHangul5](#palm-os-5-tg50nx70v-한글mnhangul5)(표시 + 키보드 입력)
 
 **설치·설정** — [설치·업데이트](#설치업데이트)(설치 경우 A~D, 배포 파일) · [설정 앱 공통](#설정-앱-공통-화면켜기업데이트)(네 앱 같은 화면, All OFF·Update)
 
@@ -57,7 +57,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 2. 화면 밖 실크스크린에 자체 키보드 | 가상 실크스크린(Graffiti 자리)에 **이 저장소의 자판**을 그림 | 그대로 | Mn 가상 키보드(`MnSkPlugin` + `MnSkCore`) | 구현. 단모음 한글·영문·숫자 |
 | 3. 화면 밖 Sony 키보드를 한글 자판으로 | 가상 실크스크린의 **Sony 가상 키보드**를 그대로 쓰고 키 글자·입력만 두벌식으로 | 그대로 | MnSonyKbd | 시험 단계. sym 오른쪽 `한`/`A` = 한/영, Shift 쌍자음 |
 
-입력한 한글을 화면에 그리는 **한글 표시**는 입력 방법과 별개로 필요하다: OS 4(NR70V 등)는 CJKOS 등 한글 시스템 또는 MnHangul, OS 5(TG50)는 MnHangul5(표시와 하드웨어 키보드 입력을 함께).
+입력한 한글을 화면에 그리는 **한글 표시**는 입력 방법과 별개로 필요하다: OS 4(NR70V 등)는 CJKOS 등 한글 시스템 또는 MnHangul, OS 5(TG50·NX70V)는 MnHangul5(표시와 하드웨어 키보드 입력을 함께).
 
 ## 모듈
 
@@ -67,10 +67,10 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | Sony 가상 키보드 한글 | `MnSonyKbd.prc` | Sony 내장 가상 키보드에 두벌식 한글. sym 탭 오른쪽 `한`/`A` = 한/영, 키 글자를 자모로 표시 | 시험 단계, 리셋 없음 |
 | 시스템 키보드 화면 한글 | `MnKbdHan.prc` | 시스템 키보드 화면(메모 Edit > Keyboard)에 두벌식 한글. Int'l 오른쪽 `한`/`A` = 한/영 | 시험 단계, 리셋 없음 |
 | 한글 표시(CJKOS 대체) | `MnHangul.prc` | 조합형 글꼴로 2바이트 한글 그리기, 글자 경계, 폭·줄바꿈 | 시험 단계, 리셋 없음 |
-| Palm OS 5 한글(TG50) | `MnHangul5.prc` | TG50(Palm OS 5)에서 한글 표시 + 하드웨어 키보드 두벌식 입력(Shift+Space 한/영) | 시험 단계(에뮬레이터만), 리셋 없음 |
+| Palm OS 5 한글(TG50·NX70V) | `MnHangul5.prc` | TG50·NX70V(Palm OS 5)에서 한글 표시 + 하드웨어 키보드 두벌식 입력(Shift+Space 한/영) | 시험 단계(에뮬레이터만), 리셋 없음 |
 
 OS 4에서는 한글 표시를 CJKOS 등 기존 한글 시스템으로 해도 되고 MnHangul로 해도 된다. 둘을 같이 켜지는 않는다(MnHangul이 CJKOS를 감지하면 켜지지 않음).
-OS 5(TG50)는 MnHangul5 하나로 표시와 입력을 한다(OS 4 모듈은 OS 5에서 동작하지 않음).
+OS 5(TG50·NX70V)는 MnHangul5 하나로 표시와 입력을 한다(OS 4 모듈은 OS 5에서 동작하지 않음).
 
 설정 앱은 넷이고 화면이 같다: `MnHangul`(한글 표시), `MnSonyKbd`(Sony 가상 키보드), `MnKbdHan`(시스템 키보드 화면), `MnSkKbd`(Mn 가상 키보드). 어느 앱에서나 네 모듈의 상태가 보인다([공통 화면](#설정-앱-공통-화면켜기업데이트)). `ClieDiag`는 개발용 진단 전용이다.
 
@@ -109,7 +109,7 @@ OS 5 그림(MnHangul5 v2)만 TG50 포팅 CloudpilotEmu 네이티브판(PEG-TG50,
 
 <img src="docs/images/mnhangul.png" width="560" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul): 메모장, MnHangul 설정 앱">
 
-### 한글 표시·입력 — OS 5: MnHangul5 (TG50)
+### 한글 표시·입력 — OS 5: MnHangul5 (TG50·NX70V, 그림은 TG50)
 
 <img src="docs/images/os5-tg50.png" width="760" alt="TG50(Palm OS 5) MnHangul5: 설정 앱, 한글 메모 목록, 한글 모드 입력(오른쪽 아래 한 표시), Shift+Space로 영문">
 
@@ -155,7 +155,7 @@ OS 5 그림(MnHangul5 v2)만 TG50 포팅 CloudpilotEmu 네이티브판(PEG-TG50,
 | 한글 표시(MnHangul): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `ON`, 리셋 뒤 자동 시작 |
 | MnHangul: 다른 기종 — T600C(영문 Palm OS 4.1)에서 표시·글자 단위 BS·줄바꿈 정상. N710C(영문 Palm OS 4.1, 고해상도)에서 MnHangul v69 + MnKbdHan v16 입력 시험 9개·0.1초 간격 48키 통과. 입력은 MnKbdHan(시스템 키보드 화면 두벌식, 진단 판 v9)으로 조합 입력 확인. OS 3.5·일본어(Shift-JIS) 기종은 켜지 않음(v68) | CloudpilotEmu 실측 |
 | MnHangul: CJKOS 감지(켜져 있으면 `ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정, v62에서 예전 방식 뺌) |
-| Palm OS 5(TG50) 한글(MnHangul5 v1~): 표시(목록·본문·줄바꿈·`…` 자르기·글자 단위 BS), 키보드 두벌식(Shift 쌍자음, 자모 단위 BS), Shift+Space 한/영, 입력칸 오른쪽 아래 `한` 표시, 리셋 뒤 자동 시작. v2부터 한글을 글자마다 그림 한 번으로 그려 영문과 비슷한 속도(v1 대비 약 8배). v3부터 큰 글꼴은 24×24 한글, 굵은 글꼴은 한글도 굵게 | 시험 단계. TG50 포팅 CloudpilotEmu 네이티브판 메모장 실측(보통·굵은·큰 굵은 글꼴, 줄바꿈 포함). 실기 미시험. 에뮬레이터에서 0.12초 간격으로 길게 치면 모듈을 끈 영문 입력도 키가 빠지므로 빠른 입력은 짧은 글로만 확인 |
+| Palm OS 5(TG50·NX70V) 한글(MnHangul5 v1~, NX70V는 v4~): 표시(목록·본문·줄바꿈·`…` 자르기·글자 단위 BS), 키보드 두벌식(Shift 쌍자음, 자모 단위 BS), Shift+Space 한/영, 입력칸 오른쪽 아래 `한` 표시, 리셋 뒤 자동 시작. v2부터 한글을 글자마다 그림 한 번으로 그려 영문과 비슷한 속도(v1 대비 약 8배). v3부터 큰 글꼴은 24×24 한글, 굵은 글꼴은 한글도 굵게 | 시험 단계. TG50 포팅 CloudpilotEmu 네이티브판 메모장 실측(보통·굵은·큰 굵은 글꼴, 줄바꿈 포함). NX70V(포팅판)는 메모장 표시·입력·큰 글꼴·리셋 뒤 자동 시작 실측. 실기 미시험. 에뮬레이터에서 0.12초 간격으로 길게 치면 모듈을 끈 영문 입력도 키가 빠지므로 빠른 입력은 짧은 글로만 확인 |
 
 ## 1. 시스템 키보드 화면 한글(MnKbdHan)
 
@@ -298,9 +298,9 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 | `ON` / `OFF` | 한글 표시를 켬 / 끔(v68까지 `Hangul ON`/`Hangul OFF`). 이미 켜져 있으면 다시 끼우지 않는다(v58). CJKOS가 감지되면 켜지지 않는다 |
 | 나머지 | [공통 화면](#설정-앱-공통-화면켜기업데이트)과 같음. `[ ] Debug` = 개발용 진단 화면 |
 
-## Palm OS 5 (TG50) 한글(MnHangul5)
+## Palm OS 5 (TG50·NX70V) 한글(MnHangul5)
 
-Sony PEG-TG50(Palm OS 5.0 영문)용. 한글 표시와 하드웨어 키보드 입력을 한 모듈이 한다. OS 4 모듈(MnHangul·키보드 셋)은 OS 5에서 동작하지 않는다
+Sony PEG-TG50·PEG-NX70V(Palm OS 5.0 영문)용(NX70V는 v4부터). 두 기종의 ROM은 시스템 함수 표의 칸 번호와 키 이벤트가 같고 함수 주소만 다르다. 한글 표시와 하드웨어 키보드 입력을 한 모듈이 한다. OS 4 모듈(MnHangul·키보드 셋)은 OS 5에서 동작하지 않는다
 (입력칸 처리가 ARM 안에서 끝나 68k 트랩을 거치지 않고, 68k 트랩 바꾸기는 OS 5가 거부한다 — [docs/OS5_RESEARCH.md](docs/OS5_RESEARCH.md)).
 
 <img src="docs/images/os5-tg50.png" width="760" alt="TG50(Palm OS 5) MnHangul5: 설정 앱, 한글 메모 목록, 한글 모드 입력(오른쪽 아래 한 표시), Shift+Space로 영문">
@@ -313,11 +313,11 @@ Sony PEG-TG50(Palm OS 5.0 영문)용. 한글 표시와 하드웨어 키보드 �
 | 표시 | 완성형(KS X 1001, EUC-KR) 2바이트 한글을 조합형 글꼴로 그림. 보통·굵은 글꼴은 16×16(Neo둥근모 기반, 한 칸 = 표준 좌표 9), 큰 글꼴(메모장 Font의 세 번째)은 24×24(위 글꼴을 확대·손질한 파생, 한 칸 12). 굵은 글꼴이면 한글도 굵게 |
 | 리셋 | `Start at reset: ON`(기본)이면 리셋이 끝난 뒤 자동으로 켜짐 |
 | 끄기 | `OFF`. 리셋 뒤에는 Sony 모듈이 그리기 함수 위에 올라오므로 그때는 "쉬기"(코드는 남고 원래 함수로 넘김, 다음 리셋에 빠짐 — `Now: off (idle until reset)`) |
-| 기기 확인 | Sony TG50이 아니거나, 바꿀 시스템 함수 칸이 알려진 값이 아니면(다른 패치가 먼저 바꿈 등) 켜지지 않는다(`not supported`, `system table differs`) |
+| 기기 확인 | Sony TG50·NX70V가 아니거나, 바꿀 시스템 함수 칸이 알려진 값이 아니면(다른 패치가 먼저 바꿈 등) 켜지지 않는다(`not supported`, `system table differs`) |
 | 업데이트 | 코드는 메모리에 복사해 돌므로 켜진 채로 덮어 설치해도 된다. 새 판은 `OFF` → `ON`(쉬는 중이면 리셋 뒤) |
 
 제한사항: 실기 미시험(실기에서는 복사한 ARM 코드 실행 전에 캐시 처리가 필요할 수 있음),
-Graffiti 입력은 영문 그대로, 조합 상태는 앱별로 나뉘지 않음(앱 화면을 누르면 조합 끝), TG50 전용(다른 OS5 기종은 칸 번호가 다를 수 있음).
+Graffiti 입력은 영문 그대로, 조합 상태는 앱별로 나뉘지 않음(앱 화면을 누르면 조합 끝), TG50·NX70V 전용(다른 OS5 기종은 칸 번호가 다를 수 있음).
 
 ## 설치·업데이트
 
@@ -344,7 +344,7 @@ Graffiti 입력은 영문 그대로, 조합 상태는 앱별로 나뉘지 않음
 | `MnSkKbd.prc` | A·C 중 선택 (Mn 가상 키보드 설정) | Mn 가상 키보드 켜기/끄기(리셋 1번)·상태·업데이트. 없어도 Mn 키보드는 동작한다(설치하면 켜진 상태) |
 | `MnHangul.prc` | C·D (한글 표시를 MnHangul로 할 때) | 한글 표시 모듈(시험 단계). 한글 시스템(CJKOS 등)이 없을 때 한글 표시 |
 | `MnHgFont24.prc` | C·D 중 선택 (MnHangul 큰 글꼴) | MnHangul 24×24 추가 글꼴(큰 글꼴용) |
-| `MnHangul5.prc` | TG50(Palm OS 5) | 한글 표시 + 하드웨어 키보드 두벌식 입력, 설정 앱 겸용([Palm OS 5](#palm-os-5-tg50-한글mnhangul5)). OS 4 기종에는 설치하지 않는다 |
+| `MnHangul5.prc` | TG50·NX70V(Palm OS 5) | 한글 표시 + 하드웨어 키보드 두벌식 입력, 설정 앱 겸용([Palm OS 5](#palm-os-5-tg50nx70v-한글mnhangul5)). OS 4 기종에는 설치하지 않는다 |
 | `KbdScan.prc` | 개발용 | 다른 기종(N700C·T600C 등) 화면 키보드 진단(v2). 키보드 동작에는 필요 없다 |
 | `ClieDiag.prc` | 개발용 | 진단 전용(v29): 로더·본체 기록, SkWr·SkEv 페이지, 복구 스위치(DisS), Feature·트랩 목록, Events 페이지(입력칸 FLD로 키·그래피티 입력 경로 기록). 사용자 설정은 `MnSkKbd`. 키보드 동작에는 필요 없다 |
 
@@ -408,7 +408,7 @@ Mn 가상 키보드(MnSkKbd)의 `ON`/`OFF`는 리셋 뒤 적용되고 `All OFF`�
 | [docs/RECOVERY.md](docs/RECOVERY.md) | 문제가 생겼을 때 복구(먹통, 설치 실패, 연결 빠짐, 리셋 종류), 옛 DisS 절차 |
 | [docs/KOREAN_SUPPORT.md](docs/KOREAN_SUPPORT.md) | CJKOS 의존성, 대체 모듈(MnHangul)·Sony 가상 키보드 한글(MnSonyKbd) 검토와 판별 시험 기록 |
 | [docs/DEVELOPMENT_HISTORY.md](docs/DEVELOPMENT_HISTORY.md) | 1~12단계 개발 기록, ROM 역분석, ClieDiag 변경 기록, 실패한 가설 |
-| [docs/OS5_RESEARCH.md](docs/OS5_RESEARCH.md) | Palm OS 5(TG50) 한글 구현 조사: 물리 키 이벤트, 68k 트랩 기록, ARM 함수 주소표(표 8·12)와 교체 시험, OS5 모듈 구상 |
+| [docs/OS5_RESEARCH.md](docs/OS5_RESEARCH.md) | Palm OS 5(TG50·NX70V) 한글 구현 조사: 물리 키 이벤트, 68k 트랩 기록, ARM 함수 주소표(표 8·12)와 교체 시험, OS5 모듈 구상 |
 
 ## 시험 환경
 

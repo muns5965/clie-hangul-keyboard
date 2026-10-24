@@ -1,10 +1,11 @@
 /*
- * MnHangul5 v3 — Palm OS 5(Sony TG50) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v4 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
  *   OS 5는 68k SysSetTrapAddress를 거부하므로(sysErrNotAllowed) 표 8을 직접 바꾼다(docs/OS5_RESEARCH.md).
- * 기기 확인: Sony('sony')·TG50('vrna')이고, 바꿀 칸의 지금 값이 모두 TG50의 알려진 원래 값(slots.txt)일 때만 켠다.
+ * 기기 확인: Sony('sony')·TG50('vrna') 또는 NX70V('crdb')이고, 바꿀 칸의 지금 값이 모두 알려진 원래 값(slots.txt)일 때만 켠다.
+ *   v4: NX70V — 칸 번호·키 이벤트가 TG50과 같다(NX70V ROM의 PACE 연결 함수로 확인), 칸의 값만 다르다.
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -19,7 +20,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v3"
+#define kVer "v4"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -43,7 +44,7 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kOk         0
 #define kOnAlready  1
 #define kNoRes      2
-#define kNotTG50    3
+#define kNotSupported    3
 #define kSlotDiffer 4   /* + 칸 순번<<8 */
 #define kNoMem      5
 
@@ -116,11 +117,12 @@ static UInt32 Table8Addr(void)
     return r;
 }
 
-/* H5Tb 1000: n, ctx 오프셋, 칸마다 (칸, 함수 오프셋, O_ 번호, 0, 허용하는 원래 값 32비트 2개) — 모두 빅엔디언 */
-#define TbSlot(tb, i)      ((tb)[2 + (i) * 8])
-#define TbFunc(tb, i)      ((tb)[2 + (i) * 8 + 1])
-#define TbIdx(tb, i)       ((tb)[2 + (i) * 8 + 2])
-#define TbExpect(tb, i, k) ((((UInt32)(tb)[2 + (i) * 8 + 4 + 2 * (k)]) << 16) | (tb)[2 + (i) * 8 + 5 + 2 * (k)])
+/* H5Tb 1000: n, ctx 오프셋, 칸마다 (칸, 함수 오프셋, O_ 번호, 0, 허용하는 원래 값 32비트 4개) — 모두 빅엔디언 */
+#define kTbW               12   /* 칸 하나의 16비트 워드 수 */
+#define TbSlot(tb, i)      ((tb)[2 + (i) * kTbW])
+#define TbFunc(tb, i)      ((tb)[2 + (i) * kTbW + 1])
+#define TbIdx(tb, i)       ((tb)[2 + (i) * kTbW + 2])
+#define TbExpect(tb, i, k) ((((UInt32)(tb)[2 + (i) * kTbW + 4 + 2 * (k)]) << 16) | (tb)[2 + (i) * kTbW + 5 + 2 * (k)])
 
 /* 지원 기기 + 칸의 지금 값이 TG50의 알려진 원래 값인지(slots.txt) */
 static UInt16 Check(const UInt16 *tb, UInt32 t8)
@@ -130,12 +132,16 @@ static UInt16 Check(const UInt16 *tb, UInt32 t8)
 
     FtrGet(sysFtrCreator, sysFtrNumOEMCompanyID, &co);
     FtrGet(sysFtrCreator, sysFtrNumOEMDeviceID, &dev);
-    if (co != 'sony' || dev != 'vrna' || t8 == 0)
-        return kNotTG50;
+    if (co != 'sony' || (dev != 'vrna' && dev != 'crdb') || t8 == 0)
+        return kNotSupported;
     for (i = 0; i < tb[0]; i++) {
         UInt32 v = SW(*(UInt32 *)(t8 + TbSlot(tb, i)));
+        UInt16 k;
 
-        if (v != TbExpect(tb, i, 0) && v != TbExpect(tb, i, 1))
+        for (k = 0; k < 4; k++)
+            if (v == TbExpect(tb, i, k))
+                break;
+        if (k == 4)
             return kSlotDiffer | (i << 8);
     }
     return kOk;
@@ -257,7 +263,7 @@ static void OnMsg(UInt16 r)
     switch (r & 0xff) {
     case kOk:        StrCopy(gMsg, "on"); break;
     case kOnAlready: StrCopy(gMsg, "already on"); break;
-    case kNotTG50:   StrCopy(gMsg, "not supported: TG50 only"); break;
+    case kNotSupported:   StrCopy(gMsg, "not supported: TG50/NX70V only"); break;
     case kSlotDiffer: StrPrintF(gMsg, "not on: system table differs (#%u)", r >> 8); break;
     case kNoMem:     StrCopy(gMsg, "not on: out of memory"); break;
     default:         StrCopy(gMsg, "not on: resource missing"); break;
@@ -330,7 +336,7 @@ static void Draw(void)
         UiCheck(kUiRowDebug, "Debug", true);
         return;
     }
-    UiRow(0, "Hangul display + keyboard (TG50)");
+    UiRow(0, "Hangul display + kbd (TG50/NX70V)");
     UiMsg(gMsg);
     UiRow(kUiRowNow, !block ? "Now: off" : Idle(block) ? "Now: off (idle until reset)" : "Now: ON");
     UiButton(kUiXOn, kUiRowBtn, "ON");
@@ -351,7 +357,13 @@ static void Draw(void)
         }
         if (th)
             DmReleaseResource(th);
-        UiPair(kUiRowMods, "Device", (c & 0xff) == kOk ? "TG50 OK" : (c & 0xff) == kNotTG50 ? "not TG50" : "table differs");
+        if ((c & 0xff) == kOk) {
+            UInt32 dev = 0;
+
+            FtrGet(sysFtrCreator, sysFtrNumOEMDeviceID, &dev);
+            UiPair(kUiRowMods, "Device", dev == 'crdb' ? "NX70V OK" : "TG50 OK");
+        } else
+            UiPair(kUiRowMods, "Device", (c & 0xff) == kNotSupported ? "not TG50/NX70V" : "table differs");
     }
     UiPair(kUiRowMods + 1, "Han/Eng", "Shift+Space");
     UiPair(kUiRowMods + 2, "Mark", "\"Han\" at lower right");

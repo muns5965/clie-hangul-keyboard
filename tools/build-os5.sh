@@ -1,9 +1,9 @@
 #!/bin/bash
-# Palm OS 5(Sony TG50) 한글 표시·입력 → bin/MnHangul5.prc (타입 appl, 크리에이터 MnH5)
+# Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 → bin/MnHangul5.prc (타입 appl, 크리에이터 MnH5)
 #
 #   1) ARM 코드(src/os5/*.c, ctx.S) → 리소스 armc 1001. 표 8의 그리기·폭·Text Manager·EvtGetEvent 칸을 바꾸는 함수들.
 #      위치 독립 한 덩어리로 링크(link.ld, ctx 맨 앞). armc 1000 = 표 8 주소 얻기(table8.S).
-#   2) 칸 표(src/os5/slots.txt) → 리소스 H5Tb 1000: n, ctx 오프셋, 칸마다 (칸, 함수 오프셋, O_ 번호, 0, 원래 값 2개) 빅엔디언.
+#   2) 칸 표(src/os5/slots.txt) → 리소스 H5Tb 1000: n, ctx 오프셋, 칸마다 (칸, 함수 오프셋, O_ 번호, 0, 허용 값 4개) 빅엔디언.
 #   3) 글꼴 묶음 HgJp 1000 = src/hangul/data/HgJ16.bin(Neo둥근모 16×16 기반 OFL),
 #      HgJp 1001 = HgJ24.bin(24×24, 위 16×16 조각을 확대·손질한 파생 OFL — 큰 글꼴용),
 #      KS X 1001 표 Ksct 1000 = tools/gen-ksc-table.py --bin.
@@ -72,12 +72,13 @@ w = [len(rows), sym['ctx']]
 for i, r in enumerate(rows):
     if r[2] not in sym:
         sys.exit('error: %s not in hook.elf' % r[2])
-    exp = [int(x, 16) for x in r[3].split('/')]
-    if len(exp) > 2:
-        sys.exit('error: at most two values per slot')
-    if len(exp) == 1:
-        exp.append(exp[0])
-    w += [int(r[0], 16), sym[r[2]], i, 0, exp[0] >> 16, exp[0] & 0xffff, exp[1] >> 16, exp[1] & 0xffff]
+    exp = [int(x, 16) for x in (r[3] + '/' + r[4]).split('/')]   # TG50 값들 + NX70V 값들
+    if len(exp) > 4:
+        sys.exit('error: at most four values per slot')
+    exp += [exp[0]] * (4 - len(exp))
+    w += [int(r[0], 16), sym[r[2]], i, 0]
+    for v in exp:
+        w += [v >> 16, v & 0xffff]
 open(outp, 'wb').write(struct.pack('>%dH' % len(w), *w))
 print('slots', len(rows), 'ctx', hex(sym['ctx']), 'code', hex(max(sym.values())))
 PY

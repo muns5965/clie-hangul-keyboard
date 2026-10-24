@@ -1,5 +1,5 @@
 /*
- * MnHangul5 (Palm OS 5, TG50) ARM 부분 공용 정의.
+ * MnHangul5 (Palm OS 5, TG50·NX70V) ARM 부분 공용 정의.
  *
  * OS 5에서는 시스템 함수가 RAM에 있는 ARM 함수 주소표(r9 - 8 = 표 8, r9 - 12 = 표 12)를 거쳐 불린다.
  * 68k 앱의 트랩도 PACE 연결 함수(glue)가 이 표로 부르므로, 표의 칸을 바꾸면 68k·ARM 호출이 모두 바뀐다.
@@ -8,7 +8,7 @@
  * 코드 규칙(tools/build-os5.sh가 검사):
  *   - 앱이 동적 힙(소유자 0)에 복사해 실행한다 → 전역 데이터·상수 표 금지. 상태는 ctx(PC 상대, CtxPtr)에만.
  *   - -ffixed-r9 (r9 = 시스템 표), -fno-tree-switch-conversion (큰 switch가 절대 주소 상수 표가 되지 않게).
- *   - 칸 번호는 TG50 ROM(Palm OS 5.0 영문) 기준. 앱이 설치 전에 원래 값이 같은지 확인한다(slots.txt).
+ *   - 칸 번호는 TG50·NX70V ROM(Palm OS 5.0 영문)에서 같다. 앱이 설치 전에 원래 값이 알려진 값인지 확인한다(slots.txt).
  */
 #ifndef OS5_H
 #define OS5_H
@@ -56,7 +56,7 @@ static inline u32 R9(void) {
 #define ORIG(i)   (CtxPtr()->orig[i])
 #define Idle()    (CtxPtr()->idle != 0)
 
-/* 표 8 (TG50) — 부르기만 하는 함수 */
+/* 표 8 (TG50·NX70V 같음) — 부르기만 하는 함수 */
 #define T8_EvtEnqueueKey          0x298
 #define T8_FntBaseLine            0x3e0
 #define T8_FntGetFont             0x3fc
@@ -70,14 +70,14 @@ static inline u32 R9(void) {
 #define T8_WinSetForeColor        0xc3c
 #define T8_WinSetTextColor        0xc4c
 #define T8_WinSetCoordinateSystem 0xc98
-/* 표 12 (TG50) */
+/* 표 12 (TG50·NX70V 같음) */
 #define T12_FrmGetActiveForm      0x224
 #define T12_FrmGetNumberOfObjects 0x250
 #define T12_FrmGetObjectBounds    0x254
 #define T12_FrmGetObjectType      0x26c
 #define T12_FrmGetWindowHandle    0x278
 
-/* 한글 한 칸(표준 좌표, TG50 2배 밀도): 16×16 글자 = 9(기기 18, 왼쪽 1 띄움), 24×24 글자 = 12(기기 24) */
+/* 한글 한 칸(표준 좌표, 2배 밀도): 16×16 글자 = 9(기기 18, 왼쪽 1 띄움), 24×24 글자 = 12(기기 24) */
 #define HW 9
 #define HW24 12
 #define kBigLine 14      /* 줄 높이가 이 이상(큰 글꼴 14·큰 굵은 15)이면 24×24 — OS 4 MnHangul v22와 같은 기준 */
