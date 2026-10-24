@@ -41,9 +41,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 화면 안 팝업(Edit > Keyboard), 두벌식 | 화면 밖 실크스크린에 자체 자판, 단모음 | 화면 밖 Sony 자판, 두벌식 |
 | Int'l 오른쪽 `한`/`A`, 리셋 없음 | 왼쪽 아래 `한/A` 키, 리셋 1번(등록) | sym 오른쪽 `한`/`A`, 리셋 없음 |
 
-**한글 표시** — [MnHangul](#한글-표시mnhangul)(CJKOS 대신)
-
-**Palm OS 5** — [TG50 한글 표시·입력(MnHangul5)](#palm-os-5-tg50-한글mnhangul5)
+**한글 표시** — [OS 4: MnHangul](#한글-표시mnhangul)(CJKOS 대신) · [OS 5 TG50: MnHangul5](#palm-os-5-tg50-한글mnhangul5)(표시 + 키보드 입력)
 
 **설치·설정** — [설치·업데이트](#설치업데이트)(설치 경우 A~D, 배포 파일) · [설정 앱 공통](#설정-앱-공통-화면켜기업데이트)(네 앱 같은 화면, All OFF·Update)
 
@@ -59,7 +57,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 2. 화면 밖 실크스크린에 자체 키보드 | 가상 실크스크린(Graffiti 자리)에 **이 저장소의 자판**을 그림 | 그대로 | Mn 가상 키보드(`MnSkPlugin` + `MnSkCore`) | 구현. 단모음 한글·영문·숫자 |
 | 3. 화면 밖 Sony 키보드를 한글 자판으로 | 가상 실크스크린의 **Sony 가상 키보드**를 그대로 쓰고 키 글자·입력만 두벌식으로 | 그대로 | MnSonyKbd | 시험 단계. sym 오른쪽 `한`/`A` = 한/영, Shift 쌍자음 |
 
-입력한 한글을 화면에 그리는 **한글 표시**는 입력 방법과 별개로 필요하다: CJKOS 등 한글 시스템 또는 MnHangul.
+입력한 한글을 화면에 그리는 **한글 표시**는 입력 방법과 별개로 필요하다: OS 4(NR70V 등)는 CJKOS 등 한글 시스템 또는 MnHangul, OS 5(TG50)는 MnHangul5(표시와 하드웨어 키보드 입력을 함께).
 
 ## 모듈
 
@@ -71,15 +69,17 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 한글 표시(CJKOS 대체) | `MnHangul.prc` | 조합형 글꼴로 2바이트 한글 그리기, 글자 경계, 폭·줄바꿈 | 시험 단계, 리셋 없음 |
 | Palm OS 5 한글(TG50) | `MnHangul5.prc` | TG50(Palm OS 5)에서 한글 표시 + 하드웨어 키보드 두벌식 입력(Shift+Space 한/영) | 시험 단계(에뮬레이터만), 리셋 없음 |
 
-한글 표시는 CJKOS 등 기존 한글 시스템을 써도 되고 MnHangul을 써도 된다. 둘을 같이 켜지는 않는다(MnHangul이 CJKOS를 감지하면 켜지지 않음).
+OS 4에서는 한글 표시를 CJKOS 등 기존 한글 시스템으로 해도 되고 MnHangul로 해도 된다. 둘을 같이 켜지는 않는다(MnHangul이 CJKOS를 감지하면 켜지지 않음).
+OS 5(TG50)는 MnHangul5 하나로 표시와 입력을 한다(OS 4 모듈은 OS 5에서 동작하지 않음).
 
 설정 앱은 넷이고 화면이 같다: `MnHangul`(한글 표시), `MnSonyKbd`(Sony 가상 키보드), `MnKbdHan`(시스템 키보드 화면), `MnSkKbd`(Mn 가상 키보드). 어느 앱에서나 네 모듈의 상태가 보인다([공통 화면](#설정-앱-공통-화면켜기업데이트)). `ClieDiag`는 개발용 진단 전용이다.
 
 ## 소개
 
-[한글 입력 방법](#한글-입력-방법)의 분류대로 그림을 나눈다. 모든 그림은 CloudpilotEmu(PEG-NR70V, Palm OS 4.1S)의 **실제 화면 캡처**다
+[한글 입력 방법](#한글-입력-방법)의 분류대로 그림을 나눈다. 그림은 모두 **실제 화면 캡처**이고, OS 4 그림은 CloudpilotEmu(PEG-NR70V, Palm OS 4.1S)다
 (MnSonyKbd v47·MnSkCore build 19·MnKbdHan v16·MnHangul v67, 설정 앱 그림은 MnHangul v69·MnSonyKbd v50·MnKbdHan v13·MnSkKbd v2, CJKOS 없이 MnHangul로 한글 표시).
-캡처는 에뮬레이터를 브라우저 없이 돌리고 펜 누름을 스크립트로 재생해 얻었다. 원본은 `docs/images/capture/`, 그림 다시 만들기: `python3 tools/gen-readme-captures.py`.
+OS 5 그림(MnHangul5 v2)만 TG50 포팅 CloudpilotEmu 네이티브판(PEG-TG50, Palm OS 5.0) 캡처다.
+캡처는 에뮬레이터를 브라우저 없이 돌리고 펜 누름(TG50은 키 입력)을 스크립트로 재생해 얻었다. 원본은 `docs/images/capture/`, 그림 다시 만들기: `python3 tools/gen-readme-captures.py`.
 
 ### 1. 화면 안 키보드 — MnKbdHan
 
@@ -105,9 +105,13 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 숫자·기호 | `123`·`Int'l` 탭(그대로) | `123` 키 | `sym`·`int'l` 탭(그대로) |
 | 지우기 | ← : 조합 중이면 자모 단위 | `BS` : 조합 중이면 자모 단위 | ← : 조합 중이면 자모 단위 |
 
-### 한글 표시 — MnHangul (입력 방법과 별개)
+### 한글 표시 — OS 4: MnHangul (입력 방법과 별개)
 
 <img src="docs/images/mnhangul.png" width="420" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul)">
+
+### 한글 표시·입력 — OS 5: MnHangul5 (TG50)
+
+<img src="docs/images/os5-tg50.png" width="760" alt="TG50(Palm OS 5) MnHangul5: 설정 앱, 한글 메모 목록, 한글 모드 입력(오른쪽 아래 한 표시), Shift+Space로 영문">
 
 ## 용어
 
