@@ -1,11 +1,12 @@
 /*
- * MnHangul5 v4 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v5 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
  *   OS 5는 68k SysSetTrapAddress를 거부하므로(sysErrNotAllowed) 표 8을 직접 바꾼다(docs/OS5_RESEARCH.md).
  * 기기 확인: Sony('sony')·TG50('vrna') 또는 NX70V('crdb')이고, 바꿀 칸의 지금 값이 모두 알려진 원래 값(slots.txt)일 때만 켠다.
  *   v4: NX70V — 칸 번호·키 이벤트가 TG50과 같다(NX70V ROM의 PACE 연결 함수로 확인), 칸의 값만 다르다.
+ * v5: ON 때 빠진 칸(다른 확장이 원래 값으로 되돌린 칸)을 다시 잇고, 화면 Now:에 빠진 칸 수를 보인다.
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -20,7 +21,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v4"
+#define kVer "v5"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -47,6 +48,7 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kNotSupported    3
 #define kSlotDiffer 4   /* + 칸 순번<<8 */
 #define kNoMem      5
+#define kRelinked   6   /* + 다시 이은 칸 수<<8 (v5) */
 
 #include "../common/app_ui.h"
 
@@ -147,6 +149,30 @@ static UInt16 Check(const UInt16 *tb, UInt32 t8)
     return kOk;
 }
 
+/* v5: 켜져 있는데 칸이 빠졌는지(다른 확장이 칸을 원래 값으로 되돌림). 칸마다 지금 값이
+ *   우리 코드 → 정상, 우리가 저장한 원래 값 → 빠짐, 그 밖 → 위에 다른 패치(Sony 모듈 등, 연결 유지로 본다).
+ *   빠진 칸 수를 돌려주고, fix면 그 칸만 우리 코드로 다시 잇는다(메모리는 그대로 — 해제 위험 없음). */
+static UInt16 Detached(const UInt16 *tb, UInt32 block, UInt32 t8, Boolean fix)
+{
+    UInt16 i, d = 0;
+
+    if (block == 0 || t8 == 0)
+        return 0;
+    for (i = 0; i < tb[0]; i++) {
+        UInt32 cur = *(UInt32 *)(t8 + TbSlot(tb, i));   /* 그대로(리틀엔디언) 비교 */
+
+        if (cur == SW(block + TbFunc(tb, i)))
+            continue;
+        if (cur == *(UInt32 *)(block + tb[1] + 4 * TbIdx(tb, i))) {
+            d++;
+            if (fix)
+                *(UInt32 *)(t8 + TbSlot(tb, i)) = SW(block + TbFunc(tb, i));
+        }
+    }
+    return d;
+}
+#define Relink(tb, block, t8) Detached(tb, block, t8, true)
+
 static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
 {
     UInt32    block, pack, pack24, ksc, t8, v = 0;
@@ -159,8 +185,10 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
     tb = (UInt16 *)MemHandleLock(th);
     n = tb[0];
     ctx = tb[1];
-    if (FtrGet(kCr, 0, &v) == errNone && v != 0) {   /* 이미 있음: 쉬는 중이면 깨움 */
-        r = *(UInt32 *)(v + ctx + kCtxIdle) ? kOk : kOnAlready;
+    if (FtrGet(kCr, 0, &v) == errNone && v != 0) {   /* 이미 있음: 쉬는 중이면 깨우고, 빠진 칸은 다시 잇는다 */
+        UInt16 back = Relink(tb, v, Table8Addr());
+
+        r = back != 0 ? (kRelinked | (back << 8)) : *(UInt32 *)(v + ctx + kCtxIdle) ? kOk : kOnAlready;
         *(UInt32 *)(v + ctx + kCtxIdle) = 0;
         MemHandleUnlock(th);
         DmReleaseResource(th);
@@ -210,9 +238,13 @@ static UInt16 Off(void)
     if (block == 0)
         return 1;
     th = DmGetResource('H5Tb', 1000);
-    t8 = Table8Addr();
-    if (th == NULL || t8 == 0)
+    if (th == NULL)
         return 0;
+    t8 = Table8Addr();
+    if (t8 == 0) {   /* v5: 리소스를 놓고 나감 */
+        DmReleaseResource(th);
+        return 0;
+    }
     tb = (UInt16 *)MemHandleLock(th);
     n = tb[0];
     for (i = 0; i < n; i++)
@@ -266,6 +298,7 @@ static void OnMsg(UInt16 r)
     case kNotSupported:   StrCopy(gMsg, "not supported: TG50/NX70V only"); break;
     case kSlotDiffer: StrPrintF(gMsg, "not on: system table differs (#%u)", r >> 8); break;
     case kNoMem:     StrCopy(gMsg, "not on: out of memory"); break;
+    case kRelinked:  StrPrintF(gMsg, "on: relinked %u detached", r >> 8); break;
     default:         StrCopy(gMsg, "not on: resource missing"); break;
     }
 }
@@ -338,7 +371,26 @@ static void Draw(void)
     }
     UiRow(0, "Hangul display + kbd (TG50/NX70V)");
     UiMsg(gMsg);
-    UiRow(kUiRowNow, !block ? "Now: off" : Idle(block) ? "Now: off (idle until reset)" : "Now: ON");
+    if (!block)
+        UiRow(kUiRowNow, "Now: off");
+    else if (Idle(block))
+        UiRow(kUiRowNow, "Now: off (idle until reset)");
+    else {
+        MemHandle dh = DmGetResource('H5Tb', 1000);
+        UInt16    d = 0;
+        Char      s[40];
+
+        if (dh != NULL) {
+            d = Detached((UInt16 *)MemHandleLock(dh), block, Table8Addr(), false);
+            MemHandleUnlock(dh);
+            DmReleaseResource(dh);
+        }
+        if (d != 0) {   /* v5: 다른 확장이 칸을 되돌림 — ON으로 다시 잇는다 */
+            StrPrintF(s, "Now: ON, %u detached (tap ON)", d);
+            UiRow(kUiRowNow, s);
+        } else
+            UiRow(kUiRowNow, "Now: ON");
+    }
     UiButton(kUiXOn, kUiRowBtn, "ON");
     UiButton(kUiXOff, kUiRowBtn, "OFF");
     UiButton(kUiXOn, kUiRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");

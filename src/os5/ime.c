@@ -56,8 +56,14 @@ typedef u8 (*FontFn)(u8);
    st[6] 미룬 횟수, st[7] 불린 수(진단) */
 static inline void HcSend(u16 c)
 {
-    u32 *st = CtxPtr()->st;
-    if (((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(c, kImMark, 0) == 0) st[4]++;
+    struct Ctx *x = CtxPtr();
+    if (((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(c, kImMark, 0) == 0) x->st[4]++;
+    else x->qfail++;   /* 큐가 가득 참: 화면과 조합 상태가 어긋나므로 이 키 처리 뒤 조합을 끝낸다(v5) */
+}
+/* 조합 함수를 부른 뒤: 결과 키를 하나라도 못 넣었으면 조합 끝(다음 키부터 새 글자) */
+static inline void EndIfQFail(u32 *st, u32 before)
+{
+    if (CtxPtr()->qfail != before) st[0] = 0;
 }
 #define MNSK_HOST_TEST 1   /* 표는 .text 어셈블리 대신 ctx->ksc */
 static inline const u8 *KscBitsPtr(void) { return CtxPtr()->ksc; }
@@ -163,8 +169,10 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         return;
     }
     st[3] = 0;
-    if (st[4] != st[5] && st[6] < 20) {   /* 앞 키로 넣은 BS·글자가 아직 앱에 안 감: 이 키를 큐 뒤로 미룸 */
-        ((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(ch, ev->keyCode, ev->modifiers);
+    /* 앞 키로 넣은 BS·글자가 아직 앱에 안 감: 이 키를 큐 뒤로 미룸.
+     * v5: 큐에 못 넣으면(가득 참) 미루지 않고 그대로 처리 — 키가 사라지는 것보다 순서가 바뀌는 쪽이 낫다 */
+    if (st[4] != st[5] && st[6] < 20 &&
+        ((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(ch, ev->keyCode, ev->modifiers) == 0) {
         st[6]++;
         Log(ev, 4);
         ev->eType = nilEvent;
@@ -178,7 +186,10 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         return;
     }
     if (ch == chrBackspace) {   /* 조합 중이면 자모 하나 되돌림 */
+        u32 qf = c->qfail;
+
         if (ComposeBack(st)) ev->eType = nilEvent;
+        EndIfQFail(st, qf);
         return;
     }
     j = ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')) ? Dubeol((u8)(ch ^ 0x20)) : 0;
@@ -187,7 +198,12 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         Log(ev, 6);
         return;
     }
-    Compose(st, (u8)(j - 0xA0));
+    {
+        u32 qf = c->qfail;
+
+        Compose(st, (u8)(j - 0xA0));
+        EndIfQFail(st, qf);
+    }
     Log(ev, 7);
     ev->eType = nilEvent;
 }

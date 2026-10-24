@@ -8,4 +8,4 @@ CtxPtr:
         bx      lr
         .align  2
         .global ctx
-ctx:    .space  384
+ctx:    .space  384                 @ struct Ctx (os5.h) 376바이트

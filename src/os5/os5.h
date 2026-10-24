@@ -43,6 +43,7 @@ struct Ctx {
     u32 idle;            /* +244 1 = 쉬는 중(모든 함수가 원래 함수로 넘김) — 표를 되돌릴 수 없을 때의 OFF */
     const u8 *pack24;    /* +248 24×24 조합형 묶음(HgJ24, 큰 글꼴용, v3) */
     u32 bmp[30];         /* +252 글자 그림(BitmapTypeV3 머리 24바이트 + 24줄 × 4바이트, draw.c) */
+    u32 qfail;           /* +372 조합 결과 키를 큐에 못 넣은 수(v5, ime.c) */
 };
 struct Ctx *CtxPtr(void);
 

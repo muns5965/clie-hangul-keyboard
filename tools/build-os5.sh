@@ -91,7 +91,7 @@ python3 "$root/tools/gen-ksc-table.py" --bin Ksct03e8.bin > /dev/null
 # 4) 앱
 m68k-palmos-gcc -palmos4 -DMN_DIAG=$DIAG -O2 -Wall -Wno-multichar "$src/app.c" -o app 2>&1 | tee build.log
 m68k-palmos-objdump -d app > app.dis
-for fn in On Check CopyRes Table8Addr PrefGet SelfDB; do
+for fn in On Check CopyRes Table8Addr PrefGet SelfDB Detached; do
   grep -q "<$fn>:" app.dis || { echo "error: $fn not found" >&2; exit 1; }
   # 함수의 마지막 rts 뒤(다음 함수의 문자열 상수가 이어 붙는 자리)는 코드가 아니므로 뺀다(build-kbdhan.sh와 같음)
   n=$(awk -v f="<$fn>:" '$2==f {on=1; next} /^[0-9a-f]+ </ {on=0} on {l[++k]=$0; if ($0 ~ /\trts/) last=k}
