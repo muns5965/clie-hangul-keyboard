@@ -41,7 +41,8 @@ struct Ctx {
     u32 ring[24];        /* +144 최근 키 기록(진단 빌드) */
     u32 rpos;            /* +240 */
     u32 idle;            /* +244 1 = 쉬는 중(모든 함수가 원래 함수로 넘김) — 표를 되돌릴 수 없을 때의 OFF */
-    u32 bmp[14];         /* +248 글자 그림(BitmapTypeV3 머리 24바이트 + 16줄 × 2바이트, draw.c) */
+    const u8 *pack24;    /* +248 24×24 조합형 묶음(HgJ24, 큰 글꼴용, v3) */
+    u32 bmp[30];         /* +252 글자 그림(BitmapTypeV3 머리 24바이트 + 24줄 × 4바이트, draw.c) */
 };
 struct Ctx *CtxPtr(void);
 
@@ -57,7 +58,10 @@ static inline u32 R9(void) {
 
 /* 표 8 (TG50) — 부르기만 하는 함수 */
 #define T8_EvtEnqueueKey          0x298
+#define T8_FntBaseLine            0x3e0
+#define T8_FntGetFont             0x3fc
 #define T8_FntLineHeight          0x408
+#define T8_FntSetFont             0x410
 #define T8_WinEraseRectangle      0xb50
 #define T8_WinGetActiveWindow     0xb64
 #define T8_WinPaintBitmap         0xbc8
@@ -73,8 +77,10 @@ static inline u32 R9(void) {
 #define T12_FrmGetObjectType      0x26c
 #define T12_FrmGetWindowHandle    0x278
 
-#define CELL 18          /* 한글 한 칸 = 기기 픽셀 18 */
-#define HW (CELL / 2)    /* 표준 좌표 폭 9 (TG50 2배 밀도) */
+/* 한글 한 칸(표준 좌표, TG50 2배 밀도): 16×16 글자 = 9(기기 18, 왼쪽 1 띄움), 24×24 글자 = 12(기기 24) */
+#define HW 9
+#define HW24 12
+#define kBigLine 14      /* 줄 높이가 이 이상(큰 글꼴 14·큰 굵은 15)이면 24×24 — OS 4 MnHangul v22와 같은 기준 */
 
 static inline int Hi(u8 b) { return b >= 0xA1 && b <= 0xFE; }
 
@@ -82,5 +88,6 @@ typedef void (*DrawCharsFn)(const char *, s16, s16, s16);
 typedef s16 (*CharsWidthFn)(const char *, s16);
 
 void HgDrawChars(const char *chars, s16 len, s16 x, s16 y);   /* draw.c — ime.c의 '한' 표시도 씀 */
+u16 HangulCell(void);                                          /* draw.c: 지금 글꼴의 한글 칸 폭(표준 좌표) */
 
 #endif

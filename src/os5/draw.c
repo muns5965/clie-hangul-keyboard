@@ -1,10 +1,12 @@
 /*
  * MnHangul5 그리기·폭 — 표 8의 WinDrawChars·WinDrawChar·WinPaintChars·WinDrawTruncChars와
  * 폭 함수 5개(FntCharsWidth·FntLineWidth·FntCharsInWidth·FntWordWrap·FntWidthToOffset)를 바꾼다.
- * 규칙은 OS 4 MnHangul(src/hangul/width.c·patch.c)과 같다. 한글 한 칸 = 표준 좌표 9(HW).
+ * 규칙은 OS 4 MnHangul(src/hangul/width.c·patch.c)과 같다. 한글 한 칸 = 표준 좌표 9(HW), 큰 글꼴 12(HW24).
  * 글자 모양: 조합형 글꼴 묶음(HgJ16, Neo둥근모 16×16 기반 OFL)을 GlyphRows로 합성해 1비트 고밀도 그림 하나로 그린다(v2).
  *   v1은 점마다 WinDrawPixel을 불러 한 글자에 약 100번 → 한글 줄이 영문의 약 7배 느렸다(시험 앱: 540자 0.33초).
  *   v2는 글자마다 WinPaintBitmap 한 번(540자 0.04초, 영문과 비슷).
+ * v3: 큰 글꼴(줄 높이 14 이상)은 24×24 묶음(HgJ24)으로 칸 12, 굵은 글꼴(boldFont·largeBoldFont)은 1픽셀 겹쳐 굵게.
+ *   그리기·폭·글자 경계가 같은 칸(HangulCell)을 써야 줄바꿈·커서가 맞는다.
  */
 #include "os5.h"
 
@@ -32,6 +34,21 @@ static int HasHi(const u8 *t, u32 n) {
     return 0;
 }
 static inline u16 RdW(const u8 *p) { return (u16)((p[0] << 8) | p[1]); }
+/* 묶음 그림 한 줄을 32비트(왼쪽 = 비트 31)로. 판 1 = 2바이트 줄(16×16), 판 2 = 4바이트 줄(24×24) — MnHangul patch.c와 같음 */
+static inline u16 RowBytes(const u8 *pk) { return pk[2] >= 2 ? 4 : 2; }
+static inline u32 RdRow(const u8 *pk, const u8 *p) {
+    return pk[2] >= 2 ? ((u32)RdW(p) << 16) | RdW(p + 2) : (u32)RdW(p) << 16;
+}
+
+#define boldFont 1
+#define largeBoldFont 7
+typedef u8 (*GetFontFn)(void);
+
+static inline int Big(void) {
+    return CtxPtr()->pack24 && ((LineHeightFn)T8(T8_FntLineHeight))() >= kBigLine;
+}
+
+u16 HangulCell(void) { return Big() ? HW24 : HW; }
 
 /* ---- 글자 모양 (MnHangul patch.c) ---- */
 /* 완성형 순위 r → 유니코드 음절 번호. 표: 비트(1398바이트) + 누계(빅엔디언, tools/gen-ksc-table.py) */
@@ -48,8 +65,8 @@ static u16 RankToSyl(const u8 *ksc, u16 r) {
     return 0;
 }
 
-static void GlyphRows(const u8 *pk, u16 sy, u16 *rows) {
-    u16 H = pk[3], Nc = pk[6], Nj = pk[7], rb = H * 2, i, k;
+static void GlyphRows(const u8 *pk, u16 sy, u32 *rows) {
+    u16 H = pk[3], Nc = pk[6], Nj = pk[7], w = RowBytes(pk), rb = H * w, i, k;
     u16 oP = RdW(pk + 112), oE = RdW(pk + 116), nE = RdW(pk + 118), oS = RdW(pk + 120),
         nS = RdW(pk + 122);
     u16 L = sy / 588, V = (sy % 588) / 28, T = sy % 28, hasT = T ? 1 : 0;
@@ -63,7 +80,7 @@ static void GlyphRows(const u8 *pk, u16 sy, u16 *rows) {
         int mid = (lo + hi) / 2;
         u16 v = RdW(pk + oS + mid * (2 + rb));
         if (v == sy) {
-            for (i = 0; i < H; i++) rows[i] = RdW(pk + oS + mid * (2 + rb) + 2 + i * 2);
+            for (i = 0; i < H; i++) rows[i] = RdRow(pk, pk + oS + mid * (2 + rb) + 2 + i * w);
             return;
         }
         if (v < sy) lo = mid + 1; else hi = mid - 1;
@@ -84,27 +101,33 @@ static void GlyphRows(const u8 *pk, u16 sy, u16 *rows) {
     }
     for (k = 0; k < 3; k++)
         if (id[k] != 0xFFFF)
-            for (i = 0; i < H; i++) rows[i] |= RdW(pk + oP + (u32)id[k] * rb + i * 2);
+            for (i = 0; i < H; i++) rows[i] |= RdRow(pk, pk + oP + (u32)id[k] * rb + i * w);
 }
 
 /* 2바이트 글자 하나를 표준 좌표(x, y = 글줄 위)에 그린다 */
 static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y) {
     struct Ctx *c = CtxPtr();
-    const u8 *pk = c->pack;
-    u16 rows[16], H = pk[3], r, old, mode;
+    int big = Big();
+    const u8 *pk = big ? c->pack24 : c->pack;
+    u32 rows[24];
+    u16 H = pk[3], w = RowBytes(pk), r, old, mode, gw = big ? 24 : 16;
     s16 lineH = ((LineHeightFn)T8(T8_FntLineHeight))();
-    s16 nx = x * 2, ny = y * 2 + (lineH * 2 - (s16)H) / 2;
+    s16 nx = x * 2 + (big ? 0 : 1), ny = y * 2 + (lineH * 2 - (s16)H) / 2;   /* 16×16은 칸 18에서 왼쪽 1 띄움 */
     ColorFn setText = (ColorFn)T8(T8_WinSetTextColor), setFore = (ColorFn)T8(T8_WinSetForeColor);
-    u8 text, fore;
+    u8 text, fore, font;
 
     if (lead == 0xA4) {
-        const u8 *j = pk + RdW(pk + 124) + (trail - 0xA1) * H * 2;
-        for (r = 0; r < H; r++) rows[r] = RdW(j + r * 2);
+        const u8 *j = pk + RdW(pk + 124) + (trail - 0xA1) * H * w;
+        for (r = 0; r < H; r++) rows[r] = RdRow(pk, j + r * w);
     } else if (lead >= 0xB0 && lead <= 0xC8 && trail >= 0xA1) {
         GlyphRows(pk, RankToSyl(c->ksc, (lead - 0xB0) * 94 + (trail - 0xA1)), rows);
     } else {   /* 그 밖의 KS X 1001 행: 빈 네모 */
-        for (r = 0; r < H; r++) rows[r] = (r == 2 || r == H - 3) ? 0x3FF8 : (r > 2 && r < H - 3 ? 0x2008 : 0);
+        u32 edge = 0xFFFFFFFFu << (32 - (gw - 4)) >> 2, side = (0x80000000u >> 2) | (0x80000000u >> (gw - 3));
+        for (r = 0; r < H; r++) rows[r] = (r == 2 || r == H - 3) ? edge : (r > 2 && r < H - 3 ? side : 0);
     }
+    font = ((GetFontFn)T8(T8_FntGetFont))();
+    if (font == boldFont || font == largeBoldFont)   /* 굵게: 오른쪽으로 1픽셀 겹침(칸 안에서) */
+        for (r = 0; r < H; r++) rows[r] |= (rows[r] >> 1) & (0xFFFFFFFFu << (32 - gw));
 #if MN_DIAG
     c->hits++;
 #endif
@@ -117,14 +140,15 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y) {
         /* BitmapTypeV3를 ARM 바이트 순서로 직접 만든다(ctx->bmp). 실측으로 확인한 형식:
          *   ARM BmpCreate가 만든 그림은 필드가 리틀엔디언이고 version 바이트에 0x80이 붙는다(V2 = 0x82).
          *   flags는 ARM 비트필드 순서(hasTransparency = 비트 2) → 투명 번호 0(점 없는 자리)은 그리지 않음.
-         *   1비트 점은 전경색(위에서 글자색으로 바꿈)으로 그려진다. 밀도 144 = 기기 픽셀 1:1. */
+         *   1비트 점은 전경색(위에서 글자색으로 바꿈)으로 그려진다. 밀도 144 = 기기 픽셀 1:1.
+         *   줄은 4바이트(rowBytes 4)로 16·24 폭 모두 같은 형식. */
         u8 *b = (u8 *)c->bmp;
         u16 i;
 
         for (i = 0; i < 24; i++) b[i] = 0;
-        b[0] = 16;          /* width */
+        b[0] = (u8)gw;      /* width */
         b[2] = (u8)H;       /* height */
-        b[4] = 2;           /* rowBytes */
+        b[4] = 4;           /* rowBytes */
         b[6] = 0x04;        /* flags: hasTransparency */
         b[8] = 1;           /* pixelSize */
         b[9] = 0x83;        /* version 3 | 리틀엔디언 */
@@ -132,27 +156,29 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y) {
         b[13] = 0xFF;       /* 압축 없음 */
         b[14] = 144;        /* density 144(고밀도) */
         for (r = 0; r < H; r++) {   /* 1비트 점: 왼쪽이 높은 비트 */
-            b[24 + r * 2] = (u8)(rows[r] >> 8);
-            b[25 + r * 2] = (u8)rows[r];
+            b[24 + r * 4] = (u8)(rows[r] >> 24);
+            b[25 + r * 4] = (u8)(rows[r] >> 16);
+            b[26 + r * 4] = (u8)(rows[r] >> 8);
+            b[27 + r * 4] = (u8)rows[r];
         }
         mode = ((DrawModeFn)T8(T8_WinSetDrawMode))(kWinPaint);
-        ((PaintBitmapFn)T8(T8_WinPaintBitmap))(b, nx + 1, ny);
+        ((PaintBitmapFn)T8(T8_WinPaintBitmap))(b, nx, ny);
         ((DrawModeFn)T8(T8_WinSetDrawMode))(mode);
     }
     ((CoordSysFn)T8(T8_WinSetCoordinateSystem))(old);
     setFore(fore);
 }
 
-/* ---- 폭 (MnHangul width.c, 한글 칸 = HW) ---- */
+/* ---- 폭 (MnHangul width.c, 한글 칸 = cw = HangulCell()) ---- */
 static inline s16 W1(u8 ch) {
     char b = (char)ch;
     return ((CharsWidthFn)ORIG(O_CharsWidth))(&b, 1);
 }
 
-static u16 Step(const u8 *t, u32 i, u32 n, s16 x, s16 *w) {
+static u16 Step(const u8 *t, u32 i, u32 n, s16 x, s16 *w, s16 cw) {
     u8 ch = t[i];
     if (Hi(ch) && i + 1 < n && Hi(t[i + 1])) {
-        *w = HW;
+        *w = cw;
         return 2;
     }
     *w = (ch == '\t') ? (TAB - (x % TAB)) : W1(ch);
@@ -160,7 +186,7 @@ static u16 Step(const u8 *t, u32 i, u32 n, s16 x, s16 *w) {
 }
 
 static s16 Measure(const u8 *t, u32 n, int tabs) {
-    s16 x = 0, w;
+    s16 x = 0, w, cw = (s16)HangulCell();
     u32 i = 0, run;
     while (i < n) {
         if (!Hi(t[i]) && !(tabs && t[i] == '\t')) {
@@ -169,7 +195,7 @@ static s16 Measure(const u8 *t, u32 n, int tabs) {
             x += ((CharsWidthFn)ORIG(O_CharsWidth))((const char *)t + run, (s16)(i - run));
             continue;
         }
-        i += Step(t, i, n, x, &w);
+        i += Step(t, i, n, x, &w, cw);
         x += w;
     }
     return x;
@@ -189,7 +215,7 @@ s16 HgLineWidth(const char *chars, u16 len) {
 
 void HgCharsInWidth(const char *str, s16 *widthP, s16 *lengthP, Boolean *fitP) {
     const u8 *t = (const u8 *)str;
-    s16 maxW, x = 0, w;
+    s16 maxW, x = 0, w, cw;
     u32 n, i = 0;
     Boolean fit = 1;
     if (Idle() || !str || !widthP || !lengthP || *lengthP <= 0 || !HasHi(t, (u32)*lengthP)) {
@@ -198,10 +224,11 @@ void HgCharsInWidth(const char *str, s16 *widthP, s16 *lengthP, Boolean *fitP) {
     }
     maxW = *widthP;
     n = (u32)*lengthP;
+    cw = (s16)HangulCell();
     while (i < n) {
         u16 sz;
         if (t[i] == '\n' || t[i] == 0) { fit = 0; break; }
-        sz = Step(t, i, n, x, &w);
+        sz = Step(t, i, n, x, &w, cw);
         if (x + w > maxW) { fit = 0; break; }
         x += w;
         i += sz;
@@ -215,15 +242,16 @@ void HgCharsInWidth(const char *str, s16 *widthP, s16 *lengthP, Boolean *fitP) {
 u16 HgWordWrap(const char *chars, u16 maxWidth) {
     const u8 *t = (const u8 *)chars;
     u16 l;
-    s16 x = 0, w;
+    s16 x = 0, w, cw;
     u32 i = 0, brk = 0;
     if (Idle() || !chars) return ((WordWrapFn)ORIG(O_WordWrap))(chars, maxWidth);
     l = ((WordWrapFn)ORIG(O_WordWrap))(chars, maxWidth);
     if (!HasHi(t, (u32)l + 1)) return l;
+    cw = (s16)HangulCell();
     while (t[i] != 0) {
         u16 sz;
         if (t[i] == '\n') return (u16)(i + 1);
-        sz = Step(t, i, 0xFFFFFFFFu, x, &w);
+        sz = Step(t, i, 0xFFFFFFFFu, x, &w, cw);
         if (x + w > (s16)maxWidth) {
             if (t[i] == ' ') {
                 while (t[i] == ' ') i++;
@@ -242,12 +270,13 @@ u16 HgWordWrap(const char *chars, u16 maxWidth) {
 
 s16 HgWidthToOffset(const char *chars, u16 len, s16 px, Boolean *leadingP, s16 *truncP) {
     const u8 *t = (const u8 *)chars;
-    s16 x = 0, w;
+    s16 x = 0, w, cw;
     u32 i = 0;
     if (Idle() || !chars || len == 0 || !HasHi(t, len))
         return ((WidthToOffsetFn)ORIG(O_WidthToOffset))(chars, len, px, leadingP, truncP);
+    cw = (s16)HangulCell();
     while (i < len) {
-        u16 sz = Step(t, i, len, x, &w);
+        u16 sz = Step(t, i, len, x, &w, cw);
         if (px < x + w) {
             if (leadingP) *leadingP = (px - x) < (w + 1) / 2;
             if (truncP) *truncP = x;
@@ -264,11 +293,11 @@ s16 HgWidthToOffset(const char *chars, u16 len, s16 px, Boolean *leadingP, s16 *
 /* ---- 그리기 ---- */
 static void DrawMixed(u32 origIdx, const char *chars, s16 len, s16 x, s16 y) {
     const u8 *s = (const u8 *)chars;
-    s16 i = 0, start, cx = x;
+    s16 i = 0, start, cx = x, cw = (s16)HangulCell();
     while (i < len) {
         if (Hi(s[i]) && i + 1 < len && Hi(s[i + 1])) {
             DrawGlyph(s[i], s[i + 1], cx, y);
-            cx += HW;
+            cx += cw;
             i += 2;
         } else {
             start = i;
@@ -303,7 +332,7 @@ void HgDrawChar(WChar ch, s16 x, s16 y) {
 /* WinDrawTruncChars: 글자 경계에서 자르고 "…" */
 void HgDrawTruncChars(const char *chars, s16 len, s16 x, s16 y, s16 maxWidth) {
     const u8 *t = (const u8 *)chars;
-    s16 w, cx = 0, ell;
+    s16 w, cx = 0, ell, cw;
     u32 i = 0;
     char e = (char)chrEllipsis;
     if (Idle() || !chars || len <= 0 || !HasHi(t, len)) {
@@ -315,8 +344,9 @@ void HgDrawTruncChars(const char *chars, s16 len, s16 x, s16 y, s16 maxWidth) {
         return;
     }
     ell = W1((u8)chrEllipsis);
+    cw = (s16)HangulCell();
     while (i < (u32)len) {
-        u16 sz = Step(t, i, len, cx, &w);
+        u16 sz = Step(t, i, len, cx, &w, cw);
         if (cx + w + ell > maxWidth) break;
         cx += w;
         i += sz;

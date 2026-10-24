@@ -1,7 +1,7 @@
 /*
- * MnHangul5 v2 — Palm OS 5(Sony TG50) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v3 — Palm OS 5(Sony TG50) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
- * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
+ * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
  *   OS 5는 68k SysSetTrapAddress를 거부하므로(sysErrNotAllowed) 표 8을 직접 바꾼다(docs/OS5_RESEARCH.md).
  * 기기 확인: Sony('sony')·TG50('vrna')이고, 바꿀 칸의 지금 값이 모두 TG50의 알려진 원래 값(slots.txt)일 때만 켠다.
@@ -11,14 +11,15 @@
  *   자기 함수(0x20c12800 등, 원래 값을 저장해 부르는 연결)로 바꾸면 그 아래에서 계속 불린다. slots.txt가 두 값을 모두 허용한다.
  *   리셋·알림 실행에서는 앱 전역변수를 쓸 수 없다 → On·Check·CopyRes·Table8Addr·PrefGet·SelfDB는 전역 없음(빌드 스크립트가 검사).
  * v2: 한글을 글자마다 그림 한 번으로 그림(src/os5/draw.c, 약 8배 빠름).
+ * v3: 큰 글꼴은 24×24 한글(HgJp 1001), 굵은 글꼴은 한글도 굵게.
  * 코드는 복사본으로 돌기 때문에 켜진 채로 PRC를 지우거나 덮어써도 리셋 전까지 그대로 동작한다.
  *
- * Feature(MnH5): 0 코드 블록, 1 글꼴, 2 KSC 표, 9 리셋 때 켜기 결과(0x10000 | 결과)
+ * Feature(MnH5): 0 코드 블록, 1 글꼴 16, 2 KSC 표, 3 글꼴 24, 9 리셋 때 켜기 결과(0x10000 | 결과)
  * 앱 설정(MnH5, 저장): 0 Start at reset(기본 1), 2 Debug 화면
  */
 #include <PalmOS.h>
 
-#define kVer "v2"
+#define kVer "v3"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -36,6 +37,7 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kCtxRing 144
 #define kCtxRpos 240
 #define kCtxIdle 244
+#define kCtxPack24 248
 
 /* 켜기 결과 */
 #define kOk         0
@@ -141,7 +143,7 @@ static UInt16 Check(const UInt16 *tb, UInt32 t8)
 
 static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
 {
-    UInt32    block, pack, ksc, t8, v = 0;
+    UInt32    block, pack, pack24, ksc, t8, v = 0;
     MemHandle th;
     UInt16   *tb, n, ctx, i, r;
 
@@ -164,14 +166,17 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
         block = (UInt32)CopyRes('armc', 1001);
         pack = (UInt32)CopyRes('HgJp', 1000);
         ksc = (UInt32)CopyRes('Ksct', 1000);
-        if (block == 0 || pack == 0 || ksc == 0) {
+        pack24 = (UInt32)CopyRes('HgJp', 1001);
+        if (block == 0 || pack == 0 || ksc == 0 || pack24 == 0) {
             if (block) MemPtrFree((MemPtr)block);
             if (pack) MemPtrFree((MemPtr)pack);
             if (ksc) MemPtrFree((MemPtr)ksc);
+            if (pack24) MemPtrFree((MemPtr)pack24);
             r = kNoMem;
         } else {
             *(UInt32 *)(block + ctx + kCtxPack) = SW(pack);   /* ARM이 읽는 값은 리틀엔디언 */
             *(UInt32 *)(block + ctx + kCtxKsc) = SW(ksc);
+            *(UInt32 *)(block + ctx + kCtxPack24) = SW(pack24);
             for (i = 0; i < n; i++)   /* 원래 값 먼저(그대로 복사) */
                 *(UInt32 *)(block + ctx + 4 * TbIdx(tb, i)) = *(UInt32 *)(t8 + TbSlot(tb, i));
             for (i = 0; i < n; i++)
@@ -179,6 +184,7 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
             FtrSet(kCr, 0, block);
             FtrSet(kCr, 1, pack);
             FtrSet(kCr, 2, ksc);
+            FtrSet(kCr, 3, pack24);
         }
     }
     MemHandleUnlock(th);
@@ -216,7 +222,7 @@ static UInt16 Off(void)
         *(UInt32 *)(t8 + TbSlot(tb, i)) = *(UInt32 *)(block + tb[1] + 4 * TbIdx(tb, i));
     MemHandleUnlock(th);
     DmReleaseResource(th);
-    for (i = 0; i < 3; i++) {
+    for (i = 0; i < 4; i++) {
         v = GetF(i);
         if (v != 0)
             MemPtrFree((MemPtr)v);

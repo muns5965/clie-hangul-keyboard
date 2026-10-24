@@ -50,6 +50,7 @@ typedef u16 (*FormU16Fn)(void *);
 typedef u16 (*FormIdxFn)(void *, u16);
 typedef void (*FormBoundsFn)(void *, u16, struct NRect *);
 typedef void (*EraseFn)(const struct NRect *, u16);
+typedef u8 (*FontFn)(u8);
 
 /* st[0..1] 조합(hangul_compose.h), st[2] 한글 모드, st[3] Shift+Space 대기, st[4] 넣은 키 수, st[5] 앱에 간 수,
    st[6] 미룬 횟수, st[7] 불린 수(진단) */
@@ -97,10 +98,14 @@ static void Mark(u32 *mark, u32 han)
     old = ((FormPtrFn)T8(T8_WinSetDrawWindow))(w);
     if (han) {
         char t[2];
+        u8 of;
+
         t[0] = (char)0xC7;   /* 한 (KSC). 스택에 만듦: 상수 데이터 금지 */
         t[1] = (char)0xD1;
+        of = ((FontFn)T8(T8_FntSetFont))(0);   /* 보통 글꼴(16×16)으로: 앱 글꼴이 크면 24×24가 GSI 칸을 넘음 */
         ((EraseFn)T8(T8_WinEraseRectangle))(&r, 0);
         HgDrawChars(t, 2, r.x + r.w - HW, r.y);
+        ((FontFn)T8(T8_FntSetFont))(of);
         *mark |= 4;
     } else if (*mark & 4) {
         ((EraseFn)T8(T8_WinEraseRectangle))(&r, 0);

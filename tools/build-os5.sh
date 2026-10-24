@@ -5,6 +5,7 @@
 #      위치 독립 한 덩어리로 링크(link.ld, ctx 맨 앞). armc 1000 = 표 8 주소 얻기(table8.S).
 #   2) 칸 표(src/os5/slots.txt) → 리소스 H5Tb 1000: n, ctx 오프셋, 칸마다 (칸, 함수 오프셋, O_ 번호, 0, 원래 값 2개) 빅엔디언.
 #   3) 글꼴 묶음 HgJp 1000 = src/hangul/data/HgJ16.bin(Neo둥근모 16×16 기반 OFL),
+#      HgJp 1001 = HgJ24.bin(24×24, 위 16×16 조각을 확대·손질한 파생 OFL — 큰 글꼴용),
 #      KS X 1001 표 Ksct 1000 = tools/gen-ksc-table.py --bin.
 #   4) 앱(src/os5/app.c, 68k).
 # 검사(하나라도 어긋나면 실패):
@@ -83,6 +84,7 @@ PY
 
 # 3) 자료
 cp "$root/src/hangul/data/HgJ16.bin" HgJp03e8.bin
+cp "$root/src/hangul/data/HgJ24.bin" HgJp03e9.bin
 python3 "$root/tools/gen-ksc-table.py" --bin Ksct03e8.bin > /dev/null
 
 # 4) 앱
@@ -96,5 +98,5 @@ for fn in On Check CopyRes Table8Addr PrefGet SelfDB; do
   [ "$n" = "0" ] || { echo "error: $fn references globals (%a5) but runs at reset launch" >&2; exit 1; }
 done
 
-build-prc "$outbin/MnHangul5.prc" "MnHangul5" MnH5 app armc03e8.bin armc03e9.bin H5Tb03e8.bin HgJp03e8.bin Ksct03e8.bin
+build-prc "$outbin/MnHangul5.prc" "MnHangul5" MnH5 app armc03e8.bin armc03e9.bin H5Tb03e8.bin HgJp03e8.bin HgJp03e9.bin Ksct03e8.bin
 echo "ok: $outbin/MnHangul5.prc"

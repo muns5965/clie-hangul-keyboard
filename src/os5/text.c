@@ -44,7 +44,7 @@ u16 HgCharIsValid(WChar c) {
 }
 
 u16 HgCharWidth(WChar c) {
-    if (!Idle() && c > 0xFF) return HW;
+    if (!Idle() && c > 0xFF) return HangulCell();
     return ((WCharFn)ORIG(O_CharWidth))(c);
 }
 
