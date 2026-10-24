@@ -8,4 +8,4 @@ CtxPtr:
         bx      lr
         .align  2
         .global ctx
-ctx:    .space  256
+ctx:    .space  304

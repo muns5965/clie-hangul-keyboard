@@ -1,5 +1,5 @@
 /*
- * MnHangul5 v1 — Palm OS 5(Sony TG50) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v2 — Palm OS 5(Sony TG50) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
@@ -10,6 +10,7 @@
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
  *   자기 함수(0x20c12800 등, 원래 값을 저장해 부르는 연결)로 바꾸면 그 아래에서 계속 불린다. slots.txt가 두 값을 모두 허용한다.
  *   리셋·알림 실행에서는 앱 전역변수를 쓸 수 없다 → On·Check·CopyRes·Table8Addr·PrefGet·SelfDB는 전역 없음(빌드 스크립트가 검사).
+ * v2: 한글을 글자마다 그림 한 번으로 그림(src/os5/draw.c, 약 8배 빠름).
  * 코드는 복사본으로 돌기 때문에 켜진 채로 PRC를 지우거나 덮어써도 리셋 전까지 그대로 동작한다.
  *
  * Feature(MnH5): 0 코드 블록, 1 글꼴, 2 KSC 표, 9 리셋 때 켜기 결과(0x10000 | 결과)
@@ -17,7 +18,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v1"
+#define kVer "v2"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1

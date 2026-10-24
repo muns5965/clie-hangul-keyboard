@@ -41,6 +41,7 @@ struct Ctx {
     u32 ring[24];        /* +144 최근 키 기록(진단 빌드) */
     u32 rpos;            /* +240 */
     u32 idle;            /* +244 1 = 쉬는 중(모든 함수가 원래 함수로 넘김) — 표를 되돌릴 수 없을 때의 OFF */
+    u32 bmp[14];         /* +248 글자 그림(BitmapTypeV3 머리 24바이트 + 16줄 × 2바이트, draw.c) */
 };
 struct Ctx *CtxPtr(void);
 
@@ -59,7 +60,8 @@ static inline u32 R9(void) {
 #define T8_FntLineHeight          0x408
 #define T8_WinEraseRectangle      0xb50
 #define T8_WinGetActiveWindow     0xb64
-#define T8_WinDrawPixel           0xb2c
+#define T8_WinPaintBitmap         0xbc8
+#define T8_WinSetDrawMode         0xc34
 #define T8_WinSetDrawWindow       0xc38
 #define T8_WinSetForeColor        0xc3c
 #define T8_WinSetTextColor        0xc4c

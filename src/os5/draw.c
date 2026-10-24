@@ -2,11 +2,14 @@
  * MnHangul5 그리기·폭 — 표 8의 WinDrawChars·WinDrawChar·WinPaintChars·WinDrawTruncChars와
  * 폭 함수 5개(FntCharsWidth·FntLineWidth·FntCharsInWidth·FntWordWrap·FntWidthToOffset)를 바꾼다.
  * 규칙은 OS 4 MnHangul(src/hangul/width.c·patch.c)과 같다. 한글 한 칸 = 표준 좌표 9(HW).
- * 글자 모양: 조합형 글꼴 묶음(HgJ16, Neo둥근모 16×16 기반 OFL)을 GlyphRows로 합성해 점으로 찍는다.
+ * 글자 모양: 조합형 글꼴 묶음(HgJ16, Neo둥근모 16×16 기반 OFL)을 GlyphRows로 합성해 1비트 고밀도 그림 하나로 그린다(v2).
+ *   v1은 점마다 WinDrawPixel을 불러 한 글자에 약 100번 → 한글 줄이 영문의 약 7배 느렸다(시험 앱: 540자 0.33초).
+ *   v2는 글자마다 WinPaintBitmap 한 번(540자 0.04초, 영문과 비슷).
  */
 #include "os5.h"
 
 #define kCoordinatesNative 0
+#define kWinPaint 0
 #define TAB 20
 #define chrEllipsis 0x85
 
@@ -18,7 +21,8 @@ typedef u16 (*WordWrapFn)(const char *, u16);
 typedef s16 (*WidthToOffsetFn)(const char *, u16, s16, Boolean *, s16 *);
 typedef s16 (*LineHeightFn)(void);
 typedef u16 (*CoordSysFn)(u16);
-typedef void (*PixelFn)(s16, s16);
+typedef u16 (*DrawModeFn)(u16);
+typedef void (*PaintBitmapFn)(void *, s16, s16);
 typedef u8 (*ColorFn)(u8);
 
 static int HasHi(const u8 *t, u32 n) {
@@ -87,10 +91,9 @@ static void GlyphRows(const u8 *pk, u16 sy, u16 *rows) {
 static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y) {
     struct Ctx *c = CtxPtr();
     const u8 *pk = c->pack;
-    u16 rows[16], H = pk[3], r, col, old;
+    u16 rows[16], H = pk[3], r, old, mode;
     s16 lineH = ((LineHeightFn)T8(T8_FntLineHeight))();
     s16 nx = x * 2, ny = y * 2 + (lineH * 2 - (s16)H) / 2;
-    PixelFn pixel = (PixelFn)T8(T8_WinDrawPixel);
     ColorFn setText = (ColorFn)T8(T8_WinSetTextColor), setFore = (ColorFn)T8(T8_WinSetForeColor);
     u8 text, fore;
 
@@ -110,10 +113,32 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y) {
     setText(text);
     fore = setFore(text);
     old = ((CoordSysFn)T8(T8_WinSetCoordinateSystem))(kCoordinatesNative);
-    for (r = 0; r < H; r++)
-        if (rows[r])
-            for (col = 0; col < 16; col++)
-                if (rows[r] & (0x8000 >> col)) pixel(nx + 1 + col, ny + r);
+    {
+        /* BitmapTypeV3를 ARM 바이트 순서로 직접 만든다(ctx->bmp). 실측으로 확인한 형식:
+         *   ARM BmpCreate가 만든 그림은 필드가 리틀엔디언이고 version 바이트에 0x80이 붙는다(V2 = 0x82).
+         *   flags는 ARM 비트필드 순서(hasTransparency = 비트 2) → 투명 번호 0(점 없는 자리)은 그리지 않음.
+         *   1비트 점은 전경색(위에서 글자색으로 바꿈)으로 그려진다. 밀도 144 = 기기 픽셀 1:1. */
+        u8 *b = (u8 *)c->bmp;
+        u16 i;
+
+        for (i = 0; i < 24; i++) b[i] = 0;
+        b[0] = 16;          /* width */
+        b[2] = (u8)H;       /* height */
+        b[4] = 2;           /* rowBytes */
+        b[6] = 0x04;        /* flags: hasTransparency */
+        b[8] = 1;           /* pixelSize */
+        b[9] = 0x83;        /* version 3 | 리틀엔디언 */
+        b[10] = 24;         /* 머리 크기 */
+        b[13] = 0xFF;       /* 압축 없음 */
+        b[14] = 144;        /* density 144(고밀도) */
+        for (r = 0; r < H; r++) {   /* 1비트 점: 왼쪽이 높은 비트 */
+            b[24 + r * 2] = (u8)(rows[r] >> 8);
+            b[25 + r * 2] = (u8)rows[r];
+        }
+        mode = ((DrawModeFn)T8(T8_WinSetDrawMode))(kWinPaint);
+        ((PaintBitmapFn)T8(T8_WinPaintBitmap))(b, nx + 1, ny);
+        ((DrawModeFn)T8(T8_WinSetDrawMode))(mode);
+    }
     ((CoordSysFn)T8(T8_WinSetCoordinateSystem))(old);
     setFore(fore);
 }
