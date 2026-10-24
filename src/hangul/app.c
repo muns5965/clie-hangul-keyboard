@@ -42,6 +42,9 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v70: 끄기를 기능 단위로 원자적으로 — Intl·Width·Kbd·Count 끄기가 먼저 모든 칸이 맨 위인지 보고, 하나라도 아니면 아무것도
+ *   되돌리지 않는다. v69까지는 맨 위인 칸만 먼저 되돌리고 'kept'로 남겨, 위의 패치를 치운 뒤에도 이미 되돌린 칸을
+ *   다시 'kept'로 세어 리셋 전에는 끌 수 없었다(외부 검토 지적, 에뮬레이터 재현: width 1 → 4 kept).
  * v69: 네 앱 공용 사용자 화면(src/common/app_ui.h) — Now·[ON][OFF][All OFF]·Start at reset·Update·Soft Reset·모듈 상태 4줄·
  *   사용법·[ ] Debug. Hangul ON/OFF → ON/OFF(OFF = 기존 Hangul OFF), All OFF는 세 모듈(MnSonyKbd·MnKbdHan), Update는 설치된
  *   두 모듈 모두 다음 리셋 한 번 건너뛰기. 알림 줄은 비어 있으면 그리지 않음. 진단 화면은 그대로.
@@ -137,7 +140,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v69"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v70"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -532,16 +535,13 @@ static UInt16 UninstIntl(void)
 
     if (code == NULL)
         return 0xFFFF;
-    for (i = 0; i < kIntlN; i++) {
-        UInt8 *entry = code + ((UInt32 *)code)[i];
-
-        if ((UInt8 *)IntlGetRoutineAddress(IntlSel(i)) == entry)
-            IntlSetRoutineAddress(IntlSel(i), (void *)((UInt32 *)code)[6 + i]);
-        else
+    for (i = 0; i < kIntlN; i++)   /* v70: 먼저 모두 맨 위인지 — 하나라도 아니면 아무것도 되돌리지 않는다 */
+        if ((UInt8 *)IntlGetRoutineAddress(IntlSel(i)) != code + ((UInt32 *)code)[i])
             kept++;
-    }
     if (kept != 0)
         return kept;
+    for (i = 0; i < kIntlN; i++)
+        IntlSetRoutineAddress(IntlSel(i), (void *)((UInt32 *)code)[6 + i]);
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     MemHandleUnlock((MemHandle)GetF(kFtrIntlH));
@@ -608,16 +608,13 @@ static UInt16 UninstWidth(void)
 
     if (code == NULL)
         return 0xFFFF;
-    for (i = 0; i < kWidthN; i++) {
-        UInt8 *entry = code + ((UInt32 *)code)[i];
-
-        if ((UInt8 *)SysGetTrapAddress(WidthTrap(i)) == entry)
-            SysSetTrapAddress(WidthTrap(i), (void *)((UInt32 *)code)[5 + i]);
-        else
+    for (i = 0; i < kWidthN; i++)   /* v70: 먼저 모두 맨 위인지 */
+        if ((UInt8 *)SysGetTrapAddress(WidthTrap(i)) != code + ((UInt32 *)code)[i])
             kept++;
-    }
     if (kept != 0)
         return kept;
+    for (i = 0; i < kWidthN; i++)
+        SysSetTrapAddress(WidthTrap(i), (void *)((UInt32 *)code)[5 + i]);
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     MemHandleUnlock((MemHandle)GetF(kFtrWidthH));
@@ -704,16 +701,13 @@ static UInt16 UninstKbd(void)
 
     if (code == NULL)
         return 0xFFFF;
-    for (i = 0; i < kKbdN; i++) {
-        UInt8 *entry = code + ((UInt32 *)code)[i];
-
-        if ((UInt8 *)SysGetTrapAddress(KbdTrap(i)) == entry)
-            SysSetTrapAddress(KbdTrap(i), (void *)((UInt32 *)code)[kKbdN + i]);
-        else
+    for (i = 0; i < kKbdN; i++)   /* v70: 먼저 모두 맨 위인지 */
+        if ((UInt8 *)SysGetTrapAddress(KbdTrap(i)) != code + ((UInt32 *)code)[i])
             kept++;
-    }
     if (kept != 0)
         return kept;
+    for (i = 0; i < kKbdN; i++)
+        SysSetTrapAddress(KbdTrap(i), (void *)((UInt32 *)code)[kKbdN + i]);
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     {
@@ -1121,18 +1115,16 @@ static void CountOff(void)
         StrCopy(gMsg, "count not ON");
         return;
     }
-    for (i = 0; i < kCountN; i++) {
-        UInt8 *stub = code + 100 + 18 * i;
-
-        if ((UInt8 *)GetRoutine(i) == stub)
-            SetRoutine(i, (void *)*(UInt32 *)(code + 4 + 4 * i));
-        else if (*(UInt32 *)(code + 4 + 4 * i) != 0)
+    for (i = 0; i < kCountN; i++)   /* v70: 먼저 모두 맨 위인지(끼우지 않은 칸 = 원래 값 0은 제외) */
+        if ((UInt8 *)GetRoutine(i) != code + 100 + 18 * i && *(UInt32 *)(code + 4 + 4 * i) != 0)
             kept++;
-    }
-    if (kept != 0) {   /* 다른 것이 위에 끼워져 있음: 코드를 풀면 안 된다 */
+    if (kept != 0) {   /* 다른 것이 위에 끼워져 있음: 아무것도 되돌리지 않고 코드도 남긴다 */
         StrPrintF(gMsg, "count: %u changed by other, kept", kept);
         return;
     }
+    for (i = 0; i < kCountN; i++)
+        if ((UInt8 *)GetRoutine(i) == code + 100 + 18 * i)
+            SetRoutine(i, (void *)*(UInt32 *)(code + 4 + 4 * i));
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     MemHandleUnlock((MemHandle)GetF(kFtrCountH));
