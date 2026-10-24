@@ -48,13 +48,17 @@ jobs:
           fi
           echo "::notice::$(m68k-palmos-gcc --version | head -1)"
 
+      # SDK는 커밋을 고정해 받는다(재현성). 올릴 때는 SDK_COMMIT만 바꾼다.
       - name: Install Palm OS SDK
+        env:
+          SDK_COMMIT: 1fa22066ca0f8b74949c14dd1d626294145d1c09
         run: |
           set -e
-          curl -sL -o /tmp/sdk.zip https://github.com/jichu4n/palm-os-sdk/archive/master.zip
+          curl -sfL -o /tmp/sdk.zip "https://github.com/jichu4n/palm-os-sdk/archive/$SDK_COMMIT.zip" \
+            || { echo "::error::SDK download failed ($SDK_COMMIT)"; exit 1; }
           unzip -q -d /tmp /tmp/sdk.zip
           rm -rf /opt/palmdev
-          mv /tmp/palm-os-sdk-master /opt/palmdev
+          mv "/tmp/palm-os-sdk-$SDK_COMMIT" /opt/palmdev
           palmdev-prep -d sdk-4 || { echo "::error::palmdev-prep failed"; exit 1; }
 
       # tools/build-*.sh 를 파일명 순서로 모두 실행한다 (build-hello.sh 는 외부 경로가 필요해 제외).
