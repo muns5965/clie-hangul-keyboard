@@ -3,6 +3,8 @@
 
 캡처(docs/images/capture/*.png)는 Palm 화면 부분(고해상도 320×480을 2배로 그린 640×960)만 잘라 둔 것이다.
 에뮬레이터를 브라우저 없이 돌려 캡처했다(cloudpilot-emu-embedded + 헤드리스 Chromium, 펜 누름을 스크립트로 재생).
+tg50_*.png(MnHangul5)는 TG50 포팅 CloudpilotEmu 네이티브판(cp-uarm --tg50) 화면 320×320을 2배로 그린 640×640이다
+(키 입력은 PC 키보드를 xdotool로 재생).
 
 사용: python3 tools/gen-readme-captures.py
 필요: Pillow, Noto Sans CJK(/usr/share/fonts/opentype/noto)
@@ -39,10 +41,15 @@ FIGS = {   # 세 키보드 같은 말: 부제 = "모듈 · 한/A 단추 자리 =
                  [('app_hg', 'MnHangul (한글 표시)'), ('app_sy', 'MnSonyKbd'), ('app_kh', 'MnKbdHan'), ('app_sk', 'MnSkKbd (Mn 키보드)')]),
     'mnhangul.png': ('CJKOS 없이 한글 표시', 'MnHangul · 조합형 글꼴(24×24) · 2바이트 글자 경계·줄바꿈',
                      [('hg_memo', '메모장(24×24 글꼴)')]),
+    'os5-tg50.png': ('Palm OS 5 (TG50) 한글 표시·입력', 'MnHangul5 · 하드웨어 키보드 두벌식 · Shift+Space = 한/영',
+                     [('tg50_app', 'MnHangul5 설정 앱'), ('tg50_list', '메모 목록'),
+                      ('tg50_han', '한: 오른쪽 아래 한 표시'), ('tg50_eng', 'Shift+Space: 영문')],
+                     'TG50 포팅 CloudpilotEmu(PEG-TG50, Palm OS 5.0) 네이티브판 실제 화면 캡처'),
 }
+NR70V_NOTE = 'CloudpilotEmu(PEG-NR70V, Palm OS 4.1S) 실제 화면 캡처'
 
 
-def figure(name, title, sub, shots):
+def figure(name, title, sub, shots, note=NR70V_NOTE):
     ims = []
     for f, _ in shots:
         s = Image.open(os.path.join(CAP, f + '.png')).convert('RGB')
@@ -64,7 +71,7 @@ def figure(name, title, sub, shots):
         img.paste(im, (x, y))
         tw = d.textlength(cap, font=CF)
         d.text((x + (SW - tw) / 2, y + sh + 12), cap, font=CF, fill=INK)
-    d.text((40, y + sh + 56), 'CloudpilotEmu(PEG-NR70V, Palm OS 4.1S) 실제 화면 캡처', font=CF, fill=SUB)
+    d.text((40, y + sh + 56), note, font=CF, fill=SUB)
     img.save(os.path.join(OUT, name), optimize=True)
     print(name, img.size)
 

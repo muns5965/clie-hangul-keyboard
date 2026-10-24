@@ -297,6 +297,8 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 Sony PEG-TG50(Palm OS 5.0 영문)용. 한글 표시와 하드웨어 키보드 입력을 한 모듈이 한다. OS 4 모듈(MnHangul·키보드 셋)은 OS 5에서 동작하지 않는다
 (입력칸 처리가 ARM 안에서 끝나 68k 트랩을 거치지 않고, 68k 트랩 바꾸기는 OS 5가 거부한다 — [docs/OS5_RESEARCH.md](docs/OS5_RESEARCH.md)).
 
+<img src="docs/images/os5-tg50.png" width="760" alt="TG50(Palm OS 5) MnHangul5: 설정 앱, 한글 메모 목록, 한글 모드 입력(오른쪽 아래 한 표시), Shift+Space로 영문">
+
 | 항목 | 내용 |
 | --- | --- |
 | 설치 | `MnHangul5.prc` 설치 → 앱에서 `ON`. 리셋 필요 없음 |
