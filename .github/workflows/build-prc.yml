@@ -29,6 +29,9 @@ jobs:
         run: |
           apt-get update -qq
           apt-get install -y -qq curl ca-certificates unzip git python3 > /dev/null
+          # MnHangul5(OS 5) ARM 코드용 (tools/build-os5.sh)
+          apt-get install -y -qq gcc-arm-none-eabi > /dev/null
+          echo "::notice::$(arm-none-eabi-gcc --version | head -1)"
 
       - uses: actions/checkout@v4
 
@@ -94,7 +97,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in build-hangul build-sony build-core; do
+          for name in build-hangul build-sony build-core build-os5; do
             echo "::group::DIAG=0 $name"
             if DIAG=0 bash "tools/$name.sh" > "build/logs/$name-release.log" 2>&1; then
               cat "build/logs/$name-release.log"; echo "::endgroup::"

@@ -5,8 +5,12 @@
 앞선 개수 누계(44개, 16비트 빅엔디언). KSC5601 한글은 유니코드 순서와 같은 순서로
 0xB0A1부터 배치되므로 순위 r → ((0xB0 + r/94) << 8) | (0xA1 + r%94).
 플러그인은 전역 데이터를 못 쓰므로 표를 .text에 어셈블리로 넣는다.
+
+--bin <파일>: 같은 표를 바이너리(비트 1398바이트 + 누계 44개 빅엔디언)로 쓴다(헤더는 쓰지 않음).
+  MnHangul5(OS 5, tools/build-os5.sh)가 리소스 Ksct 1000으로 넣는다.
 """
 import os
+import sys
 
 bits = []
 codes = []
@@ -32,6 +36,12 @@ n = 0
 for blk in range((11172 + 255) // 256):
     cum.append(n)
     n += sum(bits[blk * 256:(blk + 1) * 256])
+
+if len(sys.argv) == 3 and sys.argv[1] == '--bin':
+    with open(sys.argv[2], 'wb') as f:
+        f.write(bytes(tbl) + b''.join(x.to_bytes(2, 'big') for x in cum))
+    print('ok', len(tbl) + 2 * len(cum), 'bytes ->', sys.argv[2])
+    sys.exit(0)
 
 out = ['/* tools/gen-ksc-table.py 가 생성. 직접 고치지 말 것 */',
        'asm(".text\\n.even\\nKscBits:\\n"']

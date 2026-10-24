@@ -1,6 +1,6 @@
 # Palm OS 5(TG50) 한글 구현 조사
 
-> 조사 기록이다. 아직 OS5용 모듈은 만들지 않았다.
+> 조사 기록이다. 이 결과로 만든 OS5 모듈은 `MnHangul5`(`src/os5/`, 7절)다.
 > 시험 환경: [TG50 포팅 포크](https://github.com/muns5965/cloudpilot-emu/tree/feature/sony-tg50)의 네이티브 `cp-uarm --tg50`,
 > uARM 기준 해시와 같은 TG50 NOR ROM(OS 5.0 영문). 실기 시험은 하지 않았다. 날짜: 2026-10-22~23.
 
@@ -8,7 +8,7 @@
 
 | 항목 | OS4(NR70V) | OS5(TG50) 조사 결과 |
 | --- | --- | --- |
-| 입력 후킹 | 68k 트랩(`EvtGetEvent` 등) | 메모장은 68k 앱이라 `EvtGetEvent`·`SysHandleEvent`를 68k 트랩으로 부른다 → 68k 후킹 가능 |
+| 입력 후킹 | 68k 트랩(`EvtGetEvent` 등) | 메모장은 68k 앱이라 `EvtGetEvent`·`SysHandleEvent`를 68k 트랩으로 부르지만, **68k 후킹은 안 된다**: `SysSetTrapAddress`는 `sysErrNotAllowed`(0x0505), `SysGetTrapAddress`가 주는 68k 스텁을 고쳐도 PACE가 거치지 않음(7절). 표 8 `EvtGetEvent` 칸(`0x824`)을 바꾼다 |
 | 물리 키 이벤트 | (해당 없음) | 키마다 `keyDown` 3개: `chr 0x1720`(누름, `keyCode` = 글자) → 글자(`keyCode 0`, `modifiers 0`) → `chr 0x1721`(뗌). 원시 이벤트는 `modifiers 0x0008` |
 | 그래피티 | 키 이벤트로 들어옴 | Graffiti 키 → 대화상자. 글자는 키 이벤트 없이 Done 때 입력칸에 한꺼번에 들어감 |
 | 글자 그리기·폭·글자 경계 | 68k 트랩(`BltDrawChars`, 폭 5개, Intl 6개) 교체(MnHangul) | 입력칸 처리가 ARM 안에서 끝나 68k 트랩을 거치지 않음 → MnHangul 방식은 효과 없음 |
@@ -46,7 +46,10 @@
 | --- | --- |
 | 그리기 | 표8 `0xb18` WinDrawChars, `0xb14` WinDrawChar, `0xbd0` WinPaintChars, `0xbcc` WinPaintChar, `0xb24` WinDrawInvertedChars, `0xbac` WinInvertChars, `0xb44` WinEraseChars, `0xb38` WinDrawTruncChars |
 | 폭·줄바꿈 | 표8 `0x3ec` FntCharsWidth, `0x3e8` FntCharsInWidth, `0x40c` FntLineWidth, `0x418` FntWidthToOffset, `0x41c` FntWordWrap |
-| 글자 경계(Text Manager) | 표8 `0x9b0` TxtGetNextChar, `0x9b4` TxtGetPreviousChar, `0x998` TxtSetNextChar, `0x9d0` TxtCharBounds, `0x984` TxtByteAttr, `0x994` TxtCharAttr, `0x99c` TxtCharXAttr, `0x9b8` TxtCharSize, `0x9d8` TxtGetChar, `0x9bc` TxtCharWidth, `0x9a0` TxtCharIsValid 등 |
+| 글자 경계(Text Manager) | 표8 `0x97c` TxtByteAttr, `0x984` TxtCharAttr, `0x98c` TxtCharIsValid, `0x994` TxtCharXAttr, `0x998` TxtCharBounds, `0x99c` TxtCharSize, `0x9b0` TxtGetChar, `0x9b4` TxtGetNextChar, `0x9b8` TxtGetPreviousChar, `0x9bc` TxtGetTruncationOffset, `0x9c0` TxtGetWordWrapOffset, `0x9cc` TxtParamString, `0x9d8` TxtSetNextChar, `0x414` TxtCharWidth (**수정**: 처음 대응표는 이름이 한 칸씩 밀려 있었다. ROM `IntlDispatch` 분기표 `0x200ea1fc`를 직접 읽어 바로잡음. `WChar` 출력 인자는 16비트, `TxtCharBounds`의 시작·끝은 32비트) |
+| 입력 | 표8 `0x824` EvtGetEvent, `0x298` EvtEnqueueKey (PACE 연결 함수가 부르는 가져오기 스텁에서 확인) |
+| 폼 | 표12 `0x224` FrmGetActiveForm, `0x250` FrmGetNumberOfObjects, `0x254` FrmGetObjectBounds, `0x26c` FrmGetObjectType, `0x278` FrmGetWindowHandle |
+| 그 밖 그리기 | 표8 `0xb2c` WinDrawPixel, `0xb50` WinEraseRectangle, `0xb64` WinGetActiveWindow, `0xc38` WinSetDrawWindow, `0xc3c` WinSetForeColor, `0xc4c` WinSetTextColor, `0xc98` WinSetCoordinateSystem, `0x408` FntLineHeight |
 | 입력칸 | 표12 `0x12c` FldDrawField |
 
 ## 3. GDB 확인
@@ -77,17 +80,65 @@ OS5에서 시스템 전체 한글이 되는 기존 제품. 사용자가 시험�
 - TG50에서 물리 키보드 두벌식 입력·표시 확인(Shift+Space 한/영).
   포크의 Memory Stick 레지스터 영역이 1KiB뿐이라 `0x140010c0~0x140010f8` 접근에서 리셋이 반복됐고, 진단 빌드에서 영역을 넓혀 동작시켰다(포크 반영 대기).
 - `KoreanOSLib`의 `info` 리소스 31개는 (표 번호, 칸) 목록으로 보이며, 위 대응표로 이름을 붙이면
-  그리기 7개, 폭 5개, Text Manager 15개, 표12 3개(`FldSetAttributes`, `MenuEraseStatus`, `InsPtSetHeight`), `SysGetOSVersionString`이다.
+  그리기 7개, 폭 5개, Text Manager 15개, 표12 3개(`FldSetAttributes`, `MenuEraseStatus`, `InsPtSetHeight`), `SysGetOSVersionString`이다
+  (이름은 처음 대응표 기준이라 Text Manager 쪽은 한 칸씩 밀려 있을 수 있다 — 2절 수정 참고. 개수는 그대로).
   → 같은 구조(표 칸 교체)로 구현돼 있다고 추정한다.
 
-## 6. OS5 모듈 구상(미구현)
+## 6. OS5 모듈 구상 (처음 계획)
 
-| 부분 | 방법 |
+| 부분 | 방법 | 실제(7절) |
+| --- | --- | --- |
+| 설치 | 리셋 알림 때 68k 앱이 `PceNativeCall`로 ARM 코드를 불러 `r9`에서 표 8·12를 찾고 칸을 교체, 원래 주소 보관 | 표 주소만 ARM으로 얻고 칸 교체는 68k 앱이 함. 리셋 뒤에는 리셋 완료 알림에서 |
+| 그리기 | `WinDrawChar(s)`·`WinPaintChar(s)` 등: 한글 2바이트면 조합형 글꼴로 그리고, 아니면 원래 함수 | 그대로 |
+| 폭·경계 | NR70V `width.c`·`intl.c` 규칙을 ARM으로 빌드해 Fnt 5개·Text Manager 칸에 연결 | 그대로 |
+| 입력 | 68k `EvtGetEvent` 후킹으로 `0x1720` 원시 키를 받아 `hangul_compose.h`로 조합 | **68k 후킹 불가** → 표 8 `EvtGetEvent` 칸 |
+| 재사용 | 조합형 글꼴 데이터, 조합 엔진, 폭·경계 규칙(C) | 그대로 |
+
+## 7. 구현: MnHangul5 (`src/os5/`, `tools/build-os5.sh`)
+
+시험: 포크 네이티브 `cp-uarm --tg50`, 메모장(목록·본문). 실기는 시험하지 않았다. 날짜: 2026-10-24.
+
+**68k 트랩 후킹이 안 되는 이유**
+
+- `SysSetTrapAddress`는 어떤 트랩이든(같은 주소로 다시 써도) `sysErrNotAllowed`(0x0505)를 돌려준다.
+- `SysGetTrapAddress`가 주는 주소(동적 힙)는 12바이트 PACE 스텁이다: `TRAP #15`, `0x07FE`, ARM 연결 함수 주소(리틀엔디언).
+  이 스텁 앞을 `JMP`로 바꿔도 앱의 `EvtGetEvent` 호출은 오지 않았다 → PACE 분배는 이 스텁을 거치지 않는다.
+- PACE 연결 함수(예: `EvtGetEvent` `0x200e0398`)는 68k 인자를 읽어 표 8 칸을 부르는 가져오기 스텁(`ldr ip,[r9,#-8]; ldr pc,[ip,#0x824]`)을 부른다.
+  그래서 표 칸을 바꾸면 68k 앱과 ARM 앱의 호출이 모두 바뀐다(그리기·폭과 같은 방식).
+
+**TG50 키 입력**
+
+| 누른 키 | `keyDown` 순서(`chr` / `keyCode` / `modifiers`) |
 | --- | --- |
-| 설치 | 리셋 알림 때 68k 앱이 `PceNativeCall`로 ARM 코드를 불러 `r9`에서 표 8·12를 찾고 칸을 교체, 원래 주소 보관 |
-| 그리기 | `WinDrawChar(s)`·`WinPaintChar(s)` 등: 한글 2바이트면 조합형 글꼴로 그리고, 아니면 원래 함수 |
-| 폭·경계 | NR70V `width.c`·`intl.c` 규칙을 ARM으로 빌드해 Fnt 5개·Text Manager 칸에 연결 |
-| 입력 | 68k `EvtGetEvent` 후킹으로 `0x1720` 원시 키를 받아 `hangul_compose.h`로 조합 |
-| 재사용 | 조합형 글꼴 데이터, 조합 엔진, 폭·경계 규칙(C) |
+| `a` | `0x1720 / 0x0061 / 0x0008` → `0x0061 / 0 / 0` → `0x1721 / 0x0061 / 0x0008` (앞에 `0x012D`가 오기도 함) |
+| Shift+`a` | Shift `0x1720 / 0x8400` → `0x1720 / 0x8461` → `0x0041 / 0 / 0` → … |
+| Shift+Space | `0x1720 / 0x8420` → `0x0020 / 0 / 0` → … (글자 이벤트에는 Shift 표시 없음) |
 
-남은 확인: (1) 교체한 ARM 함수가 원래 함수를 다시 부르는 연결(원래 주소 보관·`r9` 유지), (2) 실기의 쓰기 보호, (3) 다른 OS5 기종·버전에서 칸 번호 차이(같은 방법으로 대응표를 다시 만든다).
+글자 이벤트는 앱이 원시 이벤트(`0x1720`)를 `SysHandleEvent`에 넘길 때 만들어져 다음 `EvtGetEvent`로 온다.
+한/영 Shift+Space는 바로 앞 원시 이벤트의 `keyCode 0x8420`으로 판단한다.
+
+**구성**
+
+| 부분 | 내용 |
+| --- | --- |
+| ARM 코드 | 위치 독립 한 덩어리. 앱이 동적 힙(소유자 0)에 복사. 상태는 코드 앞 `ctx`(PC 상대). `-ffixed-r9`(r9 = 시스템 표) |
+| 바꾸는 칸 | 표 8의 20칸(`src/os5/slots.txt`): 그리기 4, 폭 5, Text Manager 10, `EvtGetEvent` |
+| '한' 표시 | 활성 폼의 그래피티 상태 표시(GSI, 폼 객체 종류 11) 자리. 표 12 Frm 함수로 찾음. 앱이 다 그리고 다음 이벤트를 받으러 올 때 그림 |
+| 기기 확인 | `sysFtrNumOEMCompanyID` = `'sony'`, `sysFtrNumOEMDeviceID` = `'vrna'`(TG50), 바꿀 칸의 지금 값이 알려진 원래 값 |
+| 리셋 | 리셋 실행에서 리셋 완료 알림(`sysNotifyResetFinishedEvent`)을 등록하고 그 알림에서 켬 |
+| 끄기 | 칸이 모두 아직 우리 코드면 되돌리고 메모리를 품. 위에 다른 것이 있으면 쉬게만 함(모든 함수가 원래 함수로 넘김, 다음 리셋에 빠짐) |
+
+**구현하며 확인한 것**
+
+- **Sony 모듈이 부팅 뒤 그리기 3칸 위에 올라온다**: 리셋 완료 알림 때 `WinDrawChars`·`WinPaintChars`·`WinDrawTruncChars` 칸은
+  ROM 함수(`0x20a521f8`·`0x20a506d0`·`0x2005efc0`)이고, 나중에 Sony 함수(`0x20c12800`·`0x20c1287c`·`0x20c1277c`)로 바뀐다.
+  Sony 함수는 저장해 둔 원래 값을 부르는 연결이라, 그 아래에 있어도 한글 표시는 된다. 다만 이때 칸을 되돌리면 Sony가 우리 코드를 부르게 되므로
+  끄기는 "쉬기"로 한다. 기기 확인은 칸마다 두 값을 모두 허용한다.
+- **gcc의 switch 상수 표**: `-O2`는 큰 `switch`(두벌식 배치·초성 번호)를 `CSWTCH` 상수 표 + 절대 주소로 바꾼다.
+  복사한 코드에서는 이 주소가 틀려 글자 키가 0(영문 그대로)으로 처리됐다(`Q`처럼 작은 switch로 가는 키만 됨).
+  → `-fno-tree-switch-conversion`. 빌드 스크립트가 `CSWTCH` 기호와 `R_ARM_ABS32` 재배치를 검사한다.
+- 68k가 ARM에 넘기는 인자 묶음은 4바이트 정렬이어야 한다(68k 스택은 2바이트 정렬) → `MemPtrNew`로 만든다.
+- 글자 색: 점 그리기(`WinDrawPixel`)는 전경색을 쓰므로 글자색으로 잠시 바꿔 그린다(그대로 그리면 회색).
+
+**남은 것**: 실기 시험(복사한 ARM 코드 실행 전 캐시 처리가 필요할 수 있음), 16×16 글꼴만(다른 글꼴 크기의 폭), 그리기 속도(점 단위),
+조합 상태의 앱 구분, 다른 OS5 기종(NX70V 등)의 칸 번호.

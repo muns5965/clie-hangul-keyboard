@@ -1,0 +1,25 @@
+# MnHangul5가 바꾸는 표 8 칸 (TG50, Palm OS 5.0 영문 ROM)
+# 칸  원래 주소 칸(os5.h O_*)  바꿀 함수  원래 값(TG50 ROM 함수 주소, '/'로 둘 이상)  원래 함수
+# 앱은 설치 전에 모든 칸의 지금 값이 '원래 값' 중 하나인지 확인한다(다른 기기·다른 패치면 설치 안 함).
+# 그리기 3칸은 부팅이 끝난 뒤 Sony 모듈(ROM 0x20c1xxxx)이 자기 함수로 바꾼다(원래 값을 저장해 부르는 연결 방식).
+# 그 전(리셋 완료 알림 때)은 ROM 원래 함수, 그 뒤는 Sony 함수라 둘 다 허용한다.
+0xb18 O_DrawChars      HgDrawChars       0x20c12800/0x20a521f8 WinDrawChars
+0xb14 O_DrawChar       HgDrawChar        0x20a52250 WinDrawChar
+0xbd0 O_PaintChars     HgPaintChars      0x20c1287c/0x20a506d0 WinPaintChars
+0xb38 O_DrawTrunc      HgDrawTruncChars  0x20c1277c/0x2005efc0 WinDrawTruncChars
+0x3ec O_CharsWidth     HgCharsWidth      0x20a4524c FntCharsWidth
+0x40c O_LineWidth      HgLineWidth       0x20a45078 FntLineWidth
+0x3e8 O_CharsInWidth   HgCharsInWidth    0x20a45340 FntCharsInWidth
+0x41c O_WordWrap       HgWordWrap        0x20a44bfc FntWordWrap
+0x418 O_WidthToOffset  HgWidthToOffset   0x20a44e80 FntWidthToOffset
+0x97c O_ByteAttr       HgByteAttr        0x2005ee04 TxtByteAttr
+0x99c O_CharSize       HgCharSize        0x2005ee24 TxtCharSize
+0x9b4 O_GetNext        HgGetNext         0x2005ee3c TxtGetNextChar
+0x9b8 O_GetPrev        HgGetPrev         0x2005ee40 TxtGetPreviousChar
+0x9d8 O_SetNext        HgSetNext         0x2005ee60 TxtSetNextChar
+0x998 O_Bounds         HgCharBounds      0x2005ee20 TxtCharBounds
+0x9b0 O_GetChar        HgGetChar         0x2005ee38 TxtGetChar
+0x984 O_CharAttr       HgCharAttr        0x2005ee0c TxtCharAttr
+0x414 O_CharWidth      HgCharWidth       0x2005e89c TxtCharWidth
+0x98c O_IsValid        HgCharIsValid     0x2005ee14 TxtCharIsValid
+0x824 O_GetEvent       HgGetEvent        0x20a4c01c EvtGetEvent

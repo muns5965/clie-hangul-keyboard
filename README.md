@@ -18,6 +18,9 @@
 > while MnHangul detects CJKOS and stays off. Four settings apps (MnHangul, MnSonyKbd, MnKbdHan, MnSkKbd)
 > share one screen layout; MnSkKbd turns the Mn virtual keyboard on or off by switching its plug-in
 > database type, effective after a reset.
+> *MnHangul5* brings Hangul display and two-set hardware-keyboard input to the Palm OS 5 Sony PEG-TG50
+> by replacing entries in the RAM function table of the ARM system (68k trap patching is refused on OS 5);
+> it was tested only in a TG50 port of CloudpilotEmu.
 > **Test environment.** All development and verification were done in the CloudpilotEmu web emulator
 > running a PEG-NR70V (Palm OS 4.1S) ROM image, mainly in Memo Pad, with and without CJKOS installed.
 > The screenshots in this README are real emulator captures, taken by driving the emulator
@@ -46,6 +49,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | Sony 가상 키보드 한글 | `MnSonyKbd.prc` | Sony 내장 가상 키보드에 두벌식 한글. sym 탭 오른쪽 `한`/`A` = 한/영, 키 글자를 자모로 표시 | 시험 단계, 리셋 없음 |
 | 시스템 키보드 화면 한글 | `MnKbdHan.prc` | 시스템 키보드 화면(메모 Edit > Keyboard)에 두벌식 한글. Int'l 오른쪽 `한`/`A` = 한/영 | 시험 단계, 리셋 없음 |
 | 한글 표시(CJKOS 대체) | `MnHangul.prc` | 조합형 글꼴로 2바이트 한글 그리기, 글자 경계, 폭·줄바꿈 | 시험 단계, 리셋 없음 |
+| Palm OS 5 한글(TG50) | `MnHangul5.prc` | TG50(Palm OS 5)에서 한글 표시 + 하드웨어 키보드 두벌식 입력(Shift+Space 한/영) | 시험 단계(에뮬레이터만), 리셋 없음 |
 
 한글 표시는 CJKOS 등 기존 한글 시스템을 써도 되고 MnHangul을 써도 된다. 둘을 같이 켜지는 않는다(MnHangul이 CJKOS를 감지하면 켜지지 않음).
 
@@ -64,6 +68,8 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | Int'l 오른쪽 `한`/`A`, 리셋 없음 | 왼쪽 아래 `한/A` 키, 리셋 1번(등록) | sym 오른쪽 `한`/`A`, 리셋 없음 |
 
 **한글 표시** — [MnHangul](#한글-표시mnhangul)(CJKOS 대신)
+
+**Palm OS 5** — [TG50 한글 표시·입력(MnHangul5)](#palm-os-5-tg50-한글mnhangul5)
 
 **설치·설정** — [설치·업데이트](#설치업데이트)(설치 경우 A~D, 배포 파일) · [설정 앱 공통](#설정-앱-공통-화면켜기업데이트)(네 앱 같은 화면, All OFF·Update)
 
@@ -145,6 +151,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 한글 표시(MnHangul): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `ON`, 리셋 뒤 자동 시작 |
 | MnHangul: 다른 기종 — T600C(영문 Palm OS 4.1)에서 표시·글자 단위 BS·줄바꿈 정상. N710C(영문 Palm OS 4.1, 고해상도)에서 MnHangul v69 + MnKbdHan v16 입력 시험 9개·0.1초 간격 48키 통과. 입력은 MnKbdHan(시스템 키보드 화면 두벌식, 진단 판 v9)으로 조합 입력 확인. OS 3.5·일본어(Shift-JIS) 기종은 켜지 않음(v68) | CloudpilotEmu 실측 |
 | MnHangul: CJKOS 감지(켜져 있으면 `ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정, v62에서 예전 방식 뺌) |
+| Palm OS 5(TG50) 한글(MnHangul5 v1): 표시(목록·본문·줄바꿈·`…` 자르기·글자 단위 BS), 키보드 두벌식(Shift 쌍자음, 자모 단위 BS), Shift+Space 한/영, 입력칸 오른쪽 아래 `한` 표시, 리셋 뒤 자동 시작 | 시험 단계. TG50 포팅 CloudpilotEmu 네이티브판 메모장 실측(0.06초 간격 입력 포함). 실기 미시험 |
 
 ## 1. 시스템 키보드 화면 한글(MnKbdHan)
 
@@ -285,6 +292,25 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 | `ON` / `OFF` | 한글 표시를 켬 / 끔(v68까지 `Hangul ON`/`Hangul OFF`). 이미 켜져 있으면 다시 끼우지 않는다(v58). CJKOS가 감지되면 켜지지 않는다 |
 | 나머지 | [공통 화면](#설정-앱-공통-화면켜기업데이트)과 같음. `[ ] Debug` = 개발용 진단 화면 |
 
+## Palm OS 5 (TG50) 한글(MnHangul5)
+
+Sony PEG-TG50(Palm OS 5.0 영문)용. 한글 표시와 하드웨어 키보드 입력을 한 모듈이 한다. OS 4 모듈(MnHangul·키보드 셋)은 OS 5에서 동작하지 않는다
+(입력칸 처리가 ARM 안에서 끝나 68k 트랩을 거치지 않고, 68k 트랩 바꾸기는 OS 5가 거부한다 — [docs/OS5_RESEARCH.md](docs/OS5_RESEARCH.md)).
+
+| 항목 | 내용 |
+| --- | --- |
+| 설치 | `MnHangul5.prc` 설치 → 앱에서 `ON`. 리셋 필요 없음 |
+| 한/영 | **Shift+Space**. 한글 모드면 입력칸 화면 오른쪽 아래(Shift 화살표 자리)에 `한` |
+| 자판 | 두벌식(PC와 같음). Shift + `q w e r t` = ㅃ ㅉ ㄸ ㄲ ㅆ, Shift + `o p` = ㅒ ㅖ. 조합 중 BS = 자모 하나 |
+| 표시 | 완성형(KS X 1001, EUC-KR) 2바이트 한글을 조합형 글꼴(Neo둥근모 16×16 기반)로 그림. 한글 한 칸 = 영문 좁은 글자 폭 둘 정도(표준 좌표 9) |
+| 리셋 | `Start at reset: ON`(기본)이면 리셋이 끝난 뒤 자동으로 켜짐 |
+| 끄기 | `OFF`. 리셋 뒤에는 Sony 모듈이 그리기 함수 위에 올라오므로 그때는 "쉬기"(코드는 남고 원래 함수로 넘김, 다음 리셋에 빠짐 — `Now: off (idle until reset)`) |
+| 기기 확인 | Sony TG50이 아니거나, 바꿀 시스템 함수 칸이 알려진 값이 아니면(다른 패치가 먼저 바꿈 등) 켜지지 않는다(`not supported`, `system table differs`) |
+| 업데이트 | 코드는 메모리에 복사해 돌므로 켜진 채로 덮어 설치해도 된다. 새 판은 `OFF` → `ON`(쉬는 중이면 리셋 뒤) |
+
+제한사항: 실기 미시험(실기에서는 복사한 ARM 코드 실행 전에 캐시 처리가 필요할 수 있음), 16×16 글꼴 크기만(큰 글꼴에서도 한글 칸은 같은 크기),
+한글을 점 단위로 그려 영문보다 느림, Graffiti 입력은 영문 그대로, 조합 상태는 앱별로 나뉘지 않음(앱 화면을 누르면 조합 끝), TG50 전용(다른 OS5 기종은 칸 번호가 다를 수 있음).
+
 ## 설치·업데이트
 
 키보드는 한글을 완성형(KS X 1001, EUC-KR) 2바이트로 넣기만 한다. 화면 표시는 한글 시스템이 맡으므로, 무엇과 같이 쓰는지에 따라 처음 설치가 다르다.
@@ -310,6 +336,7 @@ CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에�
 | `MnSkKbd.prc` | A·C 중 선택 (Mn 가상 키보드 설정) | Mn 가상 키보드 켜기/끄기(리셋 1번)·상태·업데이트. 없어도 Mn 키보드는 동작한다(설치하면 켜진 상태) |
 | `MnHangul.prc` | C·D (한글 표시를 MnHangul로 할 때) | 한글 표시 모듈(시험 단계). 한글 시스템(CJKOS 등)이 없을 때 한글 표시 |
 | `MnHgFont24.prc` | C·D 중 선택 (MnHangul 큰 글꼴) | MnHangul 24×24 추가 글꼴(큰 글꼴용) |
+| `MnHangul5.prc` | TG50(Palm OS 5) | 한글 표시 + 하드웨어 키보드 두벌식 입력, 설정 앱 겸용([Palm OS 5](#palm-os-5-tg50-한글mnhangul5)). OS 4 기종에는 설치하지 않는다 |
 | `KbdScan.prc` | 개발용 | 다른 기종(N700C·T600C 등) 화면 키보드 진단(v2). 키보드 동작에는 필요 없다 |
 | `ClieDiag.prc` | 개발용 | 진단 전용(v29): 로더·본체 기록, SkWr·SkEv 페이지, 복구 스위치(DisS), Feature·트랩 목록, Events 페이지(입력칸 FLD로 키·그래피티 입력 경로 기록). 사용자 설정은 `MnSkKbd`. 키보드 동작에는 필요 없다 |
 
@@ -398,6 +425,7 @@ sudo ./tools/setup-toolchain.sh
 | m68k-palmos-gcc | 2.95.3-kgpd, [prc-tools-remix](https://github.com/jichu4n/prc-tools-remix) |
 | Palm OS SDK | 4.0, [palm-os-sdk](https://github.com/jichu4n/palm-os-sdk) |
 | PilRC | [jichu4n/pilrc](https://github.com/jichu4n/pilrc) |
+| arm-none-eabi-gcc | 13.2, Ubuntu `gcc-arm-none-eabi` 패키지 (MnHangul5의 ARM 코드, `tools/build-os5.sh`) |
 
 ### GitHub Actions 자동 빌드
 
@@ -407,7 +435,7 @@ Ubuntu 24.04 컨테이너에 prc-tools-remix v2.3.6 noble 패키지(주소 고�
 새 PRC를 추가할 때는 `tools/build-<이름>.sh`만 만들면 CI에 자동으로 포함된다. 트리거는 `src/**`라 `src/common/`도 포함된다.
 빌드된 PRC마다 `tools/prc-info.sh`로 DB 이름·타입·크리에이터·리소스 목록을 실행 요약에 표시한다.
 결과 PRC와 스크립트별 로그(`build/logs/`)는 실행 페이지의 Artifacts(`prc`)에서 받는다.
-**진단 빌드 / 배포 빌드**: `bin/`의 PRC는 진단 빌드(기본, 앱 진단 화면용 기록 포함)다. `DIAG=0 tools/build-hangul.sh`(sony·core도 같음)는 그리기·폭·입력 경로의 진단 기록을 뺀 배포 빌드를 `build/release/`에 만든다. 동작은 같고 기록만 다르다(감사 표: [ARCHITECTURE 7.1](docs/ARCHITECTURE.md)). 같은 크리에이터라 둘 중 하나만 설치된다. CI는 배포 빌드도 매번 만들어 검사하고 Artifacts(`prc-release`)로 올린다. 실행 요약에 날짜를 뺀 PRC 해시와
+**진단 빌드 / 배포 빌드**: `bin/`의 PRC는 진단 빌드(기본, 앱 진단 화면용 기록 포함)다. `DIAG=0 tools/build-hangul.sh`(sony·core·os5도 같음)는 그리기·폭·입력 경로의 진단 기록을 뺀 배포 빌드를 `build/release/`에 만든다. 동작은 같고 기록만 다르다(감사 표: [ARCHITECTURE 7.1](docs/ARCHITECTURE.md)). 같은 크리에이터라 둘 중 하나만 설치된다. CI는 배포 빌드도 매번 만들어 검사하고 Artifacts(`prc-release`)로 올린다. 실행 요약에 날짜를 뺀 PRC 해시와
 한글 조합 시험 결과가 표시된다. 로컬·CI 일치 여부는 PRC별 해시로 확인하고, 본체(`MnSkCore`)는 gcc 지역변수 배치 차이로
 해시가 달라 코드 블록 해시·트랩 목록으로 비교한다(기록: [docs/DEVELOPMENT_HISTORY.md](docs/DEVELOPMENT_HISTORY.md#빌드-해시-기록)).
 
