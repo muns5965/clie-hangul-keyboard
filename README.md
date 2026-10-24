@@ -107,7 +107,7 @@ OS 5 그림(MnHangul5 v2)만 TG50 포팅 CloudpilotEmu 네이티브판(PEG-TG50,
 
 ### 한글 표시 — OS 4: MnHangul (입력 방법과 별개)
 
-<img src="docs/images/mnhangul.png" width="420" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul)">
+<img src="docs/images/mnhangul.png" width="560" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul): 메모장, MnHangul 설정 앱">
 
 ### 한글 표시·입력 — OS 5: MnHangul5 (TG50)
 
@@ -290,7 +290,7 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 
 CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에서만 시험한다.
 
-<img src="docs/images/mnhangul.png" width="420" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul)">
+<img src="docs/images/mnhangul.png" width="560" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul): 메모장, MnHangul 설정 앱">
 
 | 버튼·표시 | 뜻 |
 | --- | --- |

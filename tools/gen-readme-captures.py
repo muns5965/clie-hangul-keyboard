@@ -40,7 +40,7 @@ FIGS = {   # 세 키보드 같은 말: 부제 = "모듈 · 한/A 단추 자리 =
     'apps.png': ('설정 앱 네 개 — 같은 화면', 'MnHangul · MnSonyKbd · MnKbdHan · MnSkKbd · 모듈 상태 4줄은 어느 앱에서나 같음',
                  [('app_hg', 'MnHangul (한글 표시)'), ('app_sy', 'MnSonyKbd'), ('app_kh', 'MnKbdHan'), ('app_sk', 'MnSkKbd (Mn 키보드)')]),
     'mnhangul.png': ('CJKOS 없이 한글 표시', 'MnHangul · 조합형 글꼴(24×24) · 2바이트 글자 경계·줄바꿈',
-                     [('hg_memo', '메모장(24×24 글꼴)')]),
+                     [('hg_memo', '메모장(24×24 글꼴)'), ('app_hg', 'MnHangul 설정 앱')]),
     'os5-tg50.png': ('Palm OS 5 (TG50) 한글 표시·입력', 'MnHangul5 · 하드웨어 키보드 두벌식 · Shift+Space = 한/영',
                      [('tg50_app', 'MnHangul5 설정 앱'), ('tg50_list', '메모 목록'),
                       ('tg50_han', '한: 오른쪽 아래 한 표시'), ('tg50_eng', 'Shift+Space: 영문')],
@@ -54,7 +54,7 @@ def figure(name, title, sub, shots, note=NR70V_NOTE):
     for f, _ in shots:
         s = Image.open(os.path.join(CAP, f + '.png')).convert('RGB')
         ims.append(s.resize((SW, round(s.height * SW / s.width)), Image.LANCZOS))
-    sh = ims[0].height
+    sh = max(im.height for im in ims)   # 높이가 다른 캡처(메모장 640×960, 설정 앱 640×640)는 위를 맞춤
     n = len(ims)
     W = max(40 * 2 + n * SW + (n - 1) * GAP, 720)
     H = 150 + sh + 56 + 50
@@ -67,7 +67,7 @@ def figure(name, title, sub, shots, note=NR70V_NOTE):
     x0 = (W - (n * SW + (n - 1) * GAP)) // 2
     for i, (im, (_, cap)) in enumerate(zip(ims, shots)):
         x = x0 + i * (SW + GAP)
-        d.rectangle((x - 1, y - 1, x + SW, y + sh), outline=(160, 168, 162))
+        d.rectangle((x - 1, y - 1, x + SW, y + im.height), outline=(160, 168, 162))
         img.paste(im, (x, y))
         tw = d.textlength(cap, font=CF)
         d.text((x + (SW - tw) / 2, y + sh + 12), cap, font=CF, fill=INK)
