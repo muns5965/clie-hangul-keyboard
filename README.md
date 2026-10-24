@@ -290,6 +290,8 @@ Mn 키보드 없이, NR70V에 들어 있는 Sony 가상 키보드로 두벌식 �
 
 CJKOS 없이 한글을 표시한다(설치 C·D). CJKOS를 끈 백업 세션에서만 시험한다.
 
+<img src="docs/images/mnhangul.png" width="420" alt="CJKOS 없이 조합형 글꼴로 한글 표시(MnHangul)">
+
 | 버튼·표시 | 뜻 |
 | --- | --- |
 | `Now: ON/off   CJKOS: running/no` | 한글 표시 연결 상태, CJKOS 감지 |
