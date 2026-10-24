@@ -1,16 +1,16 @@
 # clie-hangul-keyboard
 
 > **Abstract.** This project adds Korean (Hangul) text entry and display to the Sony CLIÉ PEG-NR70V,
-> a Palm OS 4.1S handheld whose English ROM has no Korean support. It consists of three independently
-> installable modules. (1) *Mn virtual keyboard* (`MnSkPlugin` + `MnSkCore`) draws a Korean soft keyboard
+> a Palm OS 4.1S handheld whose English ROM has no Korean support. It consists of independently
+> installable modules: three for input and one for display. (1) *Mn virtual keyboard* (`MnSkPlugin` + `MnSkCore`) draws a Korean soft keyboard
 > in the device's virtual silkscreen area through Sony's undocumented `SkWr` plug-in interface,
 > reverse-engineered from the ROM's `SilkExtn` module. (2) *MnSonyKbd* turns Sony's built-in virtual keyboard into a
 > two-set (Dubeolsik) Hangul keyboard by intercepting system traps (`BltDrawChars`, `EvtGetEvent`,
 > `WinDrawBitmap`): key labels are redrawn as Hangul jamo, a Hangul/English button is drawn next to the
 > `sym` tab, and keystrokes are composed into KS X 1001 (EUC-KR) syllables with the PC two-set rule
-> (Shift = double consonants). A fourth module, *MnKbdHan*, does the same for the system keyboard dialog
+> (Shift = double consonants). (3) *MnKbdHan* does the same for the system keyboard dialog
 > (also usable on Palm OS 4 devices without a virtual silkscreen); on hi-res devices its jamo key labels are
-> pre-built 16×16 bitmaps, which keeps Hangul typing as fast as English. (3) *MnHangul* is an experimental replacement for
+> pre-built 16×16 bitmaps, which keeps Hangul typing as fast as English. For display, *MnHangul* is an experimental replacement for
 > the commercial CJKOS system that renders double-byte Hangul from compact Johab-style glyph packs and
 > patches the text-width and character-boundary routines. All runtime code is position-independent and
 > installed as RAM trap patches without ROM modification. The patch-based modules need no reset and
