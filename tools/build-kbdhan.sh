@@ -37,7 +37,7 @@ m68k-palmos-gcc -palmos4 -O2 -Wall -Wno-multichar "$root/src/kbdhan/app.c" -o ap
 m68k-palmos-obj-res app
 m68k-palmos-objdump -d app > app.dis
 # v13: 리셋 실행(전역변수 없음)·다른 앱의 All OFF에서 부르는 함수는 %a5(전역) 참조가 없어야 한다(build-sony.sh와 같은 검사)
-for fn in GetF PrefGet PrefPut Supported AppDB HookTrap HookOn HookOff BuildJamo FreeJamo; do
+for fn in GetF PrefGet PrefPut Supported AppDB HookTrap HookOn HookOff BuildJamo FreeJamo LinkState; do
   grep -q "<$fn>:" app.dis || { echo "error: $fn not found" >&2; exit 1; }
   n=$(awk -v f="<$fn>:" '$2==f {on=1; next} /^[0-9a-f]+ </ {on=0} on {l[++k]=$0; if ($0 ~ /\trts/) last=k}
       END {if (last == 0) last = k; c=0; for (i=1; i<=last; i++) if (l[i] ~ /%a5/) c++; print c}' app.dis)

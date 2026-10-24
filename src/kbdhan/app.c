@@ -1,6 +1,9 @@
 /*
  * MnKbdHan v1 (진단) — 시스템 키보드 화면 한글 (크리에이터 'MnKh', Sony 가상 실크가 없는 Palm OS 4 영문 기종용, T600C 등)
  *
+ * v17: 빠진 연결 다시 잇기 — 켜져 있는데(Feature) 다른 확장이 트랩을 설치 전 원래 값으로 되돌려 연결이 빠졌으면
+ *   (모든 트랩이 저장한 원래 값과 같을 때만) ON이 같은 코드를 다시 잇는다(메모리는 그대로). 일부만 빠졌으면 다시 잇지 않고
+ *   Now:에 표시(리셋으로 복구). 위에 다른 패치가 있는 것(원래 값도 우리 코드도 아님)은 빠진 것으로 보지 않는다(외부 검토 반영).
  * v16: 한 모드 키 글자 자모를 그림으로(hook.c v16) — 켤 때 두벌식 키 자모(소문자·대문자 52 → 33자)를 KhJm 0(src/sony/data/
  *   SyJm0000.bin, Neo둥근모 낱자모 16×16)에서 1비트 그림으로 만들어 #10 표에 둔다(주인 0, 끌 때 지움). #9 HR 참조는 못 찾으면 0(모름).
  * v15(진단): 키보드 화면에서 앱이 이벤트 하나를 처리한 시간(틱, #40~#48: 영문 키·넣은 키·펜 별 평균·수, 최대)과
@@ -37,7 +40,7 @@
 #include "../common/dubeol_map.h"
 
 #define kCr       'MnKh'
-#define kVer      "v16"
+#define kVer      "v17"
 #define kHookRes  'KhHk'
 #define kHookN    4
 #define kBufN     104
@@ -224,6 +227,18 @@ static void BuildJamo(void)
 }
 
 /* v13: 결과 0 켬, 1 이미 켜짐, 2 지원 안 함, 3 리소스 없음, 4 메모리 없음. 리셋 실행에서도 부름(전역 없음) */
+/* v17: 연결 상태. 트랩마다 지금 값이 우리 코드 / 설치 때 저장한 원래 값(빠짐) / 그 밖(위에 다른 패치).
+ *   돌려주는 값: 0 정상(빠진 것 없음), 1 모두 빠짐, 2 일부만 빠짐. 전역 없음(리셋 실행 경로의 HookOn에서도 부름) */
+static UInt16 LinkState(const UInt8 *code)
+{
+    UInt16 i, d = 0;
+
+    for (i = 0; i < kHookN; i++)
+        if ((UInt32)SysGetTrapAddress(HookTrap(i)) == ((const UInt32 *)code)[kOrigOff / 4 + i])
+            d++;
+    return d == 0 ? 0 : d == kHookN ? 1 : 2;
+}
+
 static UInt16 HookOn(void)
 {
     MemHandle h;
@@ -235,8 +250,19 @@ static UInt16 HookOn(void)
 
     if (!Supported())
         return 2;
-    if (GetF(2) != 0)
-        return 1;
+    if (GetF(2) != 0) {   /* v17: 켜져 있음 — 연결이 모두 빠졌으면 같은 코드를 다시 잇는다 */
+        code = (UInt8 *)GetF(2);
+        switch (LinkState(code)) {
+        case 1:
+            for (i = 0; i < kHookN; i++)
+                SysSetTrapAddress(HookTrap(i), code + ((UInt32 *)code)[i]);
+            return 5;
+        case 2:
+            return 6;
+        default:
+            return 1;
+        }
+    }
     h = DmGetResource(kHookRes, 0);
     if (h == NULL)
         return 3;
@@ -330,9 +356,10 @@ static UInt16 HookOff(void)
 
 static void OnMsg(UInt16 r)
 {
-    static const Char *m[5] = { "ON", "already ON", "unsupported: OS 4 Latin only", "hook res missing", "no memory" };
+    static const Char *m[7] = { "ON", "already ON", "unsupported: OS 4 Latin only", "hook res missing", "no memory",
+                                "ON: relinked (was detached)", "partly detached: reset to fix" };
 
-    StrCopy(gMsg, m[r < 5 ? r : 4]);
+    StrCopy(gMsg, m[r < 7 ? r : 4]);
 }
 
 static void BeforeUpdate(void)
@@ -435,7 +462,15 @@ static void Draw(void)
     }
     UiRow(0, "Hangul on Edit > Keyboard");
     UiMsg(gMsg);
-    UiRow(kUiRowNow, !Supported() ? "Now: unsupported (OS 4 Latin only)" : GetF(2) ? "Now: ON" : "Now: off");
+    if (!Supported())
+        UiRow(kUiRowNow, "Now: unsupported (OS 4 Latin only)");
+    else if (GetF(2) == 0)
+        UiRow(kUiRowNow, "Now: off");
+    else {   /* v17: 켜져 있어도 연결이 빠졌으면 표시 */
+        UInt16 ls = LinkState((const UInt8 *)GetF(2));
+
+        UiRow(kUiRowNow, ls == 1 ? "Now: ON, detached (tap ON)" : ls == 2 ? "Now: ON, partly detached (reset)" : "Now: ON");
+    }
     UiButton(kUiXOn, kUiRowBtn, "ON");
     UiButton(kUiXOff, kUiRowBtn, "OFF");
     UiButton(kUiXAll, kUiRowBtn, "All OFF");
