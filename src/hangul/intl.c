@@ -1,5 +1,5 @@
 /*
- * MnHangul 글자 경계 코드 (리소스 HgIt 0) — 3a 단계: Intl 루틴 7개를 EUC-KR(KS X 1001) 규칙으로 교체
+ * MnHangul 글자 경계 코드 (리소스 HgIt 0) — 3a 단계: Intl 루틴 8개를 EUC-KR(KS X 1001) 규칙으로 교체
  *
  * v8 실측(메모 입력·BS·커서 이동)에서 불린 Intl 루틴 중 글자 경계·속성·폭 6개를 바꾼다.
  * 앱이 IntlSetRoutineAddress로 끼운다. 원형은 SDK TextMgr.h와 같다(Intl 디스패처가 스택 그대로 넘김).
@@ -11,10 +11,11 @@
  *   5 TxtCharWidth(WChar)                     2바이트 → 한글 폭(현재 글꼴·좌표 배율), 1바이트 → 원래 루틴
  *   6 TxtFindString(src, tgt, *pos, *len)     찾기(v71, MnHangul5 v10과 같은 규칙): 원문에 한글이 있으면 부분 검색,
  *                                             없으면 원래 결과 중 앞 바이트가 0xA1~0xFE인 것을 버림
+ *   7 TxtWordBounds(text, len, off, *s, *e)  두 번 눌러 낱말 선택(v72, MnHangul5 v11과 같은 규칙): 한글 낱말 단위
  * 2바이트 글자: 앞·뒤 바이트 모두 0xA1~0xFE. 상위 바이트가 이어진 구간은 구간 시작부터 두 바이트씩 짝짓는다
  * (홀수 구간이면 마지막 바이트가 1바이트 글자).
  *
- * 리소스 배치: 오프셋 0 = 진입점 7개의 오프셋 표(.long, 리소스 기준), 28 = 원래 루틴 주소 7개(앱이 DmWrite).
+ * 리소스 배치: 오프셋 0 = 진입점 8개의 오프셋 표(.long, 리소스 기준), 32 = 원래 루틴 주소 8개(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  * 한글 폭은 patch.c 그리기 결과와 같게(모드 #22): glyph 모드이고 글꼴 높이 8~15(저해상도)면 9(v12),
  * 16~40이면 18픽셀(좌표 배율로 나눔),
@@ -35,16 +36,18 @@ UInt16 HgSetNext(Char *t, UInt32 o, WChar c);
 WChar  HgCharBounds(const Char *t, UInt32 o, UInt32 *s, UInt32 *e);
 Int16  HgCharWidth(WChar c);
 Boolean HgFindString(const Char *src, const Char *tgt, UInt32 *pos, UInt16 *len);
+Boolean HgWordBounds(const Char *text, UInt32 n, UInt32 o, UInt32 *s, UInt32 *e);
 
 asm(".text\n.even\nIntlBase:\n"
     " .long HgCharAttr-IntlBase, HgPrevChar-IntlBase, HgNextChar-IntlBase\n"
     " .long HgSetNext-IntlBase, HgCharBounds-IntlBase, HgCharWidth-IntlBase\n"
-    " .long HgFindString-IntlBase\n"
-    "IntlOrig:\n .long 0,0,0,0,0,0,0\n");
+    " .long HgFindString-IntlBase, HgWordBounds-IntlBase\n"
+    "IntlOrig:\n .long 0,0,0,0,0,0,0,0\n");
 
 typedef UInt16 (*AttrFn)(WChar c);
 typedef Int16  (*WidthFn)(WChar c);
 typedef Boolean (*FindFn)(const Char *, const Char *, UInt32 *, UInt16 *);
+typedef Boolean (*WordFn)(const Char *, UInt32, UInt32, UInt32 *, UInt32 *);
 
 static inline UInt32 Orig(UInt16 i)
 {
@@ -269,4 +272,71 @@ Boolean HgFindString(const Char *src, const Char *tgt, UInt32 *pos, UInt16 *len)
         }
         base = p + 1;
     }
+}
+
+/* TxtWordBounds(두 번 눌러 낱말 선택, v72). 원래 루틴은 바이트를 Latin-1 글자로 분류해 한글 글자 가운데에서 낱말을 자른다
+ * (가나다에서 나를 두 번 누르면 1바이트 선택 → 지우면 한글이 깨짐). 문자열에 한글 쌍이 있고 누른 글자가 낱말 글자
+ * (2바이트 글자 또는 원래 TxtCharAttr로 영문자·숫자)면 좌우로 낱말 글자가 이어지는 데까지 넓힌다. 그 밖은 원래 루틴 그대로.
+ * MnHangul5 v11(src/os5/text.c)과 같은 규칙. */
+static Boolean Word1(UInt8 c)
+{
+    return Orig(0) ? ((((AttrFn)Orig(0))(c) & charAttrAlNum) != 0) : false;
+}
+
+Boolean HgWordBounds(const Char *text, UInt32 n, UInt32 o, UInt32 *s, UInt32 *e)
+{
+    const UInt8 *t = (const UInt8 *)text;
+    WordFn       orig = (WordFn)Orig(7);
+    UInt32       i, a, b, k;
+    Boolean      two = false, any = false;
+
+    if (orig == NULL)
+        return false;
+    if (text == NULL || o >= n)
+        return orig(text, n, o, s, e);
+    for (i = 0; i + 1 < n; i++)
+        if (Hi(t[i]) && Hi(t[i + 1])) {
+            any = true;
+            break;
+        }
+    if (!any)
+        return orig(text, n, o, s, e);
+    a = o;
+    if (Hi(t[o])) {   /* 상위 바이트 구간은 구간 시작부터 두 바이트씩(HgCharBounds와 같은 규칙) */
+        k = RunBefore(t, o);
+        a = o - (k & 1);
+        if (a + 1 < n && Hi(t[a]) && Hi(t[a + 1]))
+            two = true;
+        else
+            a = o;
+    }
+    if (!two && !Word1(t[a]))
+        return orig(text, n, o, s, e);
+    b = a + (two ? 2 : 1);
+    while (a > 0) {   /* 왼쪽: 앞 글자가 2바이트(구간 안 짝수 자리)면 2, 아니면 1바이트 글자 */
+        k = RunBefore(t, a);
+        if (k >= 2 && !(k & 1)) {
+            a -= 2;
+            continue;
+        }
+        if (Word1(t[a - 1])) {
+            a--;
+            continue;
+        }
+        break;
+    }
+    while (b < n && t[b]) {   /* 오른쪽 */
+        if (b + 1 < n && Hi(t[b]) && Hi(t[b + 1])) {
+            b += 2;
+            continue;
+        }
+        if (Word1(t[b])) {
+            b++;
+            continue;
+        }
+        break;
+    }
+    if (s) *s = a;
+    if (e) *e = b;
+    return true;
 }
