@@ -166,7 +166,7 @@ static int Word1(u8 c) {
 }
 Boolean HgWordBounds(const char *text, u32 n, u32 o, u32 *s, u32 *e) {
     const u8 *t = (const u8 *)text;
-    u32 i, a, b, k;
+    u32 i, a, b = 0, k;
     int two = 0, any = 0;
     if (Idle() || !text || o >= n) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
     for (i = 0; i + 1 < n; i++)
@@ -191,9 +191,11 @@ Boolean HgWordBounds(const char *text, u32 n, u32 o, u32 *s, u32 *e) {
                 if (e) *e = oe;
                 return 1;
             }
+            a = os;   /* v13: 한글에 닿으면 원래 낱말(don't)을 출발점으로 넓힌다 */
+            b = oe;
         }
     }
-    b = a + (two ? 2 : 1);
+    if (b == 0) b = a + (two ? 2 : 1);
     while (a > 0) {   /* 왼쪽: 앞 글자가 2바이트(구간 안 짝수 자리)면 2, 아니면 1바이트 글자 */
         k = RunBefore(t, a);
         if (k >= 2 && !(k & 1)) { a -= 2; continue; }
