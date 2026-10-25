@@ -8,6 +8,8 @@
  *     소문자 = 기본 자모, 대문자(Shift) = 쌍자음·ㅒ·ㅖ. 조합은 OS 4와 같은 src/common/hangul_compose.h.
  *   - '한' 표시: 입력칸 화면의 그래피티 상태 표시(GSI) 자리에 그린다(GSI가 없는 화면은 표시 없음).
  *     앱이 다 그리고 다음 이벤트를 받으러 올 때(원래 함수 부르기 전) 그린다.
+ *   - 펜 누름은 커서를 옮길 수 있어 조합을 끝낸다. v15: 시스템 키보드 대화상자(Edit → Keyboard, 폼 32000)의 키 영역
+ *     (초점 입력칸 아래 ~ 그 아래 단추 줄 위)을 누른 것은 키 입력이므로 조합을 이어 간다(KbdKeyTap).
  */
 #include "os5.h"
 
@@ -23,6 +25,9 @@
 #define commandKeyMask 0x0008
 #define chrBackspace 0x08
 #define frmGraffitiStateObj 11
+#define frmFieldObj 0
+#define frmControlObj 1
+#define kKeyboardFormId 32000   /* 시스템 키보드 대화상자(TG50 실측: 제목 Keyboard, 초점 = 입력칸) */
 
 /* hangul_compose.h가 쓰는 Palm 형식 */
 typedef u8 UInt8;
@@ -60,6 +65,32 @@ static inline void HcSend(u16 c)
     if (((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(c, kImMark, 0) == 0) x->st[4]++;
     else x->qfail++;   /* 큐가 가득 참: 화면과 조합 상태가 어긋나므로 이 키 처리 뒤 조합을 끝낸다(v5) */
 }
+/* v15: 펜 누름이 시스템 키보드 대화상자의 키 영역인가. 대화상자가 활성 폼이고 그 창이 활성 창(메뉴 등이 위에 없음)이며,
+ *   누른 곳(창 기준 좌표 = 객체 좌표)이 초점 입력칸의 아래 끝 이상이고 그 아래 단추(Done·abc·123 등) 중 가장 위 단추의 윗변 미만.
+ *   경계는 폼 객체 위치에서 계산한다(기종마다 크기가 다를 수 있음). 하나라도 아니면 0 = 지금처럼 조합 끝. */
+static int KbdKeyTap(const struct NEvent *ev)
+{
+    void *f = ((PtrFn)T12(T12_FrmGetActiveForm))();
+    struct NRect r;
+    u16 fo, n, i;
+    s16 top, bottom = 0x7FFF;
+
+    if (!f || ((FormU16Fn)T12(T12_FrmGetFormId))(f) != kKeyboardFormId) return 0;
+    if (((PtrFn)T8(T8_WinGetActiveWindow))() != ((FormPtrFn)T12(T12_FrmGetWindowHandle))(f)) return 0;
+    fo = ((FormU16Fn)T12(T12_FrmGetFocus))(f);
+    n = ((FormU16Fn)T12(T12_FrmGetNumberOfObjects))(f);
+    if (fo >= n || ((FormIdxFn)T12(T12_FrmGetObjectType))(f, fo) != frmFieldObj) return 0;
+    ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, fo, &r);
+    top = (s16)(r.y + r.h);
+    if (ev->screenY < top) return 0;
+    for (i = 0; i < n; i++) {
+        if (((FormIdxFn)T12(T12_FrmGetObjectType))(f, i) != frmControlObj) continue;
+        ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, i, &r);
+        if (r.y >= top && r.y < bottom) bottom = r.y;
+    }
+    return ev->screenY < bottom;
+}
+
 /* 조합 함수를 부른 뒤: 결과 키를 하나라도 못 넣었으면 조합 끝(다음 키부터 새 글자) */
 static inline void EndIfQFail(u32 *st, u32 before)
 {
@@ -148,7 +179,10 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         (ev->eType == keyDownEvent || ev->eType == penUpEvent || ev->eType == winEnterEvent ||
          ev->eType == frmOpenEvent || ev->eType == frmUpdateEvent))
         c->mark |= 1;   /* 앱이 다시 그렸을 수 있음 → 다음에 '한' 다시 그림 */
-    if (ev->eType == penDownEvent) { st[0] = 0; return; }   /* 커서가 옮겨질 수 있음: 조합 끝 */
+    if (ev->eType == penDownEvent) {   /* 커서가 옮겨질 수 있음: 조합 끝(v15: 키보드 대화상자의 키는 이어 감) */
+        if (!KbdKeyTap(ev)) st[0] = 0;
+        return;
+    }
     if (ev->eType != keyDownEvent) return;
     ch = ev->chr;
     if (ev->keyCode == kImMark) { st[5]++; Log(ev, 1); return; }

@@ -74,6 +74,8 @@ static inline u32 R9(void) {
 #define T8_WinSetCoordinateSystem 0xc98
 /* 표 12 (TG50·NX70V 같음) */
 #define T12_FrmGetActiveForm      0x224
+#define T12_FrmGetFocus           0x238   /* v15: 0x238·0x240은 Frm 함수 알파벳 순서로 정하고 진단 빌드로 확인(제목·폼 번호·초점 객체가 화면과 맞음) */
+#define T12_FrmGetFormId          0x240
 #define T12_FrmGetNumberOfObjects 0x250
 #define T12_FrmGetObjectBounds    0x254
 #define T12_FrmGetObjectType      0x26c
