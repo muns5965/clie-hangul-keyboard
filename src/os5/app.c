@@ -1,5 +1,5 @@
 /*
- * MnHangul5 v8 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v9 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
@@ -10,6 +10,7 @@
  * v6: 배경을 칠하는 그리기 함수(WinDrawChars 등) 대신 한글을 그릴 때 칸을 먼저 지운다 — 줄 중간을 고치면 겹쳐 보이던 문제.
  * v7: 자동 대문자 칸(Address 이름 등)의 첫 글자가 된소리가 되던 문제 — 실제 Shift(원시 keyCode 0x84xx)일 때만 된소리.
  * v8: 찾기(TxtFindString, 표 8 0x9ac)가 한글 낱말 가운데를 앞 글자 끝 바이트에 따라 맞추던 문제 — 원래 결과를 거른다(text.c).
+ * v9: 켤 때 주소 기록(Feature)을 칸 교체 전에 하고 실패를 확인(실패하면 칸을 건드리지 않고 메모리를 푼다).
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -24,7 +25,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v8"
+#define kVer "v9"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -214,14 +215,22 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
             *(UInt32 *)(block + ctx + kCtxPack) = SW(pack);   /* ARM이 읽는 값은 리틀엔디언 */
             *(UInt32 *)(block + ctx + kCtxKsc) = SW(ksc);
             *(UInt32 *)(block + ctx + kCtxPack24) = SW(pack24);
-            for (i = 0; i < n; i++)   /* 원래 값 먼저(그대로 복사) */
-                *(UInt32 *)(block + ctx + 4 * TbIdx(tb, i)) = *(UInt32 *)(t8 + TbSlot(tb, i));
-            for (i = 0; i < n; i++)
-                *(UInt32 *)(t8 + TbSlot(tb, i)) = SW(block + TbFunc(tb, i));
-            FtrSet(kCr, 0, block);
-            FtrSet(kCr, 1, pack);
-            FtrSet(kCr, 2, ksc);
-            FtrSet(kCr, 3, pack24);
+            /* v9: 주소 기록(Feature)을 칸을 바꾸기 전에 하고 실패를 확인한다 — 칸만 바뀌고 기록이 없으면 OFF로 끌 수 없다 */
+            if (FtrSet(kCr, 1, pack) != errNone || FtrSet(kCr, 2, ksc) != errNone ||
+                FtrSet(kCr, 3, pack24) != errNone || FtrSet(kCr, 0, block) != errNone) {
+                for (i = 0; i < 4; i++)
+                    FtrUnregister(kCr, i);
+                MemPtrFree((MemPtr)block);
+                MemPtrFree((MemPtr)pack);
+                MemPtrFree((MemPtr)ksc);
+                MemPtrFree((MemPtr)pack24);
+                r = kNoMem;
+            } else {
+                for (i = 0; i < n; i++)   /* 원래 값 먼저(그대로 복사) */
+                    *(UInt32 *)(block + ctx + 4 * TbIdx(tb, i)) = *(UInt32 *)(t8 + TbSlot(tb, i));
+                for (i = 0; i < n; i++)
+                    *(UInt32 *)(t8 + TbSlot(tb, i)) = SW(block + TbFunc(tb, i));
+            }
         }
     }
     MemHandleUnlock(th);
