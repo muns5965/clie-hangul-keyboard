@@ -46,7 +46,7 @@
 | --- | --- |
 | 그리기 | 표8 `0xb18` WinDrawChars, `0xb14` WinDrawChar, `0xbd0` WinPaintChars, `0xbcc` WinPaintChar, `0xb24` WinDrawInvertedChars, `0xbac` WinInvertChars, `0xb44` WinEraseChars, `0xb38` WinDrawTruncChars |
 | 폭·줄바꿈 | 표8 `0x3ec` FntCharsWidth, `0x3e8` FntCharsInWidth, `0x40c` FntLineWidth, `0x418` FntWidthToOffset, `0x41c` FntWordWrap |
-| 글자 경계(Text Manager) | 표8 `0x97c` TxtByteAttr, `0x984` TxtCharAttr, `0x98c` TxtCharIsValid, `0x994` TxtCharXAttr, `0x998` TxtCharBounds, `0x99c` TxtCharSize, `0x9b0` TxtGetChar, `0x9b4` TxtGetNextChar, `0x9b8` TxtGetPreviousChar, `0x9bc` TxtGetTruncationOffset, `0x9c0` TxtGetWordWrapOffset, `0x9cc` TxtParamString, `0x9d8` TxtSetNextChar, `0x414` TxtCharWidth (**수정**: 처음 대응표는 이름이 한 칸씩 밀려 있었다. ROM `IntlDispatch` 분기표 `0x200ea1fc`를 직접 읽어 바로잡음. `WChar` 출력 인자는 16비트, `TxtCharBounds`의 시작·끝은 32비트) |
+| 글자 경계(Text Manager) | 표8 `0x97c` TxtByteAttr, `0x984` TxtCharAttr, `0x98c` TxtCharIsValid, `0x994` TxtCharXAttr, `0x998` TxtCharBounds, `0x99c` TxtCharSize, `0x9b0` TxtGetChar, `0x9b4` TxtGetNextChar, `0x9b8` TxtGetPreviousChar, `0x9bc` TxtGetTruncationOffset, `0x9c0` TxtGetWordWrapOffset, `0x9cc` TxtParamString, `0x9d8` TxtSetNextChar, `0x414` TxtCharWidth, `0x980` TxtCaselessCompare, `0x9a0` TxtCompare, `0x9ac` TxtFindString, `0x9d0` TxtPrepFindString, `0x9d4` TxtReplaceStr, `0x9e4` TxtWordBounds (뒤 6개는 v8 때 같은 방법 — Intl 선택자 → 68k 연결 함수 → 표 8 칸 — 으로 TG50·NX70V ROM에서 확인) (**수정**: 처음 대응표는 이름이 한 칸씩 밀려 있었다. ROM `IntlDispatch` 분기표 `0x200ea1fc`를 직접 읽어 바로잡음. `WChar` 출력 인자는 16비트, `TxtCharBounds`의 시작·끝은 32비트) |
 | 입력 | 표8 `0x824` EvtGetEvent, `0x298` EvtEnqueueKey (PACE 연결 함수가 부르는 가져오기 스텁에서 확인) |
 | 폼 | 표12 `0x224` FrmGetActiveForm, `0x250` FrmGetNumberOfObjects, `0x254` FrmGetObjectBounds, `0x26c` FrmGetObjectType, `0x278` FrmGetWindowHandle |
 | 그 밖 그리기 | 표8 `0xb2c` WinDrawPixel, `0xb50` WinEraseRectangle, `0xb64` WinGetActiveWindow, `0xc38` WinSetDrawWindow, `0xc3c` WinSetForeColor, `0xc4c` WinSetTextColor, `0xc98` WinSetCoordinateSystem, `0x408` FntLineHeight |
@@ -164,3 +164,14 @@ OS5에서 시스템 전체 한글이 되는 기존 제품. 사용자가 시험�
 
 **남은 것**: 실기 시험(복사한 ARM 코드 실행 전 캐시 처리가 필요할 수 있음),
 조합 상태의 앱 구분, 다른 OS5 기종(NX70V 등)의 칸 번호.
+
+### 찾기(v8)
+
+- 대조(TG50 메모장, 검색어 `가`): `가`·`한 가` 찾음, `한가`·`ABC가` 못 찾음, **`갚가`(B0 B1 B0 A1) 찾음** — Palm 찾기는 낱말 첫머리만 맞추는데
+  원래 `TxtFindString`이 앞 바이트 하나로 첫머리를 판단해, 한글 앞 글자의 끝 바이트가 Latin-1 기호(0xB1 `±`)면 낱말 가운데도 맞췄다.
+  두 글자에 걸친 바이트(`갚가`의 B1 B0 = `굅`)는 맞추지 않았다.
+- 진단(임시 빌드, 기록은 세션 저장 → RAM 덤프로 읽음): 찾기 실행 중 표 8 호출은 `TxtPrepFindString` 1회, `TxtCompare`·`TxtFindString` 여러 번이고
+  `TxtCharAttr`·`TxtByteAttr`·`TxtGetPreviousChar`는 0회 — 첫머리 판단은 `TxtFindString` 안에서 끝난다(우리 글자 속성 함수를 거치지 않음).
+- 처리: 0x9ac `TxtFindString`을 바꿔 원래 결과를 거른다. 맞은 자리 바로 앞 바이트가 0xA1–0xFE면 버리고 다음 바이트부터 다시 찾는다.
+  그 밖이면 원래 판단 그대로(영문 검색 결과 같음). 한글 기호 행(0xA1–0xAC) 뒤도 첫머리로 보지 않는다.
+- 결과: TG50 Memo·Address·Date Book, NX70V Memo에서 `가`는 `갚가`를 찾지 않고, `갚`·`한글`·`mix`·`abc`는 전과 같다.
