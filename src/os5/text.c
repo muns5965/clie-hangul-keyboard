@@ -1,5 +1,5 @@
 /*
- * MnHangul5 글자 경계 — 표 8의 Text Manager 함수 12개를 바꾼다(MnHangul src/hangul/intl.c와 같은 규칙).
+ * MnHangul5 글자 경계 — 표 8의 Text Manager 함수 14개를 바꾼다(MnHangul src/hangul/intl.c와 같은 규칙).
  * 칸 번호는 ROM IntlDispatch 분기표로 확인했다(docs/OS5_RESEARCH.md).
  * WChar 출력 인자는 16비트, TxtCharBounds의 시작·끝은 32비트.
  */
@@ -210,4 +210,81 @@ Boolean HgWordBounds(const char *text, u32 n, u32 o, u32 *s, u32 *e) {
     if (s) *s = a;
     if (e) *e = b;
     return 1;
+}
+
+/* TxtCompare·TxtCaselessCompare(v14): 원래 함수는 바이트를 Latin-1 가중치로 비교해 한글 순서가 틀리고(나>다),
+ * 대소문자 무시 비교는 서로 다른 한글을 같다고 하며(걋=겯: 0xC0과 0xE0을 같은 글자로 봄), 일치 길이가 글자 가운데에서 끝난다
+ * (Address Look Up이 그 길이로 입력을 잘라 반 글자가 남음). 문자열에 한글 쌍이 있으면 글자 단위로 비교한다:
+ *   1바이트 구간끼리 = 원래 TxtCaselessCompare(대소문자·악센트 무시 규칙 그대로), 2바이트끼리 = 16비트 코드값,
+ *   1바이트 글자 < 2바이트 글자, 문자열 끝이 가장 앞. 일치 길이는 다른 글자 바로 앞(글자 경계).
+ *   여기까지 모두 같으면 Caseless는 0, Compare는 원래 TxtCompare를 문자열 전체에 불러 대소문자 차이로 정한다
+ *   (2바이트 글자는 같은 자리에 같은 값이라 원래 함수의 결과가 1바이트 차이만 반영).
+ * 두 문자열 모두 한글 쌍이 없으면 원래 함수 그대로(넘겨받은 인자 그대로). */
+typedef s16 (*CmpFn)(const char *, u32, u16 *, const char *, u32, u16 *);
+
+static u32 CLen(const u8 *t, u32 i, u32 n) {
+    return (i + 1 < n && Hi(t[i]) && Hi(t[i + 1])) ? 2 : 1;
+}
+
+static int HasPair(const u8 *t, u32 n) {
+    u32 i;
+    for (i = 0; i + 1 < n; i++)
+        if (Hi(t[i]) && Hi(t[i + 1])) return 1;
+    return 0;
+}
+
+static s16 HgCmp(int caseless, const char *s1, u32 n1, u16 *m1, const char *s2, u32 n2, u16 *m2) {
+    const u8 *a = (const u8 *)s1, *b = (const u8 *)s2;
+    u32 i = 0, j = 0, ea, eb;
+    u32 l1 = n1, l2 = n2;
+    u16 x, y;
+    s16 r = 0;
+    if (Idle() || !s1 || !s2)
+        return ((CmpFn)ORIG(caseless ? O_Caseless : O_Compare))(s1, l1, m1, s2, l2, m2);
+    /* 길이는 최대값이고 NUL에서 끝난다(Address Look Up은 0xFFFF처럼 큰 값을 넘김 — 실측) */
+    n1 &= 0xFFFF;
+    n2 &= 0xFFFF;
+    for (i = 0; i < n1 && a[i]; i++) {}
+    n1 = i;
+    for (i = 0; i < n2 && b[i]; i++) {}
+    n2 = i;
+    i = 0;
+    if (!HasPair(a, n1) && !HasPair(b, n2))
+        return ((CmpFn)ORIG(caseless ? O_Caseless : O_Compare))(s1, l1, m1, s2, l2, m2);
+    while (i < n1 && j < n2) {
+        u32 ca = CLen(a, i, n1), cb = CLen(b, j, n2);
+        if (ca == 2 && cb == 2) {
+            u16 wa = (u16)(a[i] << 8 | a[i + 1]), wb = (u16)(b[j] << 8 | b[j + 1]);
+            if (wa != wb) { r = wa < wb ? -1 : 1; break; }
+            i += 2;
+            j += 2;
+            continue;
+        }
+        if (ca != cb) { r = ca == 2 ? 1 : -1; break; }   /* 1바이트 글자가 앞 */
+        for (ea = i; ea < n1 && CLen(a, ea, n1) == 1; ea++) {}
+        for (eb = j; eb < n2 && CLen(b, eb, n2) == 1; eb++) {}
+        x = y = 0;
+        r = ((CmpFn)ORIG(O_Caseless))(s1 + i, ea - i, &x, s2 + j, eb - j, &y);
+        if (r == 0) { i = ea; j = eb; continue; }
+        /* 한쪽 구간이 다른 쪽의 앞부분으로 끝났는데 그 뒤가 2바이트 글자면, 1바이트 글자가 이어지는 쪽이 앞 */
+        if (x == ea - i && y < eb - j && ea < n1) r = 1;
+        else if (y == eb - j && x < ea - i && eb < n2) r = -1;
+        i += x;
+        j += y;
+        break;
+    }
+    if (r == 0 && (i < n1 || j < n2)) r = i < n1 ? 1 : -1;   /* 앞부분이 같으면 짧은 쪽이 앞 */
+    if (r == 0 && !caseless)
+        return ((CmpFn)ORIG(O_Compare))(s1, n1, m1, s2, n2, m2);
+    if (m1) *m1 = (u16)i;
+    if (m2) *m2 = (u16)j;
+    return r;
+}
+
+s16 HgCompare(const char *s1, u32 n1, u16 *m1, const char *s2, u32 n2, u16 *m2) {
+    return HgCmp(0, s1, n1, m1, s2, n2, m2);
+}
+
+s16 HgCaselessCompare(const char *s1, u32 n1, u16 *m1, const char *s2, u32 n2, u16 *m2) {
+    return HgCmp(1, s1, n1, m1, s2, n2, m2);
 }

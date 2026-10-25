@@ -25,4 +25,6 @@
 0x98c O_IsValid        HgCharIsValid     0x2005ee14              0x2005e3c4  TxtCharIsValid
 0x9ac O_FindString     HgFindString      0x2005ee34              0x2005e3e4  TxtFindString
 0x9e4 O_WordBounds     HgWordBounds      0x2005ee6c              0x2005e41c  TxtWordBounds
+0x9a0 O_Compare        HgCompare         0x2005ee28              0x2005e3d8  TxtCompare
+0x980 O_Caseless       HgCaselessCompare 0x2005ee08              0x2005e3b8  TxtCaselessCompare
 0x824 O_GetEvent       HgGetEvent        0x20a4c01c              0x20975d70  EvtGetEvent

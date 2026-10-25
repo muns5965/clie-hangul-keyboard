@@ -137,6 +137,13 @@ jobs:
           set -euo pipefail
           python3 test/word_bounds_host_test.py
 
+      # OS 5 비교(TxtCompare·TxtCaselessCompare) 함수 본문을 추출해 정렬 성질·일치 길이를 회귀시험(원래 함수는 mock)
+      - name: Test OS5 compare
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 test/compare_host_test.py
+
       # PRC 구조(DB 이름·타입·크리에이터·리소스)와 날짜를 뺀 해시를 실행 요약에 표시
       - name: Inspect PRCs
         shell: bash

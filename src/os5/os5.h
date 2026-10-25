@@ -28,7 +28,8 @@ typedef u8 Boolean;
 /* 바꾸는 함수(원래 주소 칸 번호). 순서 = slots.txt 순서(빌드 스크립트가 확인) */
 enum { O_DrawChars, O_DrawChar, O_PaintChars, O_DrawTrunc, O_CharsWidth, O_LineWidth, O_CharsInWidth,
        O_WordWrap, O_WidthToOffset, O_ByteAttr, O_CharSize, O_GetNext, O_GetPrev, O_SetNext,
-       O_Bounds, O_GetChar, O_CharAttr, O_CharWidth, O_IsValid, O_FindString, O_WordBounds, O_GetEvent, O_COUNT };
+       O_Bounds, O_GetChar, O_CharAttr, O_CharWidth, O_IsValid, O_FindString, O_WordBounds, O_Compare, O_Caseless, O_GetEvent, O_COUNT };
+typedef char OrigFits[(O_COUNT <= 24) ? 1 : -1];   /* Ctx.orig 칸 수 */
 
 /* 앱(app.c)이 같은 오프셋으로 쓴다 — 바꾸면 app.c의 kCtx*도 같이 */
 struct Ctx {
