@@ -1,5 +1,5 @@
 /*
- * MnHangul 글자 경계 코드 (리소스 HgIt 0) — 3a 단계: Intl 루틴 6개를 EUC-KR(KS X 1001) 규칙으로 교체
+ * MnHangul 글자 경계 코드 (리소스 HgIt 0) — 3a 단계: Intl 루틴 7개를 EUC-KR(KS X 1001) 규칙으로 교체
  *
  * v8 실측(메모 입력·BS·커서 이동)에서 불린 Intl 루틴 중 글자 경계·속성·폭 6개를 바꾼다.
  * 앱이 IntlSetRoutineAddress로 끼운다. 원형은 SDK TextMgr.h와 같다(Intl 디스패처가 스택 그대로 넘김).
@@ -9,10 +9,12 @@
  *   3 TxtSetNextChar(text, offset, ch)        ch > 0xFF면 2바이트로 기록
  *   4 TxtCharBounds(text, offset, *s, *e)     offset이 든 글자의 시작·끝
  *   5 TxtCharWidth(WChar)                     2바이트 → 한글 폭(현재 글꼴·좌표 배율), 1바이트 → 원래 루틴
+ *   6 TxtFindString(src, tgt, *pos, *len)     찾기(v71, MnHangul5 v10과 같은 규칙): 원문에 한글이 있으면 부분 검색,
+ *                                             없으면 원래 결과 중 앞 바이트가 0xA1~0xFE인 것을 버림
  * 2바이트 글자: 앞·뒤 바이트 모두 0xA1~0xFE. 상위 바이트가 이어진 구간은 구간 시작부터 두 바이트씩 짝짓는다
  * (홀수 구간이면 마지막 바이트가 1바이트 글자).
  *
- * 리소스 배치: 오프셋 0 = 진입점 6개의 오프셋 표(.long, 리소스 기준), 24 = 원래 루틴 주소 6개(앱이 DmWrite).
+ * 리소스 배치: 오프셋 0 = 진입점 7개의 오프셋 표(.long, 리소스 기준), 28 = 원래 루틴 주소 7개(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  * 한글 폭은 patch.c 그리기 결과와 같게(모드 #22): glyph 모드이고 글꼴 높이 8~15(저해상도)면 9(v12),
  * 16~40이면 18픽셀(좌표 배율로 나눔),
@@ -32,14 +34,17 @@ UInt16 HgNextChar(const Char *t, UInt32 o, WChar *ch);
 UInt16 HgSetNext(Char *t, UInt32 o, WChar c);
 WChar  HgCharBounds(const Char *t, UInt32 o, UInt32 *s, UInt32 *e);
 Int16  HgCharWidth(WChar c);
+Boolean HgFindString(const Char *src, const Char *tgt, UInt32 *pos, UInt16 *len);
 
 asm(".text\n.even\nIntlBase:\n"
     " .long HgCharAttr-IntlBase, HgPrevChar-IntlBase, HgNextChar-IntlBase\n"
     " .long HgSetNext-IntlBase, HgCharBounds-IntlBase, HgCharWidth-IntlBase\n"
-    "IntlOrig:\n .long 0,0,0,0,0,0\n");
+    " .long HgFindString-IntlBase\n"
+    "IntlOrig:\n .long 0,0,0,0,0,0,0\n");
 
 typedef UInt16 (*AttrFn)(WChar c);
 typedef Int16  (*WidthFn)(WChar c);
+typedef Boolean (*FindFn)(const Char *, const Char *, UInt32 *, UInt16 *);
 
 static inline UInt32 Orig(UInt16 i)
 {
@@ -208,4 +213,60 @@ Int16 HgCharWidth(WChar c)
     box[0] = '[';
     box[1] = ']';
     return FntCharsWidth(box, 2);
+}
+
+/* TxtFindString(찾기, v71). 검색어는 TxtPrepFindString이 바이트마다 1:1로 바꾼 값이라(실측: 가 B0 A1 → 6C 4A)
+ * 직접 비교하지 않고 원래 루틴의 비교를 쓴다. 원래 루틴은 낱말 첫머리를 앞 바이트 하나로 판단해
+ * 한글 앞 글자의 끝 바이트가 Latin-1 기호면 낱말 가운데도 맞춘다(갚가에서 가).
+ * - 원문에 한글 쌍이 있고 검색어가 64바이트 미만: 글자 경계마다 검색어 길이만큼 잘라 원래 루틴에 넘기고
+ *   맨 앞(0)에서 맞을 때만 받아들인다(부분 검색: 가나다에서 나).
+ * - 그 밖: 원래 결과 중 앞 바이트가 0xA1~0xFE인 것을 버리고 다음 바이트부터 다시 찾는다.
+ * MnHangul5 v10(src/os5/text.c)과 같은 규칙. */
+Boolean HgFindString(const Char *src, const Char *tgt, UInt32 *pos, UInt16 *len)
+{
+    const UInt8 *t = (const UInt8 *)src, *g = (const UInt8 *)tgt;
+    FindFn       orig = (FindFn)Orig(6);
+    Char         buf[64];
+    UInt32       nt = 0, i = 0, k, p, base = 0;
+    UInt16       l;
+    Boolean      hi = false;
+
+    if (orig == NULL)
+        return false;
+    if (src == NULL || tgt == NULL)
+        return orig(src, tgt, pos, len);
+    while (g[nt] && nt < 64)
+        nt++;
+    for (k = 0; t[k]; k++)
+        if (Hi(t[k]) && Hi(t[k + 1])) {
+            hi = true;
+            break;
+        }
+    if (hi && nt > 0 && nt < 64) {
+        while (t[i]) {
+            for (k = 0; k < nt && t[i + k]; k++)
+                buf[k] = (Char)t[i + k];
+            if (k < nt)
+                return false;
+            buf[k] = 0;
+            if (orig(buf, tgt, &p, &l) && p == 0) {
+                if (pos) *pos = i;
+                if (len) *len = l;
+                return true;
+            }
+            i += (Hi(t[i]) && Hi(t[i + 1])) ? 2 : 1;
+        }
+        return false;
+    }
+    for (;;) {
+        if (!orig(src + base, tgt, &p, &l))
+            return false;
+        p += base;
+        if (p == 0 || !Hi(t[p - 1])) {
+            if (pos) *pos = p;
+            if (len) *len = l;
+            return true;
+        }
+        base = p + 1;
+    }
 }

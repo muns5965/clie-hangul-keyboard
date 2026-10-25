@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v71: 찾기(Intl TxtFindString, intl.c 6번) — 원문에 한글이 있으면 부분 검색(가나다에서 나), 없으면 Palm 규칙.
+ *      앞 바이트 하나로 낱말 첫머리를 판단해 갚가에서 가를 맞추던 문제도 없어짐. MnHangul5 v10과 같은 규칙. Intl 6 → 7개.
  * v70: 끄기를 기능 단위로 원자적으로 — Intl·Width·Kbd·Count 끄기가 먼저 모든 칸이 맨 위인지 보고, 하나라도 아니면 아무것도
  *   되돌리지 않는다. v69까지는 맨 위인 칸만 먼저 되돌리고 'kept'로 남겨, 위의 패치를 치운 뒤에도 이미 되돌린 칸을
  *   다시 'kept'로 세어 리셋 전에는 끌 수 없었다(외부 검토 지적, 에뮬레이터 재현: width 1 → 4 kept).
@@ -140,7 +142,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v70"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v71"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -158,7 +160,7 @@
 #define kFtrIntlH     45
 #define kFtrIntlC     46
 #define kIntlRes      'HgIt'
-#define kIntlN        6
+#define kIntlN        7
 #define kFtrWidthH    47
 #define kFtrWidthC    48
 #define kWidthRes     'HgWd'
@@ -190,7 +192,8 @@ static UInt16 IntlSel(UInt16 i)
     case 2:  return intlTxtGetNextChar;
     case 3:  return intlTxtSetNextChar;
     case 4:  return intlTxtCharBounds;
-    default: return intlTxtCharWidth;
+    case 5:  return intlTxtCharWidth;
+    default: return intlTxtFindString;   /* v71 */
     }
 }
 #define kGlyphPtrFtr(i) (23 + (i))
@@ -488,7 +491,7 @@ static void UnlockGlyphs(void)
     }
 }
 
-/* 3a: Intl 루틴 6개 교체 */
+/* 3a: Intl 루틴 7개 교체(v71: + TxtFindString) */
 /* 결과: 0 켬, 1 이미 켜짐, 2 리소스 없음 (전역 없음) */
 static UInt16 InstIntl(void)
 {
@@ -508,7 +511,7 @@ static UInt16 InstIntl(void)
     for (i = 0; i < kIntlN; i++) {
         void *o = IntlGetRoutineAddress(IntlSel(i));
 
-        DmWrite(code, 24 + 4 * i, &o, 4);
+        DmWrite(code, 4 * kIntlN + 4 * i, &o, 4);
     }
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, true);
@@ -523,7 +526,7 @@ static void IntlOn(void)
 {
     UInt16 r = InstIntl();
 
-    StrCopy(gMsg, r == 0 ? "intl ON (6)" : r == 1 ? "intl already ON" : "intl resource missing");
+    StrCopy(gMsg, r == 0 ? "intl ON (7)" : r == 1 ? "intl already ON" : "intl resource missing");
 }
 
 /* v66: 끄기 본체(전역 없음, 지우기 알림에서도 부름). 결과: 0 끔, 0xFFFF 켜져 있지 않음, 그 밖 = 다른 것이 위에 있어 남긴 수 */
@@ -541,7 +544,7 @@ static UInt16 UninstIntl(void)
     if (kept != 0)
         return kept;
     for (i = 0; i < kIntlN; i++)
-        IntlSetRoutineAddress(IntlSel(i), (void *)((UInt32 *)code)[6 + i]);
+        IntlSetRoutineAddress(IntlSel(i), (void *)((UInt32 *)code)[kIntlN + i]);
     if (AppDB(&card, &id))
         DmDatabaseProtect(card, id, false);
     MemHandleUnlock((MemHandle)GetF(kFtrIntlH));
