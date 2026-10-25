@@ -1,5 +1,5 @@
 /*
- * MnHangul5 v10 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v11 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
@@ -12,6 +12,7 @@
  * v8: 찾기(TxtFindString, 표 8 0x9ac)가 한글 낱말 가운데를 앞 글자 끝 바이트에 따라 맞추던 문제 — 원래 결과를 거른다(text.c).
  * v9: 켤 때 주소 기록(Feature)을 칸 교체 전에 하고 실패를 확인(실패하면 칸을 건드리지 않고 메모리를 푼다).
  * v10: 찾기 — 원문에 한글이 있으면 글자 경계마다 부분 검색(가나다에서 나). 한글 없는 레코드는 Palm 규칙(낱말 첫머리) 그대로.
+ * v11: 두 번 눌러 낱말 선택(TxtWordBounds, 표 8 0x9e4)이 한글 글자 가운데에서 끊기던 문제 — 한글 낱말 단위로 선택(text.c).
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -26,7 +27,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v10"
+#define kVer "v11"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1

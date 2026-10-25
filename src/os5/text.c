@@ -1,5 +1,5 @@
 /*
- * MnHangul5 글자 경계 — 표 8의 Text Manager 함수 11개를 바꾼다(MnHangul src/hangul/intl.c와 같은 규칙).
+ * MnHangul5 글자 경계 — 표 8의 Text Manager 함수 12개를 바꾼다(MnHangul src/hangul/intl.c와 같은 규칙).
  * 칸 번호는 ROM IntlDispatch 분기표로 확인했다(docs/OS5_RESEARCH.md).
  * WChar 출력 인자는 16비트, TxtCharBounds의 시작·끝은 32비트.
  */
@@ -12,6 +12,7 @@ typedef u16 (*SetNextFn)(char *, u32, WChar);
 typedef WChar (*BoundsFn)(const char *, u32, u32 *, u32 *);
 typedef WChar (*GetCharFn)(const char *, u32);
 typedef Boolean (*FindFn)(const char *, const char *, u32 *, u16 *);
+typedef Boolean (*WordFn)(const char *, u32, u32, u32 *, u32 *);
 
 #define byteAttrSingle 0x01
 #define byteAttrLast 0x40
@@ -154,4 +155,44 @@ Boolean HgFindString(const char *src, const char *tgt, u32 *pos, u16 *len) {
         }
         base = p + 1;
     }
+}
+
+/* TxtWordBounds(두 번 눌러 낱말 선택, v11): 원래 함수는 바이트를 Latin-1 글자로 분류해 한글 글자 가운데에서 낱말을 자른다
+ * (가나다에서 나를 두 번 누르면 1바이트 선택 → 지우면 한글이 깨짐). 문자열에 한글 쌍이 있고 누른 글자가 낱말 글자
+ * (2바이트 글자 또는 원래 TxtCharAttr로 영문자·숫자)면 좌우로 낱말 글자가 이어지는 데까지 넓힌다. 그 밖은 원래 함수 그대로. */
+#define kAlNum 0x0232   /* charAttr_XA|DI|LO|UP */
+static int Word1(u8 c) {
+    return (((WCharFn)ORIG(O_CharAttr))(c) & kAlNum) != 0;
+}
+Boolean HgWordBounds(const char *text, u32 n, u32 o, u32 *s, u32 *e) {
+    const u8 *t = (const u8 *)text;
+    u32 i, a, b, k;
+    int two = 0, any = 0;
+    if (Idle() || !text || o >= n) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
+    for (i = 0; i + 1 < n; i++)
+        if (Hi(t[i]) && Hi(t[i + 1])) { any = 1; break; }
+    if (!any) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
+    a = o;
+    if (Hi(t[o])) {   /* 상위 바이트 구간은 구간 시작부터 두 바이트씩(TxtCharBounds와 같은 규칙) */
+        k = RunBefore(t, o);
+        a = o - (k & 1);
+        if (a + 1 < n && Hi(t[a]) && Hi(t[a + 1])) two = 1;
+        else a = o;
+    }
+    if (!two && !Word1(t[a])) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
+    b = a + (two ? 2 : 1);
+    while (a > 0) {   /* 왼쪽: 앞 글자가 2바이트(구간 안 짝수 자리)면 2, 아니면 1바이트 글자 */
+        k = RunBefore(t, a);
+        if (k >= 2 && !(k & 1)) { a -= 2; continue; }
+        if (Word1(t[a - 1])) { a--; continue; }
+        break;
+    }
+    while (b < n && t[b]) {   /* 오른쪽 */
+        if (b + 1 < n && Hi(t[b]) && Hi(t[b + 1])) { b += 2; continue; }
+        if (Word1(t[b])) { b++; continue; }
+        break;
+    }
+    if (s) *s = a;
+    if (e) *e = b;
+    return 1;
 }
