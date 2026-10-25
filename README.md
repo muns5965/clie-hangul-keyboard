@@ -20,7 +20,7 @@
 > database type, effective after a reset.
 > *MnHangul5* brings Hangul display and two-set hardware-keyboard input to the Palm OS 5 Sony PEG-TG50 and PEG-NX70V
 > by replacing entries in the RAM function table of the ARM system (68k trap patching is refused on OS 5);
-> it was tested only in TG50/NX70V ports of CloudpilotEmu.
+> it was tested only in TG50/NX70V ports of CloudpilotEmu (Memo Pad; on TG50 also Address, To Do, Date Book and Find).
 > **Test environment.** All development and verification were done in the CloudpilotEmu web emulator
 > running a PEG-NR70V (Palm OS 4.1S) ROM image, mainly in Memo Pad, with and without CJKOS installed.
 > The screenshots in this README are real emulator captures, taken by driving the emulator
@@ -155,7 +155,7 @@ OS 5 그림(MnHangul5 v2)만 TG50 포팅 CloudpilotEmu 네이티브판(PEG-TG50,
 | 한글 표시(MnHangul): 조합형 글꼴(12·16·24, 24는 추가 글꼴), 글자 경계(글자 단위 BS·커서), 폭·줄바꿈 | 시험 단계. CJKOS 없이 메모장 실측. 리셋 없이 `ON`, 리셋 뒤 자동 시작 |
 | MnHangul: 다른 기종 — T600C(영문 Palm OS 4.1)에서 표시·글자 단위 BS·줄바꿈 정상. N710C(영문 Palm OS 4.1, 고해상도)에서 MnHangul v69 + MnKbdHan v16 입력 시험 9개·0.1초 간격 48키 통과. 입력은 MnKbdHan(시스템 키보드 화면 두벌식, 진단 판 v9)으로 조합 입력 확인. OS 3.5·일본어(Shift-JIS) 기종은 켜지 않음(v68) | CloudpilotEmu 실측 |
 | MnHangul: CJKOS 감지(켜져 있으면 `ON`·자동 시작 안 함) | 시험 단계 (v56, v61부터 CJKOS 자신의 Feature `dCJK`로 판정, v62에서 예전 방식 뺌) |
-| Palm OS 5(TG50·NX70V) 한글(MnHangul5 v1~, NX70V는 v4~): 표시(목록·본문·줄바꿈·`…` 자르기·글자 단위 BS), 키보드 두벌식(Shift 쌍자음, 자모 단위 BS), Shift+Space 한/영, 입력칸 오른쪽 아래 `한` 표시, 리셋 뒤 자동 시작. v2부터 한글을 글자마다 그림 한 번으로 그려 영문과 비슷한 속도(v1 대비 약 8배). v3부터 큰 글꼴은 24×24 한글, 굵은 글꼴은 한글도 굵게 | 시험 단계. TG50 포팅 CloudpilotEmu 네이티브판 메모장 실측(보통·굵은·큰 굵은 글꼴, 줄바꿈 포함). NX70V(포팅판)는 메모장 표시·입력·큰 글꼴·리셋 뒤 자동 시작 실측. 실기 미시험. 에뮬레이터에서 0.12초 간격으로 길게 치면 모듈을 끈 영문 입력도 키가 빠지므로 빠른 입력은 짧은 글로만 확인 |
+| Palm OS 5(TG50·NX70V) 한글(MnHangul5 v1~, NX70V는 v4~): 표시(목록·본문·줄바꿈·`…` 자르기·글자 단위 BS), 키보드 두벌식(Shift 쌍자음, 자모 단위 BS), Shift+Space 한/영, 입력칸 오른쪽 아래 `한` 표시, 리셋 뒤 자동 시작. v2부터 한글을 글자마다 그림 한 번으로 그려 영문과 비슷한 속도(v1 대비 약 8배). v3부터 큰 글꼴은 24×24 한글, 굵은 글꼴은 한글도 굵게. v5 다른 확장이 되돌린 칸을 `ON`으로 다시 잇기, v6 줄 중간을 고칠 때 한글이 겹쳐 보이던 문제 수정, v7 자동 대문자 칸(Address 이름 등) 첫 글자가 된소리가 되던 문제 수정 | 시험 단계. TG50 포팅 CloudpilotEmu 네이티브판 메모장 실측(보통·굵은·큰 굵은 글꼴, 줄바꿈 포함). TG50에서 Address(입력·목록), To Do(입력), Date Book(하루·주·월·목록 보기), 찾기 창(한글 검색·결과로 이동)도 확인(v7). NX70V(포팅판)는 메모장 표시·입력·큰 글꼴·리셋 뒤 자동 시작 실측. 실기 미시험. 에뮬레이터에서 0.12초 간격으로 길게 치면 모듈을 끈 영문 입력도 키가 빠지므로 빠른 입력은 짧은 글로만 확인 |
 
 ## 1. 시스템 키보드 화면 한글(MnKbdHan)
 
