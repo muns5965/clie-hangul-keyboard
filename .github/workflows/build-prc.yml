@@ -129,6 +129,14 @@ jobs:
           fi
           echo "::notice::johab test: $(echo "$out" | tail -1)"
 
+      # OS 4/5 실제 낱말 선택 C 함수 본문을 추출해 호스트 gcc로 회귀시험
+      # Palm ROM의 원래 WordBounds/CharAttr는 mock이며, 기기 시험을 대체하지 않는다.
+      - name: Test OS4 and OS5 word bounds
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 test/word_bounds_host_test.py
+
       # PRC 구조(DB 이름·타입·크리에이터·리소스)와 날짜를 뺀 해시를 실행 요약에 표시
       - name: Inspect PRCs
         shell: bash
