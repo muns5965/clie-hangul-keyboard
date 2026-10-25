@@ -7,6 +7,8 @@
  *   v2는 글자마다 WinPaintBitmap 한 번(540자 0.04초, 영문과 비슷).
  * v3: 큰 글꼴(줄 높이 14 이상)은 24×24 묶음(HgJ24)으로 칸 12, 굵은 글꼴(boldFont·largeBoldFont)은 1픽셀 겹쳐 굵게.
  *   그리기·폭·글자 경계가 같은 칸(HangulCell)을 써야 줄바꿈·커서가 맞는다.
+ * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
+ *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
  */
 #include "os5.h"
 
@@ -27,6 +29,10 @@ typedef u16 (*DrawModeFn)(u16);
 typedef void (*PaintBitmapFn)(void *, s16, s16);
 typedef u8 (*ColorFn)(u8);
 struct ERect { s16 x, y, w, h; };
+typedef u8 UInt8;
+#include "../common/dubeol_map.h"
+#define kKeyboardFormId 32000   /* ime.c와 같음 */
+#define frmFieldObj 0
 typedef void (*EraseFn)(const struct ERect *, u16);
 
 static int HasHi(const u8 *t, u32 n) {
@@ -322,7 +328,34 @@ static void DrawMixed(u32 origIdx, const char *chars, s16 len, s16 x, s16 y) {
     }
 }
 
+/* v16: 키보드 대화상자의 키 글자면 그릴 자모(KS X 1001 0xA4 다음 바이트), 아니면 0.
+ *   한글 모드 + 영문자 한 글자 + 활성 폼 32000 + 그리는 y가 초점 입력칸 아래 끝 이상(창 기준 좌표 = 객체 좌표).
+ *   자모는 입력과 같은 규칙: 대화상자가 그리는 글자(대문자 = shift)를 그대로 눌렀을 때 들어가는 자모(ime.c: Dubeol(ch ^ 0x20)). */
+static u8 KbdLabel(const char *chars, s16 len, s16 y) {
+    u8 c;
+    void *f;
+    u16 fo, n;
+    struct ERect r;
+
+    if (len != 1 || !CtxPtr()->st[2]) return 0;
+    c = (u8)chars[0];
+    if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))) return 0;
+    f = ((void *(*)(void))T12(T12_FrmGetActiveForm))();
+    if (!f || ((u16 (*)(void *))T12(T12_FrmGetFormId))(f) != kKeyboardFormId) return 0;
+    fo = ((u16 (*)(void *))T12(T12_FrmGetFocus))(f);
+    n = ((u16 (*)(void *))T12(T12_FrmGetNumberOfObjects))(f);
+    if (fo >= n || ((u16 (*)(void *, u16))T12(T12_FrmGetObjectType))(f, fo) != frmFieldObj) return 0;
+    ((void (*)(void *, u16, struct ERect *))T12(T12_FrmGetObjectBounds))(f, fo, &r);
+    if (y < r.y + r.h) return 0;
+    return Dubeol((u8)(c ^ 0x20));
+}
+
 void HgDrawChars(const char *chars, s16 len, s16 x, s16 y) {
+    u8 j;
+    if (!Idle() && chars && (j = KbdLabel(chars, len, y)) != 0) {   /* v16: 키 글자 자리 가운데(한글 칸이 영문 글자보다 2 넓음 쪽으로) */
+        DrawGlyph(0xA4, j, x - 2, y, 1);
+        return;
+    }
     if (Idle() || !chars || len <= 0 || !HasHi((const u8 *)chars, len))
         ((DrawCharsFn)ORIG(O_DrawChars))(chars, len, x, y);
     else
