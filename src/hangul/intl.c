@@ -287,7 +287,7 @@ Boolean HgWordBounds(const Char *text, UInt32 n, UInt32 o, UInt32 *s, UInt32 *e)
 {
     const UInt8 *t = (const UInt8 *)text;
     WordFn       orig = (WordFn)Orig(7);
-    UInt32       i, a, b, k;
+    UInt32       i, a, b = 0, k;
     Boolean      two = false, any = false;
 
     if (orig == NULL)
@@ -326,9 +326,12 @@ Boolean HgWordBounds(const Char *text, UInt32 n, UInt32 o, UInt32 *s, UInt32 *e)
                 if (e) *e = oe;
                 return true;
             }
+            a = os;   /* v74: 한글에 닿으면 원래 낱말(don't)을 출발점으로 넓힌다 */
+            b = oe;
         }
     }
-    b = a + (two ? 2 : 1);
+    if (b == 0)
+        b = a + (two ? 2 : 1);
     while (a > 0) {   /* 왼쪽: 앞 글자가 2바이트(구간 안 짝수 자리)면 2, 아니면 1바이트 글자 */
         k = RunBefore(t, a);
         if (k >= 2 && !(k & 1)) {

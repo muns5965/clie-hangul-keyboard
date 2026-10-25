@@ -234,6 +234,7 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
             Boolean ok = GlyphRows(pk, chars[i], chars[i + 1], rows);
 
             SetGlyph(tmp, ok ? rows : NULL, H, cw, top, (UInt16)font[7]);
+            r = *rc;   /* v74: 원래 루틴이 넘긴 사각형을 고쳐 쓰는 경우가 있어(저해상도 앱 찾기 결과: 부를 때마다 y + 2) 매번 되돌림 */
             r.topLeft.x = rc->topLeft.x + px / ratio;
             r.extent.x = cw / ratio;
             res = orig(p1, &r, p3, &one, 1, tmp, p7);
@@ -247,6 +248,7 @@ static inline UInt32 DrawGlyphs(BltFn orig, void *p1, const RectangleType *rc, v
                 w += CharW(font, chars[i]);
                 i++;
             }
+            r = *rc;   /* v74 */
             r.topLeft.x = rc->topLeft.x + px / ratio;
             r.extent.x = (w + ratio - 1) / ratio;
             res = orig(p1, &r, p3, chars + start, i - start, (void *)font, p7);
