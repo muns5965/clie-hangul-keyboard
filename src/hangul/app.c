@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v74: (1) 저해상도 앱 찾기 결과에서 한글이 글자마다 2줄씩 내려가던 문제 — 원래 BltDrawChars가 넘긴 사각형을 고쳐 써서,
+ *      patch.c가 원래 루틴을 부를 때마다 사각형을 되돌림. (2) 영문 낱말이 한글에 닿으면 원래 낱말 범위를 출발점으로(MnHangul5 v13).
  * v73: 낱말 선택에서 한글에 닿지 않는 영문 낱말은 원래 결과 그대로(MnHangul5 v12와 같음).
  * v72: 두 번 눌러 낱말 선택(Intl TxtWordBounds, intl.c 7번)이 한글 글자 가운데에서 끊기던 문제 — 한글 낱말 단위. Intl 7 → 8개.
  * v71: 찾기(Intl TxtFindString, intl.c 6번) — 원문에 한글이 있으면 부분 검색(가나다에서 나), 없으면 Palm 규칙.
@@ -144,7 +146,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v73"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v74"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
