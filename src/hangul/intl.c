@@ -312,6 +312,22 @@ Boolean HgWordBounds(const Char *text, UInt32 n, UInt32 o, UInt32 *s, UInt32 *e)
     }
     if (!two && !Word1(t[a]))
         return orig(text, n, o, s, e);
+    if (!two) {   /* v73: 1바이트 영문 낱말은 원래 결과 우선(don't, a_b 등) — 한글에 닿지 않으면 그대로 */
+        UInt32  os = 0, oe = 0, k2;
+        Boolean touch;
+
+        if (orig(text, n, o, &os, &oe) && os <= a && oe > a && oe <= n) {
+            touch = (os > 0 && Hi(t[os - 1])) || (oe < n && Hi(t[oe]));
+            for (k2 = os; k2 < oe && !touch; k2++)
+                if (Hi(t[k2]))
+                    touch = true;
+            if (!touch) {
+                if (s) *s = os;
+                if (e) *e = oe;
+                return true;
+            }
+        }
+    }
     b = a + (two ? 2 : 1);
     while (a > 0) {   /* 왼쪽: 앞 글자가 2바이트(구간 안 짝수 자리)면 2, 아니면 1바이트 글자 */
         k = RunBefore(t, a);
