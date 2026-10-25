@@ -247,3 +247,13 @@ CJKOS는 NJStar 제품으로 2010년 판매가 끝났다([NJStar](https://www.nj
 - 진행 순서(디버그 먼저): ① 바뀐 함수 조사(**완료**, 실측 1) ② `BltDrawChars` 하나만 교체해 표시 시험(CJKOS 끈 복사본 세션)
   ③ 폭·글자 경계 ④ 글꼴 3벌(16 → 12 → 24).
 - PEG-N710C ROM(Palm OS 4.1 영문, 사용자 제공 `Sony-Clie-N710C-4.1-en.bin`, CloudpilotEmu 기종 PEG-N700C/N710C로 새로 부팅, 2026-10-22): KbdScan `rom 4103000 enc 3 lang 0 ctry 17 oem sony ysm2` — 일본어판이 아니라 영문(Latin). 인쇄 실크스크린(가상 실크 없음)이라 MnSonyKbd·Mn 가상 키보드는 해당 없음(설정 앱 모듈 상태 none). MnHangul v69 + MnHgFont24 + MnKbdHan v16 설치·ON: 설정 앱 고해상도 화면 정상, Edit > Keyboard 화면 배치가 NR70V와 같고 키 글자 자모 그림·한/A 그림 정상, 입력 시험 9개 통과, 0.1초 간격 48키 '안녕하세요'×4 정상. 일본어판 시험은 일본어 ROM(N700C 4.1 업그레이드판·N750C 등)이 있어야 함.
+
+## 찾기 (MnHangul v71, 2026-10-25 실측)
+
+- NR70V(Palm OS 4.1S)에서도 `TxtFindString`이 받는 검색어는 `TxtPrepFindString`이 바이트마다 1:1로 바꾼 값이다
+  (`가` B0 A1 → 6C 4A, `나` B3 AA → 7E 85, `굅` B1 B0 → 5E 6C). 원문과 직접 비교할 수 없다.
+- v70(Intl 6개, `TxtFindString` 그대로): 원래 루틴이 앞 바이트 하나로 낱말 첫머리를 판단 — `갚가`에서 `가`(앞 0xB1 `±`),
+  `「가`에서 `가`(0xB8 `¸`), `가나다`에서 `나`(0xA1 `¡`)는 찾고, `한가`에서 `가`(0xD1 `Ñ`)는 못 찾음. OS 5(MnHangul5 v7)와 같다.
+- v71: Intl `TxtFindString`을 바꿔 MnHangul5 v10과 같은 규칙 — 원문에 한글이 있으면 글자 경계마다 검색어 길이만큼 잘라
+  원래 루틴에 넘기고 맨 앞(0)에서 맞을 때만 받아들인다(부분 검색). 한글이 없으면 원래 결과 중 앞 바이트가 0xA1~0xFE인 것을 버린다.
+- 남은 문제: 찾기 결과 화면에서 한글이 줄 높이보다 크게 그려져 위아래 줄과 겹친다(v71 전부터, 원인 미확인).
