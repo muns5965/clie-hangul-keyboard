@@ -52,7 +52,7 @@ typedef void (*FormBoundsFn)(void *, u16, struct NRect *);
 typedef void (*EraseFn)(const struct NRect *, u16);
 typedef u8 (*FontFn)(u8);
 
-/* st[0..1] 조합(hangul_compose.h), st[2] 한글 모드, st[3] Shift+Space 대기, st[4] 넣은 키 수, st[5] 앱에 간 수,
+/* st[0..1] 조합(hangul_compose.h), st[2] 한글 모드, st[3] 바로 앞 원시 keyCode, st[4] 넣은 키 수, st[5] 앱에 간 수,
    st[6] 미룬 횟수, st[7] 불린 수(진단) */
 static inline void HcSend(u16 c)
 {
@@ -154,12 +154,12 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     if (ev->keyCode == kImMark) { st[5]++; Log(ev, 1); return; }
     if (ch == 0x1720 || ch == 0x1721 || ch == 0x012D) {   /* 원시 키 이벤트: SysHandleEvent가 글자로 바꿈 */
         if (ch == 0x1720) {
-            st[3] = (ev->keyCode == kKeyShiftSpace);
+            st[3] = ev->keyCode;   /* 원시 keyCode: Shift 있으면 0x84xx (v7) */
             LogC(ev->keyCode, ev, 2);
         }
         return;
     }
-    if (ch == ' ' && st[3]) {   /* Shift+Space: 한/영 */
+    if (ch == ' ' && st[3] == kKeyShiftSpace) {   /* Shift+Space: 한/영 */
         st[3] = 0;
         st[2] = !st[2];
         st[0] = 0;
@@ -168,6 +168,10 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         ev->eType = nilEvent;
         return;
     }
+    /* v7: 자동 대문자(Address 이름 칸 첫 글자 등) — 원시 keyCode에 Shift가 없는데 대문자가 오면
+     * 한글 모드에서는 소문자로 본다(아니면 두벌식 Shift 규칙으로 된소리가 됨). 미루기 전에 고쳐 둔다. */
+    if (st[2] && ch >= 'A' && ch <= 'Z' && st[3] != 0 && (st[3] & 0xFF00) == 0)
+        ch |= 0x20;
     st[3] = 0;
     /* 앞 키로 넣은 BS·글자가 아직 앱에 안 감: 이 키를 큐 뒤로 미룸.
      * v5: 큐에 못 넣으면(가득 참) 미루지 않고 그대로 처리 — 키가 사라지는 것보다 순서가 바뀌는 쪽이 낫다 */
