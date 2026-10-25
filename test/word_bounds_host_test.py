@@ -54,8 +54,10 @@ static uint16_t mock_attr(uint16_t c) {
     return ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
         || (c >= '0' && c <= '9')) ? 0x0232 : 0;
 }
+/* ROM 실측(에뮬레이터 진단 앱으로 원래 TxtWordBounds 직접 호출, TG50·NX70V·NR70V 같음):
+ * 아포스트로피는 낱말 안 글자(don't @o -> 0..5), 밑줄은 낱말 밖(a_b가 @a -> 0..1). */
 static int original_word_char(uint8_t c) {
-    return mock_attr(c) != 0 || c == '\'' || c == '_';
+    return mock_attr(c) != 0 || c == '\'';
 }
 static Boolean mock_word(const char *src, uint32_t n, uint32_t o,
                          uint32_t *s, uint32_t *e) {
@@ -77,21 +79,24 @@ static Boolean mock_word(const char *src, uint32_t n, uint32_t o,
 def byte_array(s):
     return "{" + ",".join(str(b) for b in s.encode("euc_kr")) + ",0}"
 
+# (문자열, 누를 글자(처음 나오는 것), 기대 선택). 에뮬레이터 실측과 같은 정책
 CASES = [
     ("가나다", "나", "가나다"),
     ("한글 입력", "글", "한글"),
     ("ABC 가나다", "B", "ABC"),
     ("ABC 가나다", "나", "가나다"),
     ("don't 가나다", "o", "don't"),
-    ("a_b 가나다", "a", "a_b"),
+    ("don't가", "o", "don't가"),      # MnHangul5 v13·MnHangul v74: 원래 낱말 범위부터 넓힘
+    ("a_b 가나다", "a", "a"),          # 밑줄은 낱말 밖(ROM)
+    ("a_b가", "a", "a"),
+    ("a_b가", "b", "b가"),
     ("가ABC나", "B", "가ABC나"),
+    ("가123나", "2", "가123나"),
     ("가,나", "나", "나"),
-    ("「가나다」", "나", "「가나다」"),
+    ("「가나다」", "나", "「가나다」"),   # 2바이트 기호도 낱말 글자(현재 정책)
+    ("ab cd", "c", "cd"),              # 한글 없음: 원래 함수 그대로
 ]
-KNOWN_LIMITS = [
-    ("don't가", "o", "don't가"),
-    ("a_b가", "a", "a_b가"),
-]
+KNOWN_LIMITS = []
 
 def build_cases():
     lines = ["int main(void) {", "int failures = 0;"]
