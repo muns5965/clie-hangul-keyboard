@@ -26,6 +26,8 @@ typedef u16 (*CoordSysFn)(u16);
 typedef u16 (*DrawModeFn)(u16);
 typedef void (*PaintBitmapFn)(void *, s16, s16);
 typedef u8 (*ColorFn)(u8);
+struct ERect { s16 x, y, w, h; };
+typedef void (*EraseFn)(const struct ERect *, u16);
 
 static int HasHi(const u8 *t, u32 n) {
     u32 i;
@@ -104,8 +106,12 @@ static void GlyphRows(const u8 *pk, u16 sy, u32 *rows) {
             for (i = 0; i < H; i++) rows[i] |= RdRow(pk, pk + oP + (u32)id[k] * rb + i * w);
 }
 
-/* 2바이트 글자 하나를 표준 좌표(x, y = 글줄 위)에 그린다 */
-static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y) {
+/* 2바이트 글자 하나를 표준 좌표(x, y = 글줄 위)에 그린다.
+ * erase: WinDrawChars·WinDrawChar·WinDrawTruncChars처럼 배경까지 칠하는 함수 대신일 때 1 —
+ *   그림이 투명(점 없는 자리는 안 그림)이라, 먼저 칸을 지금 배경색으로 지운다(v6).
+ *   앱(Memo Pad 등)은 줄 중간을 고칠 때 지우지 않고 다시 그리므로, 안 지우면 예전 글자와 겹친다.
+ *   WinPaintChars(그리기 모드를 따르는 함수) 대신일 때는 0. */
+static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
     struct Ctx *c = CtxPtr();
     int big = Big();
     const u8 *pk = big ? c->pack24 : c->pack;
@@ -124,6 +130,14 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y) {
     } else {   /* 그 밖의 KS X 1001 행: 빈 네모 */
         u32 edge = 0xFFFFFFFFu << (32 - (gw - 4)) >> 2, side = (0x80000000u >> 2) | (0x80000000u >> (gw - 3));
         for (r = 0; r < H; r++) rows[r] = (r == 2 || r == H - 3) ? edge : (r > 2 && r < H - 3 ? side : 0);
+    }
+    if (erase) {
+        struct ERect er;
+        er.x = x;
+        er.y = y;
+        er.w = (s16)HangulCell();
+        er.h = lineH;
+        ((EraseFn)T8(T8_WinEraseRectangle))(&er, 0);
     }
     font = ((GetFontFn)T8(T8_FntGetFont))();
     if (font == boldFont || font == largeBoldFont)   /* 굵게: 오른쪽으로 1픽셀 겹침(칸 안에서) */
@@ -296,7 +310,7 @@ static void DrawMixed(u32 origIdx, const char *chars, s16 len, s16 x, s16 y) {
     s16 i = 0, start, cx = x, cw = (s16)HangulCell();
     while (i < len) {
         if (Hi(s[i]) && i + 1 < len && Hi(s[i + 1])) {
-            DrawGlyph(s[i], s[i + 1], cx, y);
+            DrawGlyph(s[i], s[i + 1], cx, y, origIdx != O_PaintChars);
             cx += cw;
             i += 2;
         } else {
@@ -324,7 +338,7 @@ void HgPaintChars(const char *chars, s16 len, s16 x, s16 y) {
 
 void HgDrawChar(WChar ch, s16 x, s16 y) {
     if (!Idle() && ch > 0xFF && Hi(ch >> 8) && Hi(ch & 0xFF))
-        DrawGlyph((u8)(ch >> 8), (u8)ch, x, y);
+        DrawGlyph((u8)(ch >> 8), (u8)ch, x, y, 1);
     else
         ((DrawCharFn)ORIG(O_DrawChar))(ch, x, y);
 }
