@@ -120,6 +120,30 @@ Boolean HgFindString(const char *src, const char *tgt, u32 *pos, u16 *len) {
     u32 base = 0, p;
     u16 l;
     if (Idle() || !src || !tgt) return ((FindFn)ORIG(O_FindString))(src, tgt, pos, len);
+    {   /* v10: 원문에 한글이 있으면 부분 검색 — 글자 경계마다 원문을 검색어 길이만큼 잘라 원래 함수에 넘기고,
+         * 맨 앞(0)에서 맞을 때만 받아들인다. 검색어는 TxtPrepFindString이 바이트마다 1:1로 바꾼 값이라
+         * 직접 비교하지 않고 원래 함수의 비교 규칙을 그대로 쓴다. */
+        const u8 *g = (const u8 *)tgt;
+        char buf[64];
+        u32 nt = 0, i = 0, k, hi = 0;
+        while (g[nt] && nt < 64) nt++;
+        for (k = 0; t[k]; k++)
+            if (Hi(t[k]) && Hi(t[k + 1])) { hi = 1; break; }
+        if (hi && nt > 0 && nt < 64) {
+            while (t[i]) {
+                for (k = 0; k < nt && t[i + k]; k++) buf[k] = (char)t[i + k];
+                if (k < nt) return 0;
+                buf[k] = 0;
+                if (((FindFn)ORIG(O_FindString))(buf, tgt, &p, &l) && p == 0) {
+                    if (pos) *pos = i;
+                    if (len) *len = l;
+                    return 1;
+                }
+                i += (Hi(t[i]) && Hi(t[i + 1])) ? 2 : 1;
+            }
+            return 0;
+        }
+    }
     for (;;) {
         if (!((FindFn)ORIG(O_FindString))(src + base, tgt, &p, &l)) return 0;
         p += base;
