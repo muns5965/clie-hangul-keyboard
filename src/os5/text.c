@@ -180,6 +180,19 @@ Boolean HgWordBounds(const char *text, u32 n, u32 o, u32 *s, u32 *e) {
         else a = o;
     }
     if (!two && !Word1(t[a])) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
+    if (!two) {   /* v12: 1바이트 영문 낱말은 원래 결과 우선(don't, a_b 등 원래 함수의 낱말 규칙 유지) — 한글에 닿지 않으면 그대로 */
+        u32 os = 0, oe = 0, k2;
+        if (((WordFn)ORIG(O_WordBounds))(text, n, o, &os, &oe) && os <= a && oe > a && oe <= n) {
+            int touch = (os > 0 && Hi(t[os - 1])) || (oe < n && Hi(t[oe]));
+            for (k2 = os; k2 < oe && !touch; k2++)
+                if (Hi(t[k2])) touch = 1;
+            if (!touch) {
+                if (s) *s = os;
+                if (e) *e = oe;
+                return 1;
+            }
+        }
+    }
     b = a + (two ? 2 : 1);
     while (a > 0) {   /* 왼쪽: 앞 글자가 2바이트(구간 안 짝수 자리)면 2, 아니면 1바이트 글자 */
         k = RunBefore(t, a);
