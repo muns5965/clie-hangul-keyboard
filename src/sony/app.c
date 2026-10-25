@@ -7,6 +7,8 @@
  *   SyIm 0 (ime.c)    EvtGetEvent: 영문 키 → 두벌식 조합 → 완성형 2바이트 입력 / WinDrawBitmap: ⇪ 그림 → '한A'
  *   SyIc 0·1 '한A' 그림(tools/gen-caps-icon.py), SyJm 0 자모 그림 16×16(tools/gen-sony-jamo.py)
  *
+ * v52: Address Look Up 등 앱이 맞지 않는 글자를 바로 지우는 입력칸에서 조합이 끊기던 문제 — 커서가 우리가 방금 보낸
+ *   2바이트 글자만큼 뒤에 있으면 조합을 이어 가고, 화면에 없는 그 글자를 지우는 BS는 보내지 않는다(src/common/cursor_track.h CT_REJECT).
  * v51(진단): 키 큐 넣기(EvtEnqueueKey) 실패 기록 — #352 조합 결과 실패 수, #353 미루기 실패 수, #354 마지막(곳<<16 | 오류).
  *   진단 8줄(v20 sym 줄 자리) = q 보낸 수(#266)·앱에 간 수(#267)·실패 F(#352)·D(#353)·e(#354)·p Sony 키 누름(#355)·
  *   k Sony 키로 받은 keyDown(#356)·z 누름 없이 온 keyDown(#357)·c 누름 수 상한 8에 걸림(#358). 동작은 그대로.
@@ -102,7 +104,7 @@
 
 #include <PalmOS.h>
 
-#define kSyVer "v51"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kSyVer "v52"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define SyTitle(rest) WinDrawInvertedChars("MnSonyKbd " kSyVer rest, sizeof("MnSonyKbd " kSyVer rest) - 1, 0, 0)
 #include "chain.h"
 

@@ -84,6 +84,7 @@ static inline GetFn OrigGet(void)
 
 /* ---------------- 한글 조합 (src/common/hangul_compose.h, MnSkCore와 공용) ---------------- */
 #define kSyFtrFld 191   /* #191~#197 조합 중 커서 이동 감지(src/common/cursor_track.h, MnSonyKbd v10) */
+#define CT_REJECT   /* v52 */
 #include "../common/cursor_track.h"
 
 /* v51 진단: 키 큐 넣기 실패 기록 — #352 조합 결과(HcSend) 실패 수, #353 미루기 실패 수, #354 마지막 실패(곳<<16 | 오류). 동작은 그대로 */
@@ -104,11 +105,22 @@ static inline void Cnt(UInt16 k)   /* v51 진단 카운터 */
     FtrSet(kSyCr, k, n + 1);
 }
 
+/* v52: 앱이 받지 않은 조합 글자 뒤(CtCheck → CT_REJECTED) 이번 키의 조합에서 그 글자를 지우려고 보내는 BS 수(#359).
+ *   그 글자는 화면에 없으므로 BS를 보내면 앞의 다른 글자가 지워진다 — 이 수만큼 BS를 보내지 않는다. */
+#define kSyFtrDropBs 359
+
 static inline void HcSend(UInt16 c)
 {
     UInt32 n = 0;
     Err    err;
 
+    if (c == chrBackspace) {
+        FtrGet(kSyCr, kSyFtrDropBs, &n);
+        if (n != 0) {
+            FtrSet(kSyCr, kSyFtrDropBs, n - 1);
+            return;
+        }
+    }
     FtrGet(kSyCr, 266, &n);   /* v46: 우리가 넣은 키 수(#267 = 앱에 간 수와 비교) */
     FtrSet(kSyCr, 266, n + 1);
     err = EvtEnqueueKey(c, kImMark, 0);
@@ -461,7 +473,8 @@ static UInt16 RedrawIn(UInt8 nm)
 }
 
 /* v45 진단: 조합 중에 조합이 끝난 까닭 최근 3개(#280~#282, #279 다음 칸) = 까닭<<24 | 키<<16 | 초성<<8 | 중성.
- *   까닭 1 한/A 전환, 2 앱 화면 누름, 3 커서 이동 감지(CtCheck), 4 명령 키·영문 모드, 5 글자 아닌 키, 6 Sony 자판 키 아님(v49) */
+ *   까닭 1 한/A 전환, 2 앱 화면 누름, 3 커서 이동 감지(CtCheck), 4 명령 키·영문 모드, 5 글자 아닌 키, 6 Sony 자판 키 아님(v49),
+ *   7 앱이 우리 글자를 받지 않음(v52, 조합은 이어 감) */
 static void EndLog(UInt32 *st, UInt16 why, WChar ch)
 {
     UInt32 k = 0;
@@ -720,7 +733,15 @@ void HgImGet(EventType *event, Int32 timeout)
         ch = HanInKey((UInt8)ch);
     FtrSet(kSyCr, kFtrShiftIn, 0);
     /* v10: 조합 중인데 커서가 옮겨졌거나 입력칸이 바뀌었으면(펜 없이 앱이 옮긴 경우 등) 조합 끝 */
-    if (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0)) {
+    FtrSet(kSyCr, kSyFtrDropBs, 0);
+    switch (CtCheck(kSyCr, kSyFtrFld, (GetComp(st) & 0xFF) != 0)) {
+    case CT_REJECTED:   /* v52: 앱이 우리 글자를 지움(Look Up) — 조합은 이어 가고, 지울 글자가 없으니 BS를 보내지 않음 */
+        FtrSet(kSyCr, kSyFtrDropBs, GetComp(st) & 0xFF);
+        EndLog(st, 7, ch);   /* 기록만(끝내지 않음) */
+        break;
+    case 0:
+        break;
+    default:
         EndLog(st, 3, ch);
         st[0] = 0;
     }

@@ -62,13 +62,22 @@ static inline FieldType *CtField(void)
     return (FieldType *)FrmGetObjectPtr(f, i);
 }
 
-/* 키를 누를 때 부른다. 조합 중(composing)인데 커서가 옮겨졌거나 입력칸이 바뀌었으면 true(조합을 끝낼 것) */
-static inline Boolean CtCheck(UInt32 cr, UInt16 b, Boolean composing)
+/* 키를 누를 때 부른다. 조합 중(composing)인데 커서가 옮겨졌거나 입력칸이 바뀌었으면 true(조합을 끝낼 것).
+ * CT_REJECT(정의한 모듈만, MnSonyKbd v52): 조합 중 같은 입력칸에서 실제 위치가 기대보다 정확히 2(우리가 방금 보낸
+ *   2바이트 글자) 작으면 앱이 그 글자를 받지 않은 것(Address Look Up은 맞는 이름이 없는 글자를 지운다)으로 보고
+ *   CT_REJECTED를 돌려준다 — 조합은 이어 가되 화면에 우리 글자가 없음. 정의하지 않은 모듈은 그대로(true). */
+#define CT_REJECTED 2
+#ifdef CT_REJECT
+typedef UInt16 CtResult;
+#else
+typedef Boolean CtResult;   /* 다른 모듈은 예전과 같은 코드 */
+#endif
+static inline CtResult CtCheck(UInt32 cr, UInt16 b, Boolean composing)
 {
     FieldType *fld = CtField();
     UInt32     pf = CtGet(cr, b + 4), pp = CtGet(cr, b + 5);
     UInt16     pos;
-    Boolean    end = false;
+    CtResult   end = false;
 
     if (fld == NULL) {
         FtrSet(cr, b + 4, 0);
@@ -85,6 +94,10 @@ static inline Boolean CtCheck(UInt32 cr, UInt16 b, Boolean composing)
             MN_D(FtrSet(cr, b + 1, CtGet(cr, b + 1) + 1));
             if (composing)
                 end = true;   /* 커서가 옮겨짐 — 옛 조합 글자를 고치지 않는다 */
+#ifdef CT_REJECT
+            if (composing && end == true && pf == (UInt32)fld && e >= 2 && pos == e - 2)
+                end = CT_REJECTED;
+#endif
         }
         MN_D(FtrSet(cr, b + 2, ((UInt32)e << 16) | pos));
         MN_D(FtrSet(cr, b + 3, (e != pos ? 1UL : 0) | (composing ? 2UL : 0)));
