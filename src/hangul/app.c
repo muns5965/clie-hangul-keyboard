@@ -42,6 +42,8 @@
  * v13: 글자 데이터 다시 생성(tools/gen-hangul16.py: 글꼴 격자에서 직접 그림). 조각이 겹치는 곳의 두꺼운 획 수정.
  * v14: 완성형 글자 데이터(HgFn 0~2, 78KB)를 조합형 묶음으로 교체: HgJb 0 = Neo둥근모 16×16(14KB),
  *     HgJb 1 = 물마루 기반 12×12(23KB, 칸 높이 12~15에서 사용). tools/gen-johab.py가 11,172자 전부 원본과 같음을 확인.
+ * v75: 비교(TxtCompare·TxtCaselessCompare, Intl 20·21)가 한글을 Latin-1 바이트로 비교하던 문제(나>다, 걋=겯, Look Up에 반 글자) —
+ *   2바이트 글자는 코드값 순서, 1바이트 글자가 앞, 일치 길이는 글자 경계(intl.c, MnHangul5 v14와 같은 규칙).
  * v74: (1) 저해상도 앱 찾기 결과에서 한글이 글자마다 2줄씩 내려가던 문제 — 원래 BltDrawChars가 넘긴 사각형을 고쳐 써서,
  *      patch.c가 원래 루틴을 부를 때마다 사각형을 되돌림. (2) 영문 낱말이 한글에 닿으면 원래 낱말 범위를 출발점으로(MnHangul5 v13).
  * v73: 낱말 선택에서 한글에 닿지 않는 영문 낱말은 원래 결과 그대로(MnHangul5 v12와 같음).
@@ -146,7 +148,7 @@
 
 #include <PalmOS.h>
 
-#define kHgVer "v74"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
+#define kHgVer "v75"   /* 판 번호는 여기 한 곳만 고친다(모든 화면 제목이 이 값을 씀) */
 #define HgTitle(rest) WinDrawInvertedChars("MnHangul " kHgVer rest, sizeof("MnHangul " kHgVer rest) - 1, 0, 0)
 
 #define kHgCreator    'MnHg'
@@ -164,7 +166,7 @@
 #define kFtrIntlH     45
 #define kFtrIntlC     46
 #define kIntlRes      'HgIt'
-#define kIntlN        8
+#define kIntlN        10
 #define kFtrWidthH    47
 #define kFtrWidthC    48
 #define kWidthRes     'HgWd'
@@ -198,7 +200,9 @@ static UInt16 IntlSel(UInt16 i)
     case 4:  return intlTxtCharBounds;
     case 5:  return intlTxtCharWidth;
     case 6:  return intlTxtFindString;   /* v71 */
-    default: return intlTxtWordBounds;   /* v72 */
+    case 7:  return intlTxtWordBounds;   /* v72 */
+    case 8:  return intlTxtCompare;      /* v75 */
+    default: return intlTxtCaselessCompare;   /* v75 */
     }
 }
 #define kGlyphPtrFtr(i) (23 + (i))
@@ -531,7 +535,7 @@ static void IntlOn(void)
 {
     UInt16 r = InstIntl();
 
-    StrCopy(gMsg, r == 0 ? "intl ON (8)" : r == 1 ? "intl already ON" : "intl resource missing");
+    StrCopy(gMsg, r == 0 ? "intl ON (10)" : r == 1 ? "intl already ON" : "intl resource missing");
 }
 
 /* v66: 끄기 본체(전역 없음, 지우기 알림에서도 부름). 결과: 0 끔, 0xFFFF 켜져 있지 않음, 그 밖 = 다른 것이 위에 있어 남긴 수 */

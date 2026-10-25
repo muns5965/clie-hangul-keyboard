@@ -1,5 +1,5 @@
 /*
- * MnHangul 글자 경계 코드 (리소스 HgIt 0) — 3a 단계: Intl 루틴 8개를 EUC-KR(KS X 1001) 규칙으로 교체
+ * MnHangul 글자 경계 코드 (리소스 HgIt 0) — 3a 단계: Intl 루틴 10개를 EUC-KR(KS X 1001) 규칙으로 교체
  *
  * v8 실측(메모 입력·BS·커서 이동)에서 불린 Intl 루틴 중 글자 경계·속성·폭 6개를 바꾼다.
  * 앱이 IntlSetRoutineAddress로 끼운다. 원형은 SDK TextMgr.h와 같다(Intl 디스패처가 스택 그대로 넘김).
@@ -12,10 +12,12 @@
  *   6 TxtFindString(src, tgt, *pos, *len)     찾기(v71, MnHangul5 v10과 같은 규칙): 원문에 한글이 있으면 부분 검색,
  *                                             없으면 원래 결과 중 앞 바이트가 0xA1~0xFE인 것을 버림
  *   7 TxtWordBounds(text, len, off, *s, *e)  두 번 눌러 낱말 선택(v72, MnHangul5 v11과 같은 규칙): 한글 낱말 단위
+ *   8 TxtCompare(s1, n1, *m1, s2, n2, *m2)    비교·정렬(v75, MnHangul5 v14와 같은 규칙): 한글은 코드값 순서, 일치 길이는 글자 경계
+ *   9 TxtCaselessCompare(같은 인자)           같은 규칙(대소문자 무시)
  * 2바이트 글자: 앞·뒤 바이트 모두 0xA1~0xFE. 상위 바이트가 이어진 구간은 구간 시작부터 두 바이트씩 짝짓는다
  * (홀수 구간이면 마지막 바이트가 1바이트 글자).
  *
- * 리소스 배치: 오프셋 0 = 진입점 8개의 오프셋 표(.long, 리소스 기준), 32 = 원래 루틴 주소 8개(앱이 DmWrite).
+ * 리소스 배치: 오프셋 0 = 진입점 10개의 오프셋 표(.long, 리소스 기준), 40 = 원래 루틴 주소 10개(앱이 DmWrite).
  * 어느 앱에서든 불리므로 전역변수·A5·재배치·문자열 상수 금지(빌드 스크립트가 검사).
  * 한글 폭은 patch.c 그리기 결과와 같게(모드 #22): glyph 모드이고 글꼴 높이 8~15(저해상도)면 9(v12),
  * 16~40이면 18픽셀(좌표 배율로 나눔),
@@ -37,12 +39,15 @@ WChar  HgCharBounds(const Char *t, UInt32 o, UInt32 *s, UInt32 *e);
 Int16  HgCharWidth(WChar c);
 Boolean HgFindString(const Char *src, const Char *tgt, UInt32 *pos, UInt16 *len);
 Boolean HgWordBounds(const Char *text, UInt32 n, UInt32 o, UInt32 *s, UInt32 *e);
+Int16  HgCompare(const Char *s1, UInt16 n1, UInt16 *m1, const Char *s2, UInt16 n2, UInt16 *m2);
+Int16  HgCaselessCompare(const Char *s1, UInt16 n1, UInt16 *m1, const Char *s2, UInt16 n2, UInt16 *m2);
 
 asm(".text\n.even\nIntlBase:\n"
     " .long HgCharAttr-IntlBase, HgPrevChar-IntlBase, HgNextChar-IntlBase\n"
     " .long HgSetNext-IntlBase, HgCharBounds-IntlBase, HgCharWidth-IntlBase\n"
     " .long HgFindString-IntlBase, HgWordBounds-IntlBase\n"
-    "IntlOrig:\n .long 0,0,0,0,0,0,0,0\n");
+    " .long HgCompare-IntlBase, HgCaselessCompare-IntlBase\n"
+    "IntlOrig:\n .long 0,0,0,0,0,0,0,0,0,0\n");
 
 typedef UInt16 (*AttrFn)(WChar c);
 typedef Int16  (*WidthFn)(WChar c);
@@ -358,4 +363,103 @@ Boolean HgWordBounds(const Char *text, UInt32 n, UInt32 o, UInt32 *s, UInt32 *e)
     if (s) *s = a;
     if (e) *e = b;
     return true;
+}
+
+/* TxtCompare·TxtCaselessCompare(v75, MnHangul5 v14 src/os5/text.c와 같은 규칙): 원래 루틴은 바이트를 Latin-1 가중치로
+ * 비교해 한글 순서가 틀리고(나>다), 대소문자 무시 비교는 서로 다른 한글을 같다고 하며(걋=겯), 일치 길이가 글자 가운데에서
+ * 끝난다(Address Look Up이 그 길이로 입력을 잘라 반 글자가 남음). 원래 결과는 OS 5와 24쌍 모두 같음(NR70V 실측).
+ * 문자열에 한글 쌍이 있으면 글자 단위로: 1바이트 구간끼리 = 원래 CaselessCompare, 2바이트끼리 = 16비트 코드값,
+ * 1바이트 글자 < 2바이트 글자, 문자열 끝이 가장 앞, 일치 길이는 다른 글자 바로 앞. 모두 같으면 Caseless는 0,
+ * Compare는 원래 Compare를 전체에 불러 대소문자 차이로 정한다. 길이는 최대값이고 NUL에서 끝난다(Look Up은 큰 값을 넘김).
+ * 두 문자열 모두 한글 쌍이 없으면 원래 루틴 그대로. */
+typedef Int16 (*CmpFn)(const Char *, UInt16, UInt16 *, const Char *, UInt16, UInt16 *);
+
+static UInt16 CLen(const UInt8 *t, UInt16 i, UInt16 n)
+{
+    return (i + 1 < n && Hi(t[i]) && Hi(t[i + 1])) ? 2 : 1;
+}
+
+static Boolean HasPair(const UInt8 *t, UInt16 n)
+{
+    UInt16 i;
+
+    for (i = 0; i + 1 < n; i++)
+        if (Hi(t[i]) && Hi(t[i + 1]))
+            return true;
+    return false;
+}
+
+static Int16 HgCmp(UInt16 caseless, const Char *s1, UInt16 n1, UInt16 *m1, const Char *s2, UInt16 n2, UInt16 *m2)
+{
+    const UInt8 *a = (const UInt8 *)s1, *b = (const UInt8 *)s2;
+    CmpFn        own = (CmpFn)Orig(caseless ? 9 : 8), cl = (CmpFn)Orig(9);
+    UInt16       i = 0, j = 0, ea, eb, x, y, l1 = n1, l2 = n2;
+    Int16        r = 0;
+
+    if (!s1 || !s2)
+        return own(s1, l1, m1, s2, l2, m2);
+    while (i < n1 && a[i])
+        i++;
+    n1 = i;
+    for (i = 0; i < n2 && b[i]; i++) {
+    }
+    n2 = i;
+    i = 0;
+    if (!HasPair(a, n1) && !HasPair(b, n2))
+        return own(s1, l1, m1, s2, l2, m2);
+    while (i < n1 && j < n2) {
+        UInt16 ca = CLen(a, i, n1), cb = CLen(b, j, n2);
+
+        if (ca == 2 && cb == 2) {
+            UInt16 wa = ((UInt16)a[i] << 8) | a[i + 1], wb = ((UInt16)b[j] << 8) | b[j + 1];
+
+            if (wa != wb) {
+                r = wa < wb ? -1 : 1;
+                break;
+            }
+            i += 2;
+            j += 2;
+            continue;
+        }
+        if (ca != cb) {   /* 1바이트 글자가 앞 */
+            r = ca == 2 ? 1 : -1;
+            break;
+        }
+        for (ea = i; ea < n1 && CLen(a, ea, n1) == 1; ea++) {
+        }
+        for (eb = j; eb < n2 && CLen(b, eb, n2) == 1; eb++) {
+        }
+        x = y = 0;
+        r = cl(s1 + i, ea - i, &x, s2 + j, eb - j, &y);
+        if (r == 0) {
+            i = ea;
+            j = eb;
+            continue;
+        }
+        /* 한쪽 구간이 다른 쪽의 앞부분으로 끝났는데 그 뒤가 2바이트 글자면, 1바이트 글자가 이어지는 쪽이 앞 */
+        if (x == ea - i && y < eb - j && ea < n1)
+            r = 1;
+        else if (y == eb - j && x < ea - i && eb < n2)
+            r = -1;
+        i += x;
+        j += y;
+        break;
+    }
+    if (r == 0 && (i < n1 || j < n2))   /* 앞부분이 같으면 짧은 쪽이 앞 */
+        r = i < n1 ? 1 : -1;
+    if (r == 0 && !caseless)
+        return own(s1, l1, m1, s2, l2, m2);
+    if (m1) *m1 = i;
+    if (m2) *m2 = j;
+    return r;
+}
+
+Int16 HgCompare(const Char *s1, UInt16 n1, UInt16 *m1, const Char *s2, UInt16 n2, UInt16 *m2)
+{
+    return HgCmp(0, s1, n1, m1, s2, n2, m2);
+}
+
+Int16 HgCaselessCompare(const Char *s1, UInt16 n1, UInt16 *m1, const Char *s2, UInt16 n2, UInt16 *m2)
+{
+    return HgCmp(1, s1, n1, m1, s2, n2, m2);
 }

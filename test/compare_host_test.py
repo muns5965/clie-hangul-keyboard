@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Compile and exercise the ACTUAL OS5 HgCompare / HgCaselessCompare on the host.
+"""Compile and exercise the ACTUAL OS4 and OS5 HgCompare / HgCaselessCompare on the host.
 
 Only Palm's original TxtCompare / TxtCaselessCompare are substituted by a small
-model of the ROM behaviour measured on TG50 (CmpDiag): primary pass ignores
+model of the ROM behaviour measured on TG50, NX70V and NR70V (CmpDiag, same 24 results): primary pass ignores
 case, Compare breaks ties by case (lowercase first). Device order and Address
 Look Up still require emulator tests.
 """
@@ -73,6 +73,25 @@ static s16 mock_compare(const char *s1, u32 n1, u16 *m1, const char *s2, u32 n2,
 #define O_Caseless 1
 #define ORIG(i) ((i) == O_Compare ? (uintptr_t)mock_compare : (uintptr_t)mock_caseless)
 #define Idle() 0
+"""
+
+# OS 4 (src/hangul/intl.c): Palm 형, 길이 UInt16, 원래 루틴 Orig(8) Compare·Orig(9) Caseless
+PRELUDE_OS4 = r"""
+typedef uint8_t UInt8;
+typedef uint16_t UInt16;
+typedef uint32_t UInt32;
+typedef int16_t Int16;
+typedef char Char;
+typedef uint8_t Boolean;
+#define true 1
+#define false 0
+static Int16 os4_compare(const Char *a, UInt16 n1, UInt16 *m1, const Char *b, UInt16 n2, UInt16 *m2) {
+    return mock_compare(a, n1, m1, b, n2, m2);
+}
+static Int16 os4_caseless(const Char *a, UInt16 n1, UInt16 *m1, const Char *b, UInt16 n2, UInt16 *m2) {
+    return mock_caseless(a, n1, m1, b, n2, m2);
+}
+#define Orig(i) ((i) == 8 ? (uintptr_t)os4_compare : (uintptr_t)os4_caseless)
 """
 
 WORDS = ["", "A", "a", "ab", "Ab", "aB", "ABC", "abc", "abd", "ab가", "abc가", "AB가", "Ab가", "aB가",
@@ -178,10 +197,11 @@ def check(results):
     return fail
 
 
-def main():
-    source = (ROOT / "src/os5/text.c").read_text(encoding="utf-8")
+def run_one(path, target):
+    source = (ROOT / path).read_text(encoding="utf-8")
     parts = [extract_function(source, n) for n in ("CLen", "HasPair", "HgCmp", "HgCompare", "HgCaselessCompare")]
-    c_source = PRELUDE + "\n" + "\n".join(parts) + "\n" + build_main()
+    prelude = PRELUDE + (PRELUDE_OS4 if target == "os4" else "")
+    c_source = prelude + "\n" + "\n".join(parts) + "\n" + build_main()
     with tempfile.TemporaryDirectory() as d:
         c = pathlib.Path(d) / "cmp.c"
         exe = pathlib.Path(d) / "cmp"
@@ -192,17 +212,26 @@ def main():
     results = {}
     for line in out.split("\n"):
         if line.startswith("NUL"):
-            raise SystemExit("FAIL length 0xFFFF differs: " + line)
+            raise SystemExit(target + ": FAIL length 0xFFFF differs: " + line)
         if line:
             v = [int(x) for x in line.split()]
             results[(v[0], v[1])] = tuple(v[2:])
     fail = check(results)
     for f in fail:
-        print("FAIL", f)
+        print(target + ": FAIL", f)
     if fail:
         raise SystemExit(1)
-    print("os5: compare %d words, %d pairs, antisymmetry/transitivity/boundaries/expectations passed"
-          % (len(WORDS), len(results)))
+    print("%s: compare %d words, %d pairs, antisymmetry/transitivity/boundaries/expectations passed"
+          % (target, len(WORDS), len(results)))
+    return results
+
+
+def main():
+    r5 = run_one("src/os5/text.c", "os5")
+    r4 = run_one("src/hangul/intl.c", "os4")
+    if r4 != r5:
+        raise SystemExit("FAIL os4 and os5 results differ")
+    print("os4 == os5 on all pairs")
 
 
 if __name__ == "__main__":

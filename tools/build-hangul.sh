@@ -68,7 +68,7 @@ fi
 m68k-palmos-objcopy -O binary -j .text count.o HgCt0000.bin
 [ "$(stat -c %s HgCt0000.bin)" -eq $((100 + 18 * 24)) ] || { echo "error: HgCt size" >&2; exit 1; }
 
-# 1c) 글자 경계 코드(src/hangul/intl.c) → 리소스 HgIt 0. 오프셋 0 = 진입점 오프셋 표, 32 = 원래 주소 칸
+# 1c) 글자 경계 코드(src/hangul/intl.c) → 리소스 HgIt 0. 오프셋 0 = 진입점 오프셋 표, 40 = 원래 주소 칸
 m68k-palmos-gcc -palmos4 $DFLAG -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,HgCharAttr \
@@ -78,7 +78,7 @@ data=$(m68k-palmos-size intl.coff | awk 'NR==2 {print $2 + $3}')
 a=$(m68k-palmos-nm intl.coff | awk '$3=="IntlBase" {print $1}')
 [ "$((16#$a))" -eq 0 ] || { echo "error: IntlBase at $a" >&2; exit 1; }
 a=$(m68k-palmos-nm intl.coff | awk '$3=="IntlOrig" {print $1}')
-[ "$((16#$a))" -eq 32 ] || { echo "error: IntlOrig at $a" >&2; exit 1; }
+[ "$((16#$a))" -eq 40 ] || { echo "error: IntlOrig at $a" >&2; exit 1; }
 if m68k-palmos-objdump -d intl.coff | grep -q '%a5'; then
   echo "error: intl references %a5" >&2; exit 1
 fi
