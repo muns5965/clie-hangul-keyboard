@@ -1,5 +1,5 @@
 /*
- * MnHangul5 글자 경계 — 표 8의 Text Manager 함수 10개를 바꾼다(MnHangul src/hangul/intl.c와 같은 규칙).
+ * MnHangul5 글자 경계 — 표 8의 Text Manager 함수 11개를 바꾼다(MnHangul src/hangul/intl.c와 같은 규칙).
  * 칸 번호는 ROM IntlDispatch 분기표로 확인했다(docs/OS5_RESEARCH.md).
  * WChar 출력 인자는 16비트, TxtCharBounds의 시작·끝은 32비트.
  */
@@ -11,6 +11,7 @@ typedef u16 (*GetNextFn)(const char *, u32, WChar *);
 typedef u16 (*SetNextFn)(char *, u32, WChar);
 typedef WChar (*BoundsFn)(const char *, u32, u32 *, u32 *);
 typedef WChar (*GetCharFn)(const char *, u32);
+typedef Boolean (*FindFn)(const char *, const char *, u32 *, u16 *);
 
 #define byteAttrSingle 0x01
 #define byteAttrLast 0x40
@@ -108,4 +109,25 @@ WChar HgCharBounds(const char *text, u32 o, u32 *s, u32 *e) {
     if (s) *s = start;
     if (e) *e = end;
     return c;
+}
+
+/* TxtFindString(찾기, v8): 원래 함수는 낱말 첫머리를 앞 바이트 하나로 판단해 한글 앞 글자의 끝 바이트가
+ * Latin-1 기호(예: 0xB1 ±)면 낱말 가운데도 맞춘다(갚가에서 가). 원래 결과를 거르기만 한다:
+ * 맞은 자리 바로 앞 바이트가 0xA1–0xFE면(앞이 2바이트 글자 = 낱말 글자, 또는 2바이트 글자 가운데) 버리고
+ * 그 다음 바이트부터 다시 찾는다. 앞 바이트가 그 밖이면 원래 판단 그대로(영문 결과는 바뀌지 않음). */
+Boolean HgFindString(const char *src, const char *tgt, u32 *pos, u16 *len) {
+    const u8 *t = (const u8 *)src;
+    u32 base = 0, p;
+    u16 l;
+    if (Idle() || !src || !tgt) return ((FindFn)ORIG(O_FindString))(src, tgt, pos, len);
+    for (;;) {
+        if (!((FindFn)ORIG(O_FindString))(src + base, tgt, &p, &l)) return 0;
+        p += base;
+        if (p == 0 || !Hi(t[p - 1])) {
+            if (pos) *pos = p;
+            if (len) *len = l;
+            return 1;
+        }
+        base = p + 1;
+    }
 }
