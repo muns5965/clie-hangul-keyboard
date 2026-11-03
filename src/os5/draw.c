@@ -148,7 +148,8 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
         er.y = y;
         er.w = (s16)HangulCell();
         er.h = lineH - 1;   /* v24: 줄 맨 아래 한 줄(입력칸 점선 밑줄 자리)은 지우지 않는다 — 글자 그림은 그 줄에 닿지 않는다
-                             * (16×16·24×24 모두 아래 여백 2 이상). 전에는 한글 아래 밑줄이 지워졌다 */
+                             * (그림 맨 아래와 남기는 줄 사이 기기 1픽셀 이상 — 줄 높이 11(16×16)·14·15(24×24)로 계산.
+                             * 다른 글꼴·세로 자리를 더하면 다시 확인). 전에는 한글 아래 밑줄이 지워졌다 */
         ((EraseFn)T8(T8_WinEraseRectangle))(&er, 0);
     }
     font = ((GetFontFn)T8(T8_FntGetFont))();
