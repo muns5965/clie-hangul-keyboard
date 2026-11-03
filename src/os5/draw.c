@@ -10,6 +10,9 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v24: 24×24 글자를 기기 1픽셀 위로. 한글은 기준선이 아니라 줄 높이 가운데에 놓는데, 큰 굵은 글꼴(Address 이름 칸)에서 같은 칸 영문보다
+ *   윗끝 1·아랫끝 2픽셀 아래였다(VZ90 측정). 올린 뒤 윗끝 = 영문 대문자 윗끝, 아랫끝 = 기준선 + 1. 16×16은 윗끝·아랫끝이 1픽셀 위라 그대로.
+ *   또 글자 칸을 지울 때 줄 맨 아래 한 줄은 남긴다(입력칸 점선 밑줄이 한글 아래에서만 지워졌음).
  */
 #include "os5.h"
 
@@ -125,7 +128,8 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
     u32 rows[24];
     u16 H = pk[3], w = RowBytes(pk), r, old, mode, gw = big ? 24 : 16;
     s16 lineH = ((LineHeightFn)T8(T8_FntLineHeight))();
-    s16 nx = x * 2 + (big ? 0 : 1), ny = y * 2 + (lineH * 2 - (s16)H) / 2;   /* 16×16은 칸 18에서 왼쪽 1 띄움 */
+    s16 nx = x * 2 + (big ? 0 : 1), ny = y * 2 + (lineH * 2 - (s16)H) / 2 - (big ? 1 : 0);   /* 16×16은 칸 18에서 왼쪽 1 띄움.
+                                                                                       v24: 24×24는 기기 1픽셀 위로(아래 설명) */
     ColorFn setText = (ColorFn)T8(T8_WinSetTextColor), setFore = (ColorFn)T8(T8_WinSetForeColor);
     u8 text, fore, font;
 
@@ -143,7 +147,8 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
         er.x = x;
         er.y = y;
         er.w = (s16)HangulCell();
-        er.h = lineH;
+        er.h = lineH - 1;   /* v24: 줄 맨 아래 한 줄(입력칸 점선 밑줄 자리)은 지우지 않는다 — 글자 그림은 그 줄에 닿지 않는다
+                             * (16×16·24×24 모두 아래 여백 2 이상). 전에는 한글 아래 밑줄이 지워졌다 */
         ((EraseFn)T8(T8_WinEraseRectangle))(&er, 0);
     }
     font = ((GetFontFn)T8(T8_FntGetFont))();

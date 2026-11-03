@@ -1,5 +1,5 @@
 /*
- * MnHangul5 v23 — Palm OS 5(Sony TG50·NX70V, CloudpilotEmu의 VZ90 영문 Mini) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v24 — Palm OS 5(Sony TG50·NX70V, CloudpilotEmu의 VZ90 영문 Mini) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
@@ -29,6 +29,7 @@
  * v21: VZ90 판별에 Sony 문자열 정보의 기종 이름("PEG-VZ90")을 더한다 — 'PvPv'는 다른 기종의 PV ROM과 같다.
  * v22: Mn 실크 키보드(MnSk5)가 넣은 키(keyCode 'MS')는 조합하지 않고 그대로 보낸다(ime.c, 미루기 처리 뒤).
  * v23: 실크 영역 펜은 조합을 끝내지 않음(Sony 소프트 키보드로 두벌식 조합), 앱 화면 펜 수를 ctx에 세고 그 주소를 Feature #10에(MnSk5가 읽음).
+ * v24: 24×24 한글을 기기 1픽셀 위로(draw.c, 같은 칸 영문과 위아래 맞춤), 한글 아래 입력칸 밑줄을 지우지 않음.
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -43,7 +44,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v23"
+#define kVer "v24"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
