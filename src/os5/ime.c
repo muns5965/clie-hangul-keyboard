@@ -210,7 +210,9 @@ static void LogC(u16 chr, const struct NEvent *ev, u32 act)
 #endif
 #define Log(ev, a) LogC((ev)->chr, ev, a)
 
-/* '한' 표시: 활성 폼의 GSI 자리에 그리거나(han) 지운다. 메뉴·팝업이 위에 있으면 그리지 않음 */
+/* '한' 표시: 활성 폼의 GSI 자리에 그리거나(han) 지운다. 메뉴·팝업이 위에 있으면 그리지 않음.
+ *   v18: 키보드 대화상자에 한/영 칸을 그릴 수 있으면 그 칸이 상태를 보이므로 GSI '한'은 그리지 않는다(같은 정보가 두 번 보였음).
+ *   칸을 그릴 수 없는 대화상자(창 밖·겹침)에서는 지금처럼 GSI에 그린다. */
 static void Mark(u32 *mark, u32 han)
 {
     void *f = ((PtrFn)T12(T12_FrmGetActiveForm))(), *w, *old;
@@ -218,6 +220,10 @@ static void Mark(u32 *mark, u32 han)
     struct NRect r;
 
     if (!f) return;
+    if (KbdToggleRect(f, &r)) {   /* 대화상자가 새로 그린 화면이라 지울 것 없음 */
+        *mark &= ~4u;
+        return;
+    }
     w = ((FormPtrFn)T12(T12_FrmGetWindowHandle))(f);
     if (!w || ((PtrFn)T8(T8_WinGetActiveWindow))() != w) return;
     n = ((FormU16Fn)T12(T12_FrmGetNumberOfObjects))(f);
@@ -278,7 +284,9 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         c->mark |= 1;   /* 앱이 다시 그렸을 수 있음 → 다음에 '한' 다시 그림 */
     if (ev->eType == frmOpenEvent || ev->eType == frmUpdateEvent || ev->eType == winEnterEvent ||
         ev->eType == penUpEvent || ev->eType == keyDownEvent)
-        c->kbd = 1;   /* v17: 키보드 대화상자면 다음에 한/영 칸을 (다시) 그림(아니면 KbdToggleRect가 0) */
+        c->kbd = 1;
+    if (ev->eType == frmOpenEvent)
+        c->kshift = 0;   /* v18: 앞 대화상자에서 shift만 누르고 닫은 경우 — 새 화면은 손으로 누른 shift 없음 */   /* v17: 키보드 대화상자면 다음에 한/영 칸을 (다시) 그림(아니면 KbdToggleRect가 0) */
     if (ev->eType == penDownEvent && KbdToggleTap(ev)) {   /* v17: 한/영 칸 */
         st[2] = !st[2];
         st[0] = 0;
