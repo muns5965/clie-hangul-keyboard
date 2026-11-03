@@ -10,6 +10,7 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v25: WinPaintChar도 바꾼다 — Sony 소프트 키보드(StdInput) 키 글자를 한글 모드에서 두벌식 자모로(HgPaintChar).
  * v24: 24×24 글자를 기기 1픽셀 위로. 한글은 기준선이 아니라 줄 높이 가운데에 놓는데, 큰 굵은 글꼴(Address 이름 칸)에서 같은 칸 영문보다
  *   윗끝 1·아랫끝 2픽셀 아래였다(VZ90 측정). 올린 뒤 윗끝 = 영문 대문자 윗끝, 아랫끝 = 기준선 + 1. 16×16은 윗끝·아랫끝이 1픽셀 위라 그대로.
  *   또 글자 칸을 지울 때 줄 맨 아래 한 줄은 남긴다(입력칸 점선 밑줄이 한글 아래에서만 지워졌음).
@@ -116,48 +117,12 @@ static void GlyphRows(const u8 *pk, u16 sy, u32 *rows) {
             for (i = 0; i < H; i++) rows[i] |= RdRow(pk, pk + oP + (u32)id[k] * rb + i * w);
 }
 
-/* 2바이트 글자 하나를 표준 좌표(x, y = 글줄 위)에 그린다.
- * erase: WinDrawChars·WinDrawChar·WinDrawTruncChars처럼 배경까지 칠하는 함수 대신일 때 1 —
- *   그림이 투명(점 없는 자리는 안 그림)이라, 먼저 칸을 지금 배경색으로 지운다(v6).
- *   앱(Memo Pad 등)은 줄 중간을 고칠 때 지우지 않고 다시 그리므로, 안 지우면 예전 글자와 겹친다.
- *   WinPaintChars(그리기 모드를 따르는 함수) 대신일 때는 0. */
-static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
+/* 1비트 글자 줄(rows, 32비트, 왼쪽 = 비트 31)을 기기 좌표 (nx, ny)에 지금 글자색으로 그린다(점 없는 자리는 투명). v25: DrawGlyph에서 떼어 냄 */
+static void PaintRows(const u32 *rows, u16 H, u16 gw, s16 nx, s16 ny) {
     struct Ctx *c = CtxPtr();
-    int big = Big();
-    const u8 *pk = big ? c->pack24 : c->pack;
-    u32 rows[24];
-    u16 H = pk[3], w = RowBytes(pk), r, old, mode, gw = big ? 24 : 16;
-    s16 lineH = ((LineHeightFn)T8(T8_FntLineHeight))();
-    s16 nx = x * 2 + (big ? 0 : 1), ny = y * 2 + (lineH * 2 - (s16)H) / 2 - (big ? 1 : 0);   /* 16×16은 칸 18에서 왼쪽 1 띄움.
-                                                                                       v24: 24×24는 기기 1픽셀 위로(아래 설명) */
+    u16 r, old, mode;
     ColorFn setText = (ColorFn)T8(T8_WinSetTextColor), setFore = (ColorFn)T8(T8_WinSetForeColor);
-    u8 text, fore, font;
-
-    if (lead == 0xA4) {
-        const u8 *j = pk + RdW(pk + 124) + (trail - 0xA1) * H * w;
-        for (r = 0; r < H; r++) rows[r] = RdRow(pk, j + r * w);
-    } else if (lead >= 0xB0 && lead <= 0xC8 && trail >= 0xA1) {
-        GlyphRows(pk, RankToSyl(c->ksc, (lead - 0xB0) * 94 + (trail - 0xA1)), rows);
-    } else {   /* 그 밖의 KS X 1001 행: 빈 네모 */
-        u32 edge = 0xFFFFFFFFu << (32 - (gw - 4)) >> 2, side = (0x80000000u >> 2) | (0x80000000u >> (gw - 3));
-        for (r = 0; r < H; r++) rows[r] = (r == 2 || r == H - 3) ? edge : (r > 2 && r < H - 3 ? side : 0);
-    }
-    if (erase) {
-        struct ERect er;
-        er.x = x;
-        er.y = y;
-        er.w = (s16)HangulCell();
-        er.h = lineH - 1;   /* v24: 줄 맨 아래 한 줄(입력칸 점선 밑줄 자리)은 지우지 않는다 — 글자 그림은 그 줄에 닿지 않는다
-                             * (그림 맨 아래와 남기는 줄 사이 기기 1픽셀 이상 — 줄 높이 11(16×16)·14·15(24×24)로 계산.
-                             * 다른 글꼴·세로 자리를 더하면 다시 확인). 전에는 한글 아래 밑줄이 지워졌다 */
-        ((EraseFn)T8(T8_WinEraseRectangle))(&er, 0);
-    }
-    font = ((GetFontFn)T8(T8_FntGetFont))();
-    if (font == boldFont || font == largeBoldFont)   /* 굵게: 오른쪽으로 1픽셀 겹침(칸 안에서) */
-        for (r = 0; r < H; r++) rows[r] |= (rows[r] >> 1) & (0xFFFFFFFFu << (32 - gw));
-#if MN_DIAG
-    c->hits++;
-#endif
+    u8 text, fore;
 
     text = setText(0);  /* 글자 색으로 그림 */
     setText(text);
@@ -194,6 +159,51 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
     }
     ((CoordSysFn)T8(T8_WinSetCoordinateSystem))(old);
     setFore(fore);
+}
+
+/* 2바이트 글자 하나를 표준 좌표(x, y = 글줄 위)에 그린다.
+ * erase: WinDrawChars·WinDrawChar·WinDrawTruncChars처럼 배경까지 칠하는 함수 대신일 때 1 —
+ *   그림이 투명(점 없는 자리는 안 그림)이라, 먼저 칸을 지금 배경색으로 지운다(v6).
+ *   앱(Memo Pad 등)은 줄 중간을 고칠 때 지우지 않고 다시 그리므로, 안 지우면 예전 글자와 겹친다.
+ *   WinPaintChars(그리기 모드를 따르는 함수) 대신일 때는 0. */
+static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
+    struct Ctx *c = CtxPtr();
+    int big = Big();
+    const u8 *pk = big ? c->pack24 : c->pack;
+    u32 rows[24];
+    u16 H = pk[3], w = RowBytes(pk), r, gw = big ? 24 : 16;
+    s16 lineH = ((LineHeightFn)T8(T8_FntLineHeight))();
+    s16 nx = x * 2 + (big ? 0 : 1), ny = y * 2 + (lineH * 2 - (s16)H) / 2 - (big ? 1 : 0);   /* 16×16은 칸 18에서 왼쪽 1 띄움.
+                                                                                       v24: 24×24는 기기 1픽셀 위로(아래 설명) */
+    u8 font;
+
+    if (lead == 0xA4) {
+        const u8 *j = pk + RdW(pk + 124) + (trail - 0xA1) * H * w;
+        for (r = 0; r < H; r++) rows[r] = RdRow(pk, j + r * w);
+    } else if (lead >= 0xB0 && lead <= 0xC8 && trail >= 0xA1) {
+        GlyphRows(pk, RankToSyl(c->ksc, (lead - 0xB0) * 94 + (trail - 0xA1)), rows);
+    } else {   /* 그 밖의 KS X 1001 행: 빈 네모 */
+        u32 edge = 0xFFFFFFFFu << (32 - (gw - 4)) >> 2, side = (0x80000000u >> 2) | (0x80000000u >> (gw - 3));
+        for (r = 0; r < H; r++) rows[r] = (r == 2 || r == H - 3) ? edge : (r > 2 && r < H - 3 ? side : 0);
+    }
+    if (erase) {
+        struct ERect er;
+        er.x = x;
+        er.y = y;
+        er.w = (s16)HangulCell();
+        er.h = lineH - 1;   /* v24: 줄 맨 아래 한 줄(입력칸 점선 밑줄 자리)은 지우지 않는다 — 글자 그림은 그 줄에 닿지 않는다
+                             * (그림 맨 아래와 남기는 줄 사이 기기 1픽셀 이상 — 줄 높이 11(16×16)·14·15(24×24)로 계산.
+                             * 다른 글꼴·세로 자리를 더하면 다시 확인). 전에는 한글 아래 밑줄이 지워졌다 */
+        ((EraseFn)T8(T8_WinEraseRectangle))(&er, 0);
+    }
+    font = ((GetFontFn)T8(T8_FntGetFont))();
+    if (font == boldFont || font == largeBoldFont)   /* 굵게: 오른쪽으로 1픽셀 겹침(칸 안에서) */
+        for (r = 0; r < H; r++) rows[r] |= (rows[r] >> 1) & (0xFFFFFFFFu << (32 - gw));
+#if MN_DIAG
+    c->hits++;
+#endif
+
+    PaintRows(rows, H, gw, nx, ny);
 }
 
 /* ---- 폭 (MnHangul width.c, 한글 칸 = cw = HangulCell()) ---- */
@@ -382,6 +392,49 @@ void HgDrawChar(WChar ch, s16 x, s16 y) {
         DrawGlyph((u8)(ch >> 8), (u8)ch, x, y, 1);
     else
         ((DrawCharFn)ORIG(O_DrawChar))(ch, x, y);
+}
+
+/* v25: WinPaintChar — Sony 소프트 키보드(표준 입력 StdInput)가 키 글자를 화면 밖 창에 한 글자씩 그린다(docs/OS5_RESEARCH.md 12절).
+ *   한글 모드이고 부른 곳(돌아갈 주소)이 StdInput 코드(ctx sklo~skhi, 앱이 켤 때 찾음) 안이면 영문 키 글자를 두벌식 자모로 그린다.
+ *   자모는 입력과 같은 규칙(ime.c: Dubeol(ch ^ 0x20)) — 자판이 대문자(Shift)로 그린 키는 그 키를 눌렀을 때 들어가는 쌍자음·ㅒ·ㅖ.
+ *   StdInput이 넘기는 좌표·글자 폭은 이미 기기 픽셀 단위다(진단: 키 간격 23). 좌표계 값을 보고 2배 하면 두 칸 간격으로 어긋났다(VZ90 실측) → 그대로 쓴다.
+ *   글자 점 범위의 가운데를 영문 글자 칸 가운데에 맞춘다. */
+void HgPaintChar(WChar ch, s16 x, s16 y) {
+    struct Ctx *c = CtxPtr();
+    u32 lr = (u32)__builtin_return_address(0);
+
+    if (!Idle() && c->st[2] && c->sklo && lr >= c->sklo && lr < c->skhi && ch < 0x80 &&
+        ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))) {
+        u8 j = Dubeol((u8)(ch ^ 0x20));
+        const u8 *pk = c->pack;
+        if (j && pk) {
+            u32 rows[16];
+            u16 H = pk[3], w = RowBytes(pk), r, k;
+            u16 rmin = 16, rmax = 0, cmin = 16, cmax = 0;
+            const u8 *g = pk + RdW(pk + 124) + (j - 0xA1) * H * w;
+            char b = (char)ch;
+            s16 cw = ((CharsWidthFn)ORIG(O_CharsWidth))(&b, 1), lh = ((LineHeightFn)T8(T8_FntLineHeight))();
+
+            for (r = 0; r < H && r < 16; r++) {
+                rows[r] = RdRow(pk, g + r * w);
+                if (rows[r]) {
+                    if (r < rmin) rmin = r;
+                    rmax = r;
+                    for (k = 0; k < 16; k++)
+                        if (rows[r] & (0x80000000u >> k)) {
+                            if (k < cmin) cmin = k;
+                            if (k > cmax) cmax = k;
+                        }
+                }
+            }
+            if (rmin <= rmax) {
+                s16 cx = (s16)(x + cw / 2), cy = (s16)(y + lh / 2);
+                PaintRows(rows, H, 16, (s16)(cx - (s16)((cmin + cmax + 1) / 2)), (s16)(cy - (s16)((rmin + rmax + 1) / 2)));
+                return;
+            }
+        }
+    }
+    ((DrawCharFn)c->pcorig)(ch, x, y);
 }
 
 /* WinDrawTruncChars: 글자 경계에서 자르고 "…" */

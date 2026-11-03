@@ -28,3 +28,6 @@
 0x9a0 O_Compare        HgCompare         0x2005ee28              0x2005e3d8  TxtCompare
 0x980 O_Caseless       HgCaselessCompare 0x2005ee08              0x2005e3b8  TxtCaselessCompare
 0x824 O_GetEvent       HgGetEvent        0x20a4c01c              0x20975d70  EvtGetEvent
+# v25: Sony 소프트 키보드 키 글자(StdInput이 화면 밖 창에 한 글자씩). 원래 주소는 리셋 뒤에도 ROM 함수(Sony 모듈이 바꾸지 않음, 진단 빌드로 확인).
+#      VZ90 영문 Mini는 0x10835688(VZ90 검사는 칸마다 0x10xxxxxx만 본다). 저장 번호 = os5.h O_PaintChar(98, ctx +392).
+0xbcc O_PaintChar      HgPaintChar       0x20a5071c              0x2097a470  WinPaintChar

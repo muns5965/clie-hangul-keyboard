@@ -29,7 +29,8 @@ typedef u8 Boolean;
 /* 바꾸는 함수(원래 주소 칸 번호). 순서 = slots.txt 순서(빌드 스크립트가 확인) */
 enum { O_DrawChars, O_DrawChar, O_PaintChars, O_DrawTrunc, O_CharsWidth, O_LineWidth, O_CharsInWidth,
        O_WordWrap, O_WidthToOffset, O_ByteAttr, O_CharSize, O_GetNext, O_GetPrev, O_SetNext,
-       O_Bounds, O_GetChar, O_CharAttr, O_CharWidth, O_IsValid, O_FindString, O_WordBounds, O_Compare, O_Caseless, O_GetEvent, O_COUNT };
+       O_Bounds, O_GetChar, O_CharAttr, O_CharWidth, O_IsValid, O_FindString, O_WordBounds, O_Compare, O_Caseless, O_GetEvent, O_COUNT,
+       O_PaintChar = 98 };   /* v25: orig[24]가 꽉 차 원래 주소는 ctx +392(pcorig) — 칸 표의 저장 번호(×4 = ctx 오프셋) */
 typedef char OrigFits[(O_COUNT <= 24) ? 1 : -1];   /* Ctx.orig 칸 수 */
 
 /* 앱(app.c)이 같은 오프셋으로 쓴다 — 바꾸면 app.c의 kCtx*도 같이 */
@@ -50,6 +51,8 @@ struct Ctx {
     u32 kshift;          /* +380 v17: 키보드 대화상자에서 손으로 누른 shift(다음 영문자까지) — 아니면 대문자도 기본 자모 */
     u32 markwin;         /* +384 v19: GSI '한'을 그린 창(그 창에서만 지운다, 새 폼이 열리면 0) */
     u32 pen;             /* +388 v23: 앱 화면(실크 영역 밖) 펜 누름 수 — Feature 'MnH5' #10이 이 칸 주소(MnSk5가 읽음) */
+    u32 pcorig;          /* +392 v25: WinPaintChar 원래 주소(O_PaintChar = 98 = 392/4, 설치 코드가 칸 표의 저장 번호로 씀) */
+    u32 sklo, skhi;      /* +396 v25: Sony 표준 입력(StdInput, 'aSkw'/'SkAi') 코드 리소스 'amdc' 0의 범위 — 앱이 켤 때 채움, 없으면 0 */
 #ifdef MN_TEST_STALE
     u32 test;            /* 시험 빌드만 */
 #endif
@@ -57,6 +60,8 @@ struct Ctx {
 struct Ctx *CtxPtr(void);
 #define kCtxSpace 416   /* ctx.S의 .space와 같게. v19: 384를 넘겨 뒤 코드를 덮었던 일이 있어 컴파일 때 확인 */
 typedef char CtxFits[(sizeof(struct Ctx) <= kCtxSpace) ? 1 : -1];
+typedef char PcOrigAt[(__builtin_offsetof(struct Ctx, pcorig) == 4 * O_PaintChar) ? 1 : -1];   /* v25 */
+typedef char SkLoAt[(__builtin_offsetof(struct Ctx, sklo) == 396) ? 1 : -1];                  /* app.c kCtxSkLo */
 
 static inline u32 R9(void) {
     u32 r;

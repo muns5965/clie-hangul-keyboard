@@ -1,5 +1,5 @@
 /*
- * MnHangul5 v24 — Palm OS 5(Sony TG50·NX70V, CloudpilotEmu의 VZ90 영문 Mini) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v25 — Palm OS 5(Sony TG50·NX70V, CloudpilotEmu의 VZ90 영문 Mini) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
@@ -30,6 +30,7 @@
  * v22: Mn 실크 키보드(MnSk5)가 넣은 키(keyCode 'MS')는 조합하지 않고 그대로 보낸다(ime.c, 미루기 처리 뒤).
  * v23: 실크 영역 펜은 조합을 끝내지 않음(Sony 소프트 키보드로 두벌식 조합), 앱 화면 펜 수를 ctx에 세고 그 주소를 Feature #10에(MnSk5가 읽음).
  * v24: 24×24 한글을 기기 1픽셀 위로(draw.c, 같은 칸 영문과 위아래 맞춤), 한글 아래 입력칸 밑줄을 지우지 않음.
+ * v25: WinPaintChar도 바꿔 Sony 소프트 키보드(NX70V·VZ90 표준 입력)의 영문 키 글자를 한글 모드에서 두벌식 자모로 그린다.
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -44,7 +45,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v24"
+#define kVer "v25"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -64,6 +65,8 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kCtxIdle 244
 #define kCtxPack24 248
 #define kCtxPen  388   /* v23 */
+#define kCtxSkLo 396   /* v25: StdInput 코드 범위(os5.h sklo·skhi) */
+#define kCtxSkHi 400
 #define kFtrPen  10    /* v23: 앱 화면 펜 수 칸 주소(ARM 리틀엔디언 u32) — MnSk5가 읽어 바뀌면 조합을 끝냄 */
 
 /* 켜기 결과 */
@@ -269,6 +272,25 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
             *(UInt32 *)(block + ctx + kCtxPack) = SW(pack);   /* ARM이 읽는 값은 리틀엔디언 */
             *(UInt32 *)(block + ctx + kCtxKsc) = SW(ksc);
             *(UInt32 *)(block + ctx + kCtxPack24) = SW(pack24);
+            {   /* v25: Sony 표준 입력(StdInput) 코드 범위 — 소프트 키보드 키 글자를 그리는 곳인지 판정(draw.c HgPaintChar).
+                 * ROM에 있는 리소스라 주소가 바뀌지 않는다(잠금 없이 주소만 기록). 없으면(TG50) 0 = 바꾸지 않음 */
+                DmOpenRef sdb = DmOpenDatabaseByTypeCreator('aSkw', 'SkAi', dmModeReadOnly);
+                UInt32    lo = 0, hi = 0;
+
+                if (sdb) {
+                    MemHandle sh = DmGet1Resource('amdc', 0);
+
+                    if (sh) {
+                        lo = (UInt32)MemHandleLock(sh);
+                        hi = lo + MemHandleSize(sh);
+                        MemHandleUnlock(sh);
+                        DmReleaseResource(sh);
+                    }
+                    DmCloseDatabase(sdb);
+                }
+                *(UInt32 *)(block + ctx + kCtxSkLo) = SW(lo);
+                *(UInt32 *)(block + ctx + kCtxSkHi) = SW(hi);
+            }
             /* v9: 주소 기록(Feature)을 칸을 바꾸기 전에 하고 실패를 확인한다 — 칸만 바뀌고 기록이 없으면 OFF로 끌 수 없다 */
             if (FtrSet(kCr, 1, pack) != errNone || FtrSet(kCr, 2, ksc) != errNone ||
                 FtrSet(kCr, 3, pack24) != errNone || FtrSet(kCr, 0, block) != errNone) {

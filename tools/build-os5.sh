@@ -62,7 +62,11 @@ python3 - "$src/slots.txt" "$src/os5.h" hook.elf H5Tb03e8.bin <<'PY'
 import re, struct, subprocess, sys
 slots, hdr, elf, outp = sys.argv[1:]
 enum = re.search(r'enum \{([^}]*)\}', open(hdr).read()).group(1)
-names = [x.strip() for x in enum.split(',') if x.strip() and x.strip() != 'O_COUNT']
+# v25: 'O_이름 = 번호'는 원래 주소 저장 번호를 직접 정한 칸(orig[24] 밖, ctx 오프셋 = 번호 × 4). 나머지는 순서 번호
+ent = [x.split('/*')[0].strip() for x in enum.split(',')]
+ent = [x for x in ent if x and x != 'O_COUNT']
+names = [x.split('=')[0].strip() for x in ent]
+fixed = {x.split('=')[0].strip(): int(x.split('=')[1].strip(), 0) for x in ent if '=' in x}
 sym = {}
 for l in subprocess.check_output(['arm-none-eabi-nm', elf]).decode().splitlines():
     f = l.split()
@@ -79,7 +83,10 @@ for i, r in enumerate(rows):
     if len(exp) > 4:
         sys.exit('error: at most four values per slot')
     exp += [exp[0]] * (4 - len(exp))
-    w += [int(r[0], 16), sym[r[2]], i, 0]
+    idx = fixed.get(r[1], i)
+    if r[1] not in fixed and idx >= 24:
+        sys.exit('error: orig[24] overflow at %s' % r[1])
+    w += [int(r[0], 16), sym[r[2]], idx, 0]
     for v in exp:
         w += [v >> 16, v & 0xffff]
 open(outp, 'wb').write(struct.pack('>%dH' % len(w), *w))
