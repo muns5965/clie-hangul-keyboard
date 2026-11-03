@@ -10,6 +10,7 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v26: StdInput이 부른 WinPaintChar(s)는 원래 함수로, 그 안의 글자 경계 함수도 원래대로(RawPaint, ctx raw).
  * v25: WinPaintChar도 바꾼다 — Sony 소프트 키보드(StdInput) 키 글자를 한글 모드에서 두벌식 자모로(HgPaintChar).
  * v24: 24×24 글자를 기기 1픽셀 위로. 한글은 기준선이 아니라 줄 높이 가운데에 놓는데, 큰 굵은 글꼴(Address 이름 칸)에서 같은 칸 영문보다
  *   윗끝 1·아랫끝 2픽셀 아래였다(VZ90 측정). 올린 뒤 윗끝 = 영문 대문자 윗끝, 아랫끝 = 기준선 + 1. 16×16은 윗끝·아랫끝이 1픽셀 위라 그대로.
@@ -380,7 +381,21 @@ void HgDrawChars(const char *chars, s16 len, s16 x, s16 y) {
         DrawMixed(O_DrawChars, chars, len, x, y);
 }
 
+/* v26: StdInput이 부른 글자 그리기는 원래 함수로, 그 안에서 부르는 글자 경계 함수(표 8)도 원래대로(raw).
+ *   영문 ROM의 かな·記号 탭 글자(Latin-1 0xA1~)를 한글 2바이트로 읽어 깨졌다(v17~v25). */
+static void RawPaint(u32 fn, const char *chars, s16 len, WChar ch, s16 x, s16 y) {
+    struct Ctx *c = CtxPtr();
+    c->raw = 1;
+    if (chars) ((DrawCharsFn)fn)(chars, len, x, y);
+    else ((DrawCharFn)fn)(ch, x, y);
+    c->raw = 0;
+}
+
 void HgPaintChars(const char *chars, s16 len, s16 x, s16 y) {
+    if (FromStdInput()) {
+        RawPaint(ORIG(O_PaintChars), chars, len, 0, x, y);
+        return;
+    }
     if (Idle() || !chars || len <= 0 || !HasHi((const u8 *)chars, len))
         ((DrawCharsFn)ORIG(O_PaintChars))(chars, len, x, y);
     else
@@ -403,7 +418,7 @@ void HgPaintChar(WChar ch, s16 x, s16 y) {
     struct Ctx *c = CtxPtr();
     u32 lr = (u32)__builtin_return_address(0);
 
-    if (!Idle() && c->st[2] && c->sklo && lr >= c->sklo && lr < c->skhi && ch < 0x80 &&
+    if (!Idle() && c->st[2] && InStdInput(lr) && ch < 0x80 &&
         ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))) {
         u8 j = Dubeol((u8)(ch ^ 0x20));
         const u8 *pk = c->pack;
@@ -434,7 +449,8 @@ void HgPaintChar(WChar ch, s16 x, s16 y) {
             }
         }
     }
-    ((DrawCharFn)c->pcorig)(ch, x, y);
+    if (InStdInput(lr)) RawPaint(c->pcorig, 0, 0, ch, x, y);
+    else ((DrawCharFn)c->pcorig)(ch, x, y);
 }
 
 /* WinDrawTruncChars: 글자 경계에서 자르고 "…" */

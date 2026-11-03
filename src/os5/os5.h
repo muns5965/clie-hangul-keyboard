@@ -53,6 +53,7 @@ struct Ctx {
     u32 pen;             /* +388 v23: 앱 화면(실크 영역 밖) 펜 누름 수 — Feature 'MnH5' #10이 이 칸 주소(MnSk5가 읽음) */
     u32 pcorig;          /* +392 v25: WinPaintChar 원래 주소(O_PaintChar = 98 = 392/4, 설치 코드가 칸 표의 저장 번호로 씀) */
     u32 sklo, skhi;      /* +396 v25: Sony 표준 입력(StdInput, 'aSkw'/'SkAi') 코드 리소스 'amdc' 0의 범위 — 앱이 켤 때 채움, 없으면 0 */
+    u32 raw;             /* +404 v26: StdInput이 부른 글자 그리기 원래 함수를 도는 동안 1 — 글자 경계 함수가 한글로 읽지 않음(text.c Off) */
 #ifdef MN_TEST_STALE
     u32 test;            /* 시험 빌드만 */
 #endif
@@ -72,6 +73,12 @@ static inline u32 R9(void) {
 #define T12(slot) (*(u32 *)(*(u32 *)(R9() - 12) + (slot)))
 #define ORIG(i)   (CtxPtr()->orig[i])
 #define Idle()    (CtxPtr()->idle != 0)
+/* v26: 부른 곳(돌아갈 주소)이 Sony 표준 입력(StdInput) 코드 안인가 — 그 글자는 한글로 읽지 않는다(영문 ROM かな·記号 탭의 Latin-1) */
+static inline int InStdInput(u32 lr) {
+    struct Ctx *c = CtxPtr();
+    return c->sklo && lr >= c->sklo && lr < c->skhi;
+}
+#define FromStdInput() InStdInput((u32)__builtin_return_address(0))
 
 /* 표 8 (TG50·NX70V 같음) — 부르기만 하는 함수 */
 #define T8_EvtEnqueueKey          0x298

@@ -5,6 +5,9 @@
  */
 #include "os5.h"
 
+/* v26: StdInput이 부른 글자 그리기 안에서는 원래 함수 그대로(꺼진 것처럼) — ctx raw */
+#define Off() (Idle() || CtxPtr()->raw)
+
 typedef u16 (*U8Fn)(u8);
 typedef u16 (*WCharFn)(WChar);
 typedef u16 (*GetNextFn)(const char *, u32, WChar *);
@@ -26,34 +29,34 @@ static u32 RunBefore(const u8 *t, u32 o) {
 }
 
 u16 HgByteAttr(u8 b) {
-    if (!Idle() && Hi(b)) return byteAttrFirst | byteAttrLast | byteAttrSingle;
+    if (!Off() && Hi(b)) return byteAttrFirst | byteAttrLast | byteAttrSingle;
     return ((U8Fn)ORIG(O_ByteAttr))(b);
 }
 
 u16 HgCharSize(WChar c) {
-    if (!Idle() && c > 0xFF) return 2;
+    if (!Off() && c > 0xFF) return 2;
     return ((WCharFn)ORIG(O_CharSize))(c);
 }
 
 u16 HgCharAttr(WChar c) {
-    if (!Idle() && c > 0xFF) return charAttr_XA;
+    if (!Off() && c > 0xFF) return charAttr_XA;
     return ((WCharFn)ORIG(O_CharAttr))(c);
 }
 
 u16 HgCharIsValid(WChar c) {
-    if (!Idle() && c > 0xFF) return Hi(c >> 8) && Hi(c & 0xFF);
+    if (!Off() && c > 0xFF) return Hi(c >> 8) && Hi(c & 0xFF);
     return ((WCharFn)ORIG(O_IsValid))(c);
 }
 
 u16 HgCharWidth(WChar c) {
-    if (!Idle() && c > 0xFF) return HangulCell();
+    if (!Off() && c > 0xFF) return HangulCell();
     return ((WCharFn)ORIG(O_CharWidth))(c);
 }
 
 u16 HgGetPrev(const char *text, u32 o, WChar *ch) {
     const u8 *t = (const u8 *)text;
     u16 n;
-    if (Idle()) return ((GetNextFn)ORIG(O_GetPrev))(text, o, ch);
+    if (Off()) return ((GetNextFn)ORIG(O_GetPrev))(text, o, ch);
     if (o == 0) {
         if (ch) *ch = 0;
         return 0;
@@ -66,7 +69,7 @@ u16 HgGetPrev(const char *text, u32 o, WChar *ch) {
 u16 HgGetNext(const char *text, u32 o, WChar *ch) {
     const u8 *t = (const u8 *)text;
     u16 n;
-    if (Idle()) return ((GetNextFn)ORIG(O_GetNext))(text, o, ch);
+    if (Off()) return ((GetNextFn)ORIG(O_GetNext))(text, o, ch);
     n = (Hi(t[o]) && Hi(t[o + 1])) ? 2 : 1;
     if (ch) *ch = (n == 2) ? (WChar)((t[o] << 8) | t[o + 1]) : t[o];
     return n;
@@ -74,14 +77,14 @@ u16 HgGetNext(const char *text, u32 o, WChar *ch) {
 
 WChar HgGetChar(const char *text, u32 o) {
     WChar c;
-    if (Idle()) return ((GetCharFn)ORIG(O_GetChar))(text, o);
+    if (Off()) return ((GetCharFn)ORIG(O_GetChar))(text, o);
     HgGetNext(text, o, &c);
     return c;
 }
 
 u16 HgSetNext(char *text, u32 o, WChar c) {
     u8 *t = (u8 *)text;
-    if (Idle()) return ((SetNextFn)ORIG(O_SetNext))(text, o, c);
+    if (Off()) return ((SetNextFn)ORIG(O_SetNext))(text, o, c);
     if (c > 0xFF) {
         if (t) { t[o] = (u8)(c >> 8); t[o + 1] = (u8)c; }
         return 2;
@@ -94,7 +97,7 @@ WChar HgCharBounds(const char *text, u32 o, u32 *s, u32 *e) {
     const u8 *t = (const u8 *)text;
     u32 start = o, end = o + 1;
     WChar c;
-    if (Idle()) return ((BoundsFn)ORIG(O_Bounds))(text, o, s, e);
+    if (Off()) return ((BoundsFn)ORIG(O_Bounds))(text, o, s, e);
     c = t[o];
     if (Hi(t[o])) {
         u32 k = RunBefore(t, o);
@@ -120,7 +123,7 @@ Boolean HgFindString(const char *src, const char *tgt, u32 *pos, u16 *len) {
     const u8 *t = (const u8 *)src;
     u32 base = 0, p;
     u16 l;
-    if (Idle() || !src || !tgt) return ((FindFn)ORIG(O_FindString))(src, tgt, pos, len);
+    if (Off() || !src || !tgt) return ((FindFn)ORIG(O_FindString))(src, tgt, pos, len);
     {   /* v10: 원문에 한글이 있으면 부분 검색 — 글자 경계마다 원문을 검색어 길이만큼 잘라 원래 함수에 넘기고,
          * 맨 앞(0)에서 맞을 때만 받아들인다. 검색어는 TxtPrepFindString이 바이트마다 1:1로 바꾼 값이라
          * 직접 비교하지 않고 원래 함수의 비교 규칙을 그대로 쓴다. */
@@ -168,7 +171,7 @@ Boolean HgWordBounds(const char *text, u32 n, u32 o, u32 *s, u32 *e) {
     const u8 *t = (const u8 *)text;
     u32 i, a, b = 0, k;
     int two = 0, any = 0;
-    if (Idle() || !text || o >= n) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
+    if (Off() || !text || o >= n) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
     for (i = 0; i + 1 < n; i++)
         if (Hi(t[i]) && Hi(t[i + 1])) { any = 1; break; }
     if (!any) return ((WordFn)ORIG(O_WordBounds))(text, n, o, s, e);
@@ -239,7 +242,7 @@ static s16 HgCmp(int caseless, const char *s1, u32 n1, u16 *m1, const char *s2, 
     u32 l1 = n1, l2 = n2;
     u16 x, y;
     s16 r = 0;
-    if (Idle() || !s1 || !s2)
+    if (Off() || !s1 || !s2)
         return ((CmpFn)ORIG(caseless ? O_Caseless : O_Compare))(s1, l1, m1, s2, l2, m2);
     /* 길이는 최대값이고 NUL에서 끝난다(Address Look Up은 0xFFFF처럼 큰 값을 넘김 — 실측) */
     n1 &= 0xFFFF;

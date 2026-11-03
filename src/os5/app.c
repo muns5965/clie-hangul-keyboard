@@ -30,6 +30,7 @@
  * v22: Mn 실크 키보드(MnSk5)가 넣은 키(keyCode 'MS')는 조합하지 않고 그대로 보낸다(ime.c, 미루기 처리 뒤).
  * v23: 실크 영역 펜은 조합을 끝내지 않음(Sony 소프트 키보드로 두벌식 조합), 앱 화면 펜 수를 ctx에 세고 그 주소를 Feature #10에(MnSk5가 읽음).
  * v24: 24×24 한글을 기기 1픽셀 위로(draw.c, 같은 칸 영문과 위아래 맞춤), 한글 아래 입력칸 밑줄을 지우지 않음.
+ * v26: Sony 소프트 키보드가 그리는 글자는 글자 경계 함수도 원래대로(ctx raw) — 영문 ROM かな·記号 탭 Latin-1이 깨지던 문제(v17~v25).
  * v25: WinPaintChar도 바꿔 Sony 소프트 키보드(NX70V·VZ90 표준 입력)의 영문 키 글자를 한글 모드에서 두벌식 자모로 그린다.
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
@@ -45,7 +46,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v25"
+#define kVer "v26"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
