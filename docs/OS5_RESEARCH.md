@@ -366,3 +366,8 @@ B-2 직접 호출(v14):
   3번의 표시는 칸이 없다고 보고 GSI에 '한'을 그려 잔상을 만들고, 그리기·지우기를 키 기록에 남긴다. VZ90 영문 Mini 결과 —
   대화상자 GSI (131,130)에 '한' 그림(3번) → 다음 표시에서 지우기 경로(같은 창) → (131,130)만 지움, 한/영 칸 `한`은 그대로.
   Done 뒤 메모 화면 GSI (135,150)에는 다시 그림(다른 창의 표시는 대화상자 쪽 처리와 따로). 최종 PRC는 이 코드 없이 빌드.
+- v20 한/영 칸 테두리: v17~v19는 `WinDrawRectangleFrame`(표 8 `0xb34`, PACE 연결 함수로 칸 확인)을 ARM에서 직접 불렀는데 아무것도 그려지지
+  않았다(밝은 TG50 화면에서도). 시험 빌드로 같은 자리에 `WinDrawRectangle`(`0xb30`)·`WinDrawLine`(`0xb28`)을 그리면 보였다 —
+  ARM 쪽 함수의 인자 형식이 68k와 다른 것으로 보이나 확인하지 않았다. v20은 `WinPushDrawState` → 그리기 색 =
+  `UIColorGetTableEntryIndex(UIObjectFrame)`(표 12 `0x540`) → 칸 바깥 1에 `WinDrawLine` 넷(모서리 비움) → `WinPopDrawState`.
+  결과: VZ90 영문 Mini(어두운 화면)·TG50·NX70V(밝은 화면) 모두 다른 단추와 같은 색 테두리, `A` ↔ `한` 전환·입력 정상.

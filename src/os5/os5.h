@@ -73,8 +73,10 @@ static inline u32 R9(void) {
 #define T8_FntGetFont             0x3fc
 #define T8_FntLineHeight          0x408
 #define T8_FntSetFont             0x410
-#define T8_WinDrawRectangleFrame  0xb34   /* v17 */
+#define T8_WinDrawLine            0xb28   /* v20 */
 #define T8_WinEraseRectangle      0xb50
+#define T8_WinPopDrawState        0xbf0   /* v20 */
+#define T8_WinPushDrawState       0xbf4   /* v20 */
 #define T8_WinGetActiveWindow     0xb64
 #define T8_WinPaintBitmap         0xbc8
 #define T8_WinSetDrawMode         0xc34
@@ -91,6 +93,7 @@ static inline u32 R9(void) {
 #define T12_FrmGetObjectType      0x26c
 #define T12_FrmGetWindowHandle    0x278
 #define T12_FrmUpdateForm         0x2f0   /* v17: 키 글자 다시 그리기(frmUpdateEvent) */
+#define T12_UIColorGetTableEntryIndex 0x540   /* v20: 단추 테두리 색(UIObjectFrame) */
 
 /* 한글 한 칸(표준 좌표, 2배 밀도): 16×16 글자 = 9(기기 18, 왼쪽 1 띄움), 24×24 글자 = 12(기기 24) */
 #define HW 9

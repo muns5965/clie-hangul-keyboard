@@ -59,6 +59,7 @@ typedef u16 (*FormIdxFn)(void *, u16);
 typedef void (*FormBoundsFn)(void *, u16, struct NRect *);
 typedef void (*EraseFn)(const struct NRect *, u16);
 typedef u8 (*FontFn)(u8);
+typedef void (*LineFn)(s16, s16, s16, s16);
 
 /* st[0..1] 조합(hangul_compose.h), st[2] 한글 모드, st[3] 바로 앞 원시 keyCode, st[4] 넣은 키 수, st[5] 앱에 간 수,
    st[6] 미룬 횟수, st[7] 불린 수(진단) */
@@ -150,7 +151,20 @@ static void KbdToggleDraw(u32 han)
     of = ((FontFn)T8(T8_FntSetFont))(0);
     ty = (s16)(r.y + (r.h - 11) / 2);
     ((EraseFn)T8(T8_WinEraseRectangle))(&r, 0);
-    ((void (*)(u16, const struct NRect *))T8(T8_WinDrawRectangleFrame))(1, &r);   /* simpleFrame */
+    /* v20: 테두리 — v17~v19의 WinDrawRectangleFrame(표 8 0xb34)은 ARM에서 직접 부르면 아무것도 그리지 않았다(진단 빌드: 같은 자리에
+     *   WinDrawRectangle·WinDrawLine은 그려짐). 단추 테두리 색(UIObjectFrame)으로 칸 바깥 1에 선 넷, 모서리는 비워 둥근 단추처럼. */
+    ((void (*)(void))T8(T8_WinPushDrawState))();
+    ((u8 (*)(u8))T8(T8_WinSetForeColor))(((u8 (*)(u8))T12(T12_UIColorGetTableEntryIndex))(0));   /* UIObjectFrame */
+    {
+        LineFn line = (LineFn)T8(T8_WinDrawLine);
+        s16 x0 = r.x, y0 = r.y, x1 = (s16)(r.x + r.w - 1), y1 = (s16)(r.y + r.h - 1);
+
+        line(x0, (s16)(y0 - 1), x1, (s16)(y0 - 1));
+        line(x0, (s16)(y1 + 1), x1, (s16)(y1 + 1));
+        line((s16)(x0 - 1), y0, (s16)(x0 - 1), y1);
+        line((s16)(x1 + 1), y0, (s16)(x1 + 1), y1);
+    }
+    ((void (*)(void))T8(T8_WinPopDrawState))();
     if (han) {
         char t[2];
 
