@@ -375,7 +375,7 @@ B-2 직접 호출(v14):
 - v21 VZ90 판별 조사(진단 앱, 저장소 밖): `PvPv`는 DAL이 주는 PV 플랫폼 공통 ID라, 다른 기종을 PV로 돌리면(예: Palm OS 5.2.1 영문 TH55)
   회사·인코딩·ROM 판·칸 주소 범위 조건을 모두 만족할 수 있다. Sony 문자열 정보(Feature `SoNy` 2, `SonySysFtrStringInfoType`)는
   VZ90 영문 Mini에서 maker `Sony Corp.`, model `PEG-VZ90`, ship `enUS`, os `Palm OS(R) 5.2.1`, cpu `PV ARM926EJ`
-  (cpu만 실행 때 바뀜). ROM 파일 안에 같은 틀이 있다 — 일본어 순정·영문 Full·영문 Mini 모두 model `PEG-VZ90`(ship `jpJP`/`enUS`),
+  (cpu만 실행 때 바뀜). model 칸 오프셋 16은 Sony SDK `SonySystemFtr.h`의 구조체 정의(maker[16] 다음, 널 종료 ASCII)와 같다(app.c `kSonyStrModel`). ROM 파일 안에 같은 틀이 있다 — 일본어 순정·영문 Full·영문 Mini 모두 model `PEG-VZ90`(ship `jpJP`/`enUS`),
   DAL과 상관없는 Sony 자료. v21은 `PvPv`일 때 이 model이 `PEG-VZ90`인지도 본다(인코딩·ROM 판·주소 범위 조건은 그대로).
   결과: VZ90 영문 Mini `VZ90 OK`·ON, 리셋 뒤 자동 시작·대화상자 입력 정상. 비교 문자열을 바꾼 시험 빌드는 `not TG50/NX70V/VZ90`(거부).
   TG50은 `TG50 OK`·ON(이 조건은 `PvPv`에만 적용). 다른 기종의 PV ROM은 갖고 있지 않아 실제 거부는 시험하지 못했다.

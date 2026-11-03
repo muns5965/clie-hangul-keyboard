@@ -68,6 +68,11 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kNotSupported    3
 #define kSlotDiffer 4   /* + 칸 순번<<8 */
 #define kNoMem      5
+
+/* v21: Sony SDK SonySystemFtr.h SonySysFtrStringInfoType — Char maker[16](오프셋 0), Char model[16](오프셋 16, 널 종료),
+ *   ship[16](32), os[32](48), cpu[32](80) … 모두 ASCII. 진단 앱으로 VZ90 영문 Mini에서 model = "PEG-VZ90" 확인.
+ *   기종 이름 비교 9바이트 = 8글자 + 널(16바이트 칸 안). Feature가 없거나 다르면 켜지 않는다. */
+#define kSonyStrModel 16
 #define kRelinked   6   /* + 다시 이은 칸 수<<8 (v5) */
 
 #include "../common/app_ui.h"
@@ -167,7 +172,7 @@ static UInt16 Check(const UInt16 *tb, UInt32 t8)
              *   ('PvPv'는 PV 플랫폼 공통이라 다른 기종의 PV ROM도 같다). 일본어·영문 VZ90 ROM 모두 "PEG-VZ90" */
             UInt32 si = 0;
 
-            if (FtrGet('SoNy', 2, &si) != errNone || si == 0 || StrNCompare((const Char *)si + 16, "PEG-VZ90", 9) != 0)
+            if (FtrGet('SoNy', 2, &si) != errNone || si == 0 || StrNCompare((const Char *)si + kSonyStrModel, "PEG-VZ90", 9) != 0)
                 return kNotSupported;
         }
         for (i = 0; i < tb[0]; i++)
