@@ -19,7 +19,7 @@
  *   - 시작 코드·A5가 없다 → 전역변수·문자열 상수·초기화된 지역 배열 금지, 위치 독립 코드(빌드 스크립트가 검사).
  *
  * 시험 빌드(SK5_CFLAGS로 켬, 배포 PRC에는 없음): -DSK5_DEBUG 자판 맨 위에 #47·#52·#50·#54를 표시(펜을 뗄 때마다 다시 그림),
- *   -DSK5_TEST_QFAIL 큐 실패 흉내(넣으려는 키 7개마다 하나를 실패로 처리).
+ *   -DSK5_TEST_QFAIL=1|2|3 큐 실패 흉내(1 키 7개마다, 2 BS만 3번째마다, 3 글자만 3번째마다 실패로 처리).
  *
  * 보내는 키에는 keyCode kSkMark('MS')를 붙인다. MnHangul5 v22는 이 키를 조합하지 않고 그대로 보낸다
  * (MnHangul5가 한글 모드여도 이 키보드의 영문이 두벌식으로 바뀌지 않게).
@@ -469,9 +469,14 @@ static inline void HcSend(UInt16 c)
     Err e;
 
 #ifdef SK5_TEST_QFAIL
-    /* 시험 빌드: 큐 실패 흉내 — 넣으려는 키 7개마다 하나를 넣지 않고 실패로 처리(#55 0~6 순환) */
-    FtrSet(kCr, 55, GetFtr(55) >= 6 ? 0 : GetFtr(55) + 1);
-    if (GetFtr(55) == 0)
+    /* 시험 빌드: 큐 실패 흉내(#55 순환 계수). SK5_TEST_QFAIL=1 넣으려는 키 7개마다 하나, =2 BS만 세어 3번째마다,
+     * =3 BS 아닌 키(글자)만 세어 3번째마다 넣지 않고 실패로 처리 */
+    if (SK5_TEST_QFAIL == 1 || (SK5_TEST_QFAIL == 2) == (c == chrBackspace)) {
+        UInt32 n = GetFtr(55), lim = (SK5_TEST_QFAIL == 1) ? 6 : 2;
+
+        FtrSet(kCr, 55, n >= lim ? 0 : n + 1);
+    }
+    if ((SK5_TEST_QFAIL == 1 || (SK5_TEST_QFAIL == 2) == (c == chrBackspace)) && GetFtr(55) == 0)
         e = 1;
     else
 #endif
@@ -567,6 +572,9 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
         FtrSet(kCr, kFtrDepth, Be32(ev + 2));
         Commit();
         CtReset(kCr, kFtrFld);   /* 키보드를 새로 띄우면 비교 다시 시작 */
+#ifdef SK5_TEST_QFAIL
+        FtrSet(kCr, 55, 0);      /* 시험 빌드: 실패 흉내 계수를 켤 때마다 처음부터 */
+#endif
         DrawKeys();
         break;
 

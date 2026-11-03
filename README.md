@@ -22,6 +22,8 @@
 > (and, from v17, Hangul display and system-keyboard input to the PEG-VZ90 English "mini" ROM in CloudpilotEmu)
 > by replacing entries in the RAM function table of the ARM system (68k trap patching is refused on OS 5);
 > it was tested only in TG50/NX70V ports of CloudpilotEmu (Memo Pad; on TG50 also Address, To Do, Date Book and Find).
+> *MnSk5* ports the Mn virtual keyboard to the PEG-NX70V and PEG-VZ90 as a 68k Sony Silk Plug-in (type `Slkw`), picked from
+> the status bar's plug-in list without a reset; it composes Hangul itself and relies on MnHangul5 for display.
 > **Test environment.** All development and verification were done in the CloudpilotEmu web emulator
 > running a PEG-NR70V (Palm OS 4.1S) ROM image, mainly in Memo Pad, with and without CJKOS installed.
 > The screenshots in this README are real emulator captures, taken by driving the emulator
@@ -42,7 +44,7 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 화면 안 팝업(Edit > Keyboard), 두벌식 | 화면 밖 실크스크린에 자체 자판, 단모음 | 화면 밖 Sony 자판, 두벌식 |
 | Int'l 오른쪽 `한`/`A`, 리셋 없음 | 왼쪽 아래 `한/A` 키, 리셋 1번(등록) | sym 오른쪽 `한`/`A`, 리셋 없음 |
 
-**한글 표시** — [OS 4: MnHangul](#한글-표시mnhangul)(CJKOS 대신) · [OS 5 TG50·NX70V: MnHangul5](#palm-os-5-tg50nx70v-한글mnhangul5)(표시 + 키보드 입력)
+**한글 표시** — [OS 4: MnHangul](#한글-표시mnhangul)(CJKOS 대신) · [OS 5 TG50·NX70V: MnHangul5](#palm-os-5-tg50nx70v-한글mnhangul5)(표시 + 키보드 입력) · [OS 5 NX70V·VZ90: MnSk5](#os-5-mn-가상-키보드mnsk5-nx70vvz90)(Graffiti 자리 단모음 자판)
 
 **설치·설정** — [설치·업데이트](#설치업데이트)(설치 경우 A~D, 배포 파일) · [설정 앱 공통](#설정-앱-공통-화면켜기업데이트)(네 앱 같은 화면, All OFF·Update)
 
@@ -69,9 +71,10 @@ Sony CLIÉ PEG-NR70V(Palm OS 4.1S)에서 한글을 쓰기 위한 모듈 모음. 
 | 시스템 키보드 화면 한글 | `MnKbdHan.prc` | 시스템 키보드 화면(메모 Edit > Keyboard)에 두벌식 한글. Int'l 오른쪽 `한`/`A` = 한/영 | 시험 단계, 리셋 없음 |
 | 한글 표시(CJKOS 대체) | `MnHangul.prc` | 조합형 글꼴로 2바이트 한글 그리기, 글자 경계, 폭·줄바꿈 | 시험 단계, 리셋 없음 |
 | Palm OS 5 한글(TG50·NX70V) | `MnHangul5.prc` | TG50·NX70V(Palm OS 5)에서 한글 표시 + 하드웨어 키보드 두벌식 입력(Shift+Space 한/영) | 시험 단계(에뮬레이터만), 리셋 없음 |
+| Palm OS 5 Mn 가상 키보드(NX70V·VZ90) | `MnSk5.prc` | 가상 실크스크린(Graffiti 자리)에 OS 4 Mn 가상 키보드와 같은 단모음 한글·영문 자판. 한글 표시는 MnHangul5 | 시험 단계(에뮬레이터만), 리셋 없음 |
 
 OS 4에서는 한글 표시를 CJKOS 등 기존 한글 시스템으로 해도 되고 MnHangul로 해도 된다. 둘을 같이 켜지는 않는다(MnHangul이 CJKOS를 감지하면 켜지지 않음).
-OS 5(TG50·NX70V)는 MnHangul5 하나로 표시와 입력을 한다(OS 4 모듈은 OS 5에서 동작하지 않음).
+OS 5(TG50·NX70V)는 MnHangul5 하나로 표시와 입력을 한다(OS 4 모듈은 OS 5에서 동작하지 않음). NX70V·VZ90에서는 Graffiti 자리 자판 `MnSk5`를 더할 수 있다([OS 5 Mn 가상 키보드](#os-5-mn-가상-키보드mnsk5-nx70vvz90)).
 
 설정 앱은 넷이고 화면이 같다: `MnHangul`(한글 표시), `MnSonyKbd`(Sony 가상 키보드), `MnKbdHan`(시스템 키보드 화면), `MnSkKbd`(Mn 가상 키보드). 어느 앱에서나 네 모듈의 상태가 보인다([공통 화면](#설정-앱-공통-화면켜기업데이트)). `ClieDiag`는 개발용 진단 전용이다.
 
@@ -143,7 +146,7 @@ CloudpilotEmu(포크 master, VZ90 지원)의 VZ90 영문 Mini ROM(RomFlash.VZ `f
 | 자판 | 두벌식. 쌍자음·ㅒ·ㅖ는 키보드 화면의 `shift`를 누른 뒤. 새 글 첫머리처럼 키보드 화면이 스스로 건 대문자는 기본 자모 |
 | 대상 | 영문 Mini ROM만. 일본어 순정 ROM(Shift-JIS)은 켜지지 않음(v18 시험: 리셋 뒤 자동 켜기도 거부). 실기 없음(에뮬레이터의 PV 기기 ID `PvPv` + Sony 기종 이름 `PEG-VZ90`(v21) 확인) |
 
-제한사항: Graffiti 입력 영역은 영문 그대로(시험: 메모장·Address·To Do, v18).
+제한사항: Graffiti 입력은 영문 그대로(시험: 메모장·Address·To Do, v18). Graffiti 자리에 한글 자판을 쓰려면 `MnSk5`([OS 5 Mn 가상 키보드](#os-5-mn-가상-키보드mnsk5-nx70vvz90)).
 
 ## 현재 상태
 
@@ -332,9 +335,31 @@ Sony PEG-TG50·PEG-NX70V(Palm OS 5.0 영문)용(NX70V는 v4부터). v17부터 Cl
 | 끄기 | `OFF`. 리셋 뒤에는 Sony 모듈이 그리기 함수 위에 올라오므로 그때는 "쉬기"(코드는 남고 원래 함수로 넘김, 다음 리셋에 빠짐 — `Now: off (idle until reset)`) |
 | 기기 확인 | Sony TG50·NX70V가 아니거나, 바꿀 시스템 함수 칸이 알려진 값이 아니면(다른 패치가 먼저 바꿈 등) 켜지지 않는다(`not supported`, `system table differs`) |
 | 업데이트 | 코드는 메모리에 복사해 돌므로 켜진 채로 덮어 설치해도 된다. 새 판은 `OFF` → `ON`(쉬는 중이면 리셋 뒤) |
+| MnSk5와 같이 | v22부터 `MnSk5`가 보낸 키(keyCode `0x4D53`)는 조합하지 않고 그대로 넘긴다. 두 모듈의 한/영은 따로다 |
 
 제한사항: 실기 미시험(실기에서는 복사한 ARM 코드 실행 전에 캐시 처리가 필요할 수 있음),
 Graffiti 입력은 영문 그대로, 조합 상태는 앱별로 나뉘지 않음(앱 화면을 누르면 조합 끝), TG50·NX70V 전용(다른 OS5 기종은 칸 번호가 다를 수 있음).
+
+### OS 5 Mn 가상 키보드(MnSk5, NX70V·VZ90)
+
+NX70V·VZ90의 가상 실크스크린(Graffiti 자리, 320×130)에 OS 4 [Mn 가상 키보드](#2-mn-가상-키보드mnskpluginmnskcore)와 같은 단모음 한글·영문·숫자 자판을 그린다.
+Sony의 Silk Plug-in(타입 `Slkw`)으로 동작하므로 상태바 목록에서 고르기만 하면 되고 리셋이 필요 없다([docs/OS5_RESEARCH.md](docs/OS5_RESEARCH.md) 9절).
+TG50은 가상 실크스크린이 없어 해당 없다(하드웨어 키보드 + MnHangul5).
+
+| 항목 | 내용 |
+| --- | --- |
+| 역할 | `MnSk5` = Graffiti 자리 자판 + **한글 조합**(단모음, 완성형 2바이트로 보냄). `MnHangul5` = **한글 표시**와 하드웨어 키보드·시스템 키보드 화면 두벌식 입력. 한글을 보려면 MnHangul5 v22 이상을 켠다 |
+| 설치·켜기 | `MnHangul5.prc`(v22~)·`MnSk5.prc` 설치 → MnHangul5 `ON` → 상태바 **4번째 아이콘** → "Silk Plug-In" 목록에서 `Mn Keyboard` → OK |
+| 끄기 | 같은 목록에서 표준 입력(NX70V `StandardInput`, VZ90은 일본어 이름의 첫 항목)을 고름 |
+| 쓰는 법 | 왼쪽 아래 `한/A` = 한/영, `123` = 숫자·기호, `^` 뒤 자음 = 쌍자음(글자 하나 뒤 풀림), 모음 연타 ㅏㅏ→ㅑ ㅓㅓ→ㅕ ㅗㅗ→ㅛ ㅜㅜ→ㅠ ㅐㅐ→ㅒ ㅔㅔ→ㅖ, `BS` = 조합 중이면 자모 하나, `Ent` = 줄바꿈 |
+| 한/영 상태 | **MnSk5의 `한/A`와 MnHangul5의 한/영(Shift+Space, 키보드 화면의 `한`/`A` 칸)은 따로다.** MnSk5로 친 영문은 MnHangul5가 한글 모드여도 영문 그대로 들어간다 |
+| 업데이트 | 목록에서 표준 입력으로 바꿈 → `MnSk5.prc` 설치 → 다시 `Mn Keyboard`. 고른 채로는 설치되지 않는다(삭제 보호, 에뮬레이터 "unable to overwrite db") |
+| 리셋 | 리셋하면 표준 입력으로 돌아간다(`Mn Keyboard`는 목록에 남음). 다시 고르면 된다 |
+| 조합 중 커서 이동 | 다음 키를 누를 때 커서가 옮겨졌거나 입력칸이 바뀌었으면 조합을 끝낸다(OS 4와 같은 방식, [제한사항](#제한사항)) |
+
+제한사항: 실기 미시험(CloudpilotEmu NX70V·VZ90 영문 Mini, 메모장). 키를 큐에 넣지 못하면 그 키의 조합을 끝내 다음 BS가 다른 글자를 지우지 않게 하지만,
+그때 빠지거나 남은 자모는 되돌리지 않는다(실제 큐 가득 참은 재현하지 못해 흉내 빌드로만 시험). 아주 빠른 탭(에뮬레이터 초당 25번)은 일부가 키로 잡히지 않는다.
+나랏글·키 반복은 없다.
 
 ## 설치·업데이트
 
@@ -362,6 +387,7 @@ Graffiti 입력은 영문 그대로, 조합 상태는 앱별로 나뉘지 않음
 | `MnHangul.prc` | C·D (한글 표시를 MnHangul로 할 때) | 한글 표시 모듈(시험 단계). 한글 시스템(CJKOS 등)이 없을 때 한글 표시 |
 | `MnHgFont24.prc` | C·D 중 선택 (MnHangul 큰 글꼴) | MnHangul 24×24 추가 글꼴(큰 글꼴용) |
 | `MnHangul5.prc` | TG50·NX70V(Palm OS 5) | 한글 표시 + 하드웨어 키보드 두벌식 입력, 설정 앱 겸용([Palm OS 5](#palm-os-5-tg50nx70v-한글mnhangul5)). OS 4 기종에는 설치하지 않는다 |
+| `MnSk5.prc` | NX70V·VZ90(Palm OS 5) 선택 | Graffiti 자리 단모음 한글 자판(Silk Plug-in, [OS 5 Mn 가상 키보드](#os-5-mn-가상-키보드mnsk5-nx70vvz90)). MnHangul5 v22~와 같이 쓴다. OS 4 기종에는 설치하지 않는다 |
 | `KbdScan.prc` | 개발용 | 다른 기종(N700C·T600C 등) 화면 키보드 진단(v2). 키보드 동작에는 필요 없다 |
 | `ClieDiag.prc` | 개발용 | 진단 전용(v29): 로더·본체 기록, SkWr·SkEv 페이지, 복구 스위치(DisS), Feature·트랩 목록, Events 페이지(입력칸 FLD로 키·그래피티 입력 경로 기록). 사용자 설정은 `MnSkKbd`. 키보드 동작에는 필요 없다 |
 
