@@ -74,6 +74,7 @@ static Boolean mock_word(const char *src, uint32_t n, uint32_t o,
 #define ORIG(i) ((i) == 0 ? (uintptr_t)mock_attr : (uintptr_t)mock_word)
 #define Orig(i) ORIG(i)
 #define Idle() 0
+#define Off() 0
 """
 
 def byte_array(s):
