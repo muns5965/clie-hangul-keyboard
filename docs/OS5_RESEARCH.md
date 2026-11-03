@@ -1,6 +1,6 @@
 # Palm OS 5(TG50) 한글 구현 조사
 
-> 조사 기록이다. 이 결과로 만든 OS5 모듈은 `MnHangul5`(`src/os5/`, 7절)다. NX70V는 7절 끝.
+> 조사 기록이다. 이 결과로 만든 OS5 모듈은 `MnHangul5`(`src/os5/`, 7절)다. NX70V는 7절 끝, VZ90은 8절, Graffiti 입력 영역(가상 실크) 조사는 9절.
 > 시험 환경: [TG50 포팅 포크](https://github.com/muns5965/cloudpilot-emu/tree/feature/sony-tg50)의 네이티브 `cp-uarm --tg50`,
 > uARM 기준 해시와 같은 TG50 NOR ROM(OS 5.0 영문). 실기 시험은 하지 않았다. 날짜: 2026-10-22~23.
 
@@ -379,3 +379,89 @@ B-2 직접 호출(v14):
   DAL과 상관없는 Sony 자료. v21은 `PvPv`일 때 이 model이 `PEG-VZ90`인지도 본다(인코딩·ROM 판·주소 범위 조건은 그대로).
   결과: VZ90 영문 Mini `VZ90 OK`·ON, 리셋 뒤 자동 시작·대화상자 입력 정상. 비교 문자열을 바꾼 시험 빌드는 `not TG50/NX70V/VZ90`(거부).
   TG50은 `TG50 OK`·ON(이 조건은 `PvPv`에만 적용). 다른 기종의 PV ROM은 갖고 있지 않아 실제 거부는 시험하지 못했다.
+
+## 9. OS 5 Graffiti 입력 영역 조사 (Mn 가상 키보드 이식 가능성)
+
+> 2026-11-03. 코드 변경 없음. ROM 정적 분석(저장소 밖 도구)과 CloudpilotEmu 네이티브 `cp-uarm`(`--nx70v` NX70V 영문 combo ROM,
+> PV VZ90 영문 Mini 세션 + MnHangul5 v21 ON, `--tg50` TG50 영문)에서 저장소 밖 시험 플러그인(`MnSlProbe`, 68k, 이벤트 원시값을
+> Feature에 남기고 실크 영역에 그대로 그림)으로 확인했다. 실기 시험은 하지 않았다.
+
+### 9.1 기종별 입력 영역
+
+| 기종 | 화면 | Graffiti 자리 | 담당(ROM) | 다른 화면을 띄우는 방법 |
+| --- | --- | --- | --- | --- |
+| TG50 (OS 5.0) | 320×320 | **없음**(하드웨어 키보드). Graffiti 키 → 입력칸에 커서가 있을 때 "Graffiti Input" 대화상자 | ARM 확장 `GraffitiDialog`(타입 `aext`, 크리에이터 `SeGD`) | Silk Plug-in 구조 없음(ROM에 `Slkw`·`StdInput`·`StatusBar` 없음). 이미 하드웨어 키보드 + MnHangul5 두벌식이 있다 |
+| NX70V (OS 5.0) | 320×480 | 가상 실크(320×130) + 상태바(320×30) | Sony Silk Manager(ARM, 공유 라이브러리 `Sony Silk Library`) | **Silk Plug-in**: 상태바 4번째 아이콘 → "Silk Plug-In" 목록에서 선택 |
+| VZ90 (OS 5.2.1, PV) | 320×480 | 같음(영문 Mini도 실크 단추는 일본어 표기) | 같은 Silk Manager(같은 함수 이름·구조) | 같음. 목록 첫 항목은 일본어 이름의 표준 입력 |
+
+내장 플러그인: 표준 입력 `StdInput`(타입 `aSkw`, 크리에이터 `SkAi` — 소프트 Graffiti·소프트 키보드), 상태바 `StatusBar`(`aStw`, `SkSb`).
+VZ90 영문 Full ROM에는 `aSkw` 타입 DB(크리에이터 `DcmL`, Decuma 필기 인식으로 보임)가 더 있다. 둘 다 ARM 모듈이다.
+
+### 9.2 Silk Plug-in 구조 (NX70V·VZ90 공통)
+
+Sony CLIÉ SDK 5.0이 공개한 구조다(`SonySlkw.h`의 이벤트 정의, Programmer's Companion 7장 "Virtual Silkscreen"). 아래 ROM 동작은
+NX70V ROM의 Silk Manager(플러그인 전환 함수)를 역분석한 것이고, VZ90 ROM에도 같은 코드가 있다.
+
+- 플러그인 = DB. 타입 `aSkw`(ARM 모듈 — 모듈을 올려 진입 주소를 얻는 시스템 함수로 부름, 함수 이름은 확인하지 않음) 또는
+  **`Slkw`(68k, 리소스 `code 0`의 맨 앞을 진입점으로 호출)**. 상태바용은 `aStw`/`Staw`. 68k 플러그인은 PACE 호출 경로로 불리며
+  이벤트 구조를 68k 바이트 순서로 바꿔 넘긴다(아래 실측과 맞음).
+- 등록: **부팅 때가 아니라 목록에서 고를 때** DB를 찾는다. 설치하자마자 "Silk Plug-In" 목록에 보이고, 고르면 Open → Start,
+  다른 것으로 바꾸면 Stop → Close. **리셋이 필요 없다**(NR70V `SkWr`는 부팅 때만 등록 → 처음 설치·로더 교체에 리셋).
+- ROM 코드로 보면 고를 때 DB에 삭제 보호(`DmDatabaseProtect`로 보이는 호출)를 걸고 바꿀 때 푼다(호출 이름은 표 칸 번호로 추정).
+  교체 절차: 목록에서 표준 입력으로 바꿈 → 설치 → 다시 고름(시험에서 정상).
+- 진입점: `Err entry(UInt32 *slot, SilkEvent *ev)`. Open 때 첫 인자는 **슬롯 주소**, 이후에는 거기 넣은 **값**(시험: Open에서 넣은 값이
+  다음 이벤트마다 그대로 옴) — NR70V `SkWr`와 같은 약속이다.
+- 이벤트 번호(`ev` 맨 앞 1바이트): 1 Open, 2 Close, 3 Start, 4 Stop, 5 Draw, 6 DispChange, 7 PenDown, 8 PenMove, 9 PenUp,
+  10 TimerFired, 11 DoCommand(SDK 열거형과 같고, NR70V 번호와도 같다).
+
+68k 이벤트 실측(빅엔디언):
+
+| 오프셋 | 내용 | NX70V | VZ90 영문 Mini |
+| --- | --- | --- | --- |
+| +0 | 이벤트 번호(1바이트) | | |
+| +1 | (쓰레기 값으로 보임) | 0x01 | 0x0E |
+| +4 | SDK의 `depth` 자리(32비트) | 0x80 | 0x10 |
+| +12, +16 | Open·Start: 너비·높이(32비트) | 320, 130 | 320, 130 |
+| +12, +14 | Pen: x, y(16비트) — **실크 영역 기준 네이티브 좌표**(0~319, 0~129) | 화면 (100,380) → (98,59) | (100,380) → (100,60) |
+
+그리기·입력 실측:
+- 플러그인이 불릴 때 그리기 창은 실크 창이 아니다(그냥 그리면 아무것도 안 보임). `SysLibFind("Sony Silk Library")` →
+  `VskSetDrawWindow(ref, vskSlkwTypeSilk)` → 그리기 → `VskRestoreDrawWindow`(Silk Library 트랩, SDK `SonySilkLib.h`)로 그리면 보인다.
+  창 크기는 표준 좌표 160×65, `WinSetCoordinateSystem(kCoordinatesNative)`(OS 5 고해상도 API) 뒤에는 320×130으로 1픽셀 단위 그리기 가능
+  (NR70V의 Sony HR 라이브러리 대신).
+- Start 때 그리면 된다(이번 시험 구간에는 Draw가 오지 않았다).
+- `EvtEnqueueKey`: 실크를 누를 때 넣은 `x`가 메모장에 입력됨 — NX70V, VZ90(MnHangul5 v21 켜진 상태) 모두.
+- 펜: PenDown → PenMove 여러 번 → PenUp이 실크 영역 안에서 온다. 앱 화면을 누른 것은 오지 않는다(NR70V와 같음).
+
+### 9.3 OS 4 Mn 가상 키보드(MnSkPlugin·MnSkCore)와 비교
+
+| 항목 | OS 4 NR70V `SkWr` | OS 5 `Slkw` | 이식 |
+| --- | --- | --- | --- |
+| 진입점·슬롯 | `entry(slot, event, out)` | `entry(slot, ev)` | 거의 같음 |
+| 이벤트 번호 | 1~9 | 1~11(같은 번호) | 그대로 |
+| 이벤트 칸 | Open +2 창 핸들, Start +14 고해상도, 펜 +2/+4 저해상도 | Open·Start +12/+16 크기, 펜 +12/+14 네이티브 | 읽는 자리만 바꿈 |
+| 그릴 창 | Open의 창 핸들 → `WinSetDrawWindow` | `VskSetDrawWindow`/`VskRestoreDrawWindow` | 바꿈 |
+| 고해상도 | Sony HR 라이브러리(`HRWinDrawBitmap` 등 27곳) | `WinSetCoordinateSystem(native)` + 표준 그리기 | 그리기 계층 다시 작성 |
+| 등록·업데이트 | 부팅 때만 → 로더+본체 분리, 리셋 | 고를 때 → 로더 불필요할 가능성, 리셋 없음 | 단순해짐 |
+| 조합·자판 | `hangul_compose.h`, `ksc_table.h`, `cursor_track.h`, 자판 배열 | 같은 68k 코드 | 그대로 재사용 |
+| 글자 보내기 | `EvtEnqueueKey`(완성형 2바이트, BS 교체) | 같음(시험 확인) | 그대로 |
+
+결론: 자판 배열·조합·커서 비교는 그대로 쓰고, **이벤트 칸 읽기·그릴 창·고해상도 그리기만 새로 쓰면 된다**. 68k로 두면 OS 4와
+같은 툴체인·같은 위치 독립 코드 검사를 쓸 수 있다. 같은 코드로 NX70V·VZ90 둘 다 된다(TG50은 실크가 없어 대상 아님).
+
+### 9.4 MnHangul5와 같이 쓸 때 정할 것
+
+- 한글 표시: OS 5에는 CJKOS가 없으므로 완성형 2바이트 글자 표시는 MnHangul5가 맡는다(지금과 같음). 플러그인은 입력만.
+- 키 구분: MnHangul5는 한글 모드에서 들어오는 **모든** 영문 글자 keyDown을 두벌식으로 조합한다. 플러그인이 보내는 완성형 글자·BS는
+  조합 대상이 아니어서 그대로 지나가지만, 플러그인 영문 모드의 영문 글자는 MnHangul5 한글 모드에 걸린다. 또 MnHangul5가 자기 키
+  표시로 쓰는 keyCode `0x4D48`('MH')를 플러그인이 쓰면 MnHangul5의 미루기 계산(넣은 수·받은 수)이 어긋나므로 쓰면 안 된다.
+  → 둘 중 하나를 정해야 한다: (가) 플러그인 전용 keyCode를 정하고 MnHangul5가 그 키는 건드리지 않게(MnHangul5 소규모 변경),
+  (나) 플러그인은 영문 두벌식 글자만 보내고 조합은 MnHangul5에 맡김(플러그인이 작아지지만 단모음 자판은 못 씀).
+- 조합 중 커서 이동: 앱 화면 펜은 플러그인에 오지 않으므로 OS 4처럼 `cursor_track.h`(입력칸 커서 위치 비교)를 쓴다.
+
+### 9.5 남은 확인
+
+- Draw·DispChange가 오는 조건(다른 창이 실크를 덮었다 사라질 때 등), 실크 최소화(상태바 화살표)·화면 회전 때 동작.
+- 플러그인 아이콘(`SlkwAppIconFamilyID` 1001, 최대 15×9 / 30×18) 표시.
+- 플러그인을 고른 채 리셋했을 때 다시 켜지는지, 고른 채 같은 DB를 설치했을 때(보호 때문에 실패할 것으로 예상).
+- 68k 플러그인의 속도(펜 이동마다 PACE 경유)와 VZ90 실기.
