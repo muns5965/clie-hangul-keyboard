@@ -10,6 +10,9 @@
  *     앱이 다 그리고 다음 이벤트를 받으러 올 때(원래 함수 부르기 전) 그린다.
  *   - 펜 누름은 커서를 옮길 수 있어 조합을 끝낸다. v15: 시스템 키보드 대화상자(Edit → Keyboard, 폼 32000)의 키 영역
  *     (초점 입력칸 아래 ~ 그 아래 단추 줄 위)을 누른 것은 키 입력이므로 조합을 이어 간다(KbdKeyTap).
+ *   v17: 키보드 대화상자 아래 단추 줄의 가장 오른쪽 단추(Int'l) 오른쪽에 한/영 칸('한'/'A', OS 4 MnKbdHan과 같은 자리)을
+ *     그리고, 누르면 한/영을 바꾼다 — 하드웨어 키보드가 없는 VZ90용(TG50·NX70V에서도 쓸 수 있음). 바꾼 뒤 키 글자는
+ *     FrmUpdateForm(frmUpdateEvent)으로 대화상자가 다시 그리게 한다.
  */
 #include "os5.h"
 
@@ -91,6 +94,96 @@ static int KbdKeyTap(const struct NEvent *ev)
     return ev->screenY < bottom;
 }
 
+/* v17: 한/영 칸 — 키보드 대화상자(활성 폼·활성 창)의 아래 단추 줄(초점 입력칸 아래에서 가장 왼쪽 단추 = Done과 같은 y)의
+ *   가장 오른쪽 단추(Int'l) 오른쪽. 창 밖으로 나가거나 다른 단추와 겹치면 0(칸 없음).
+ *   VZ90 실측(표준 좌표): Done 5,126 · abc 49 · 123 69 · Int'l 89~107, 오른쪽 142,124·142,132에 작은 단추 둘. */
+#define kTogW 14
+#define kTogGap 4
+#define kWinW 160
+static int KbdToggleRect(void *f, struct NRect *t)
+{
+    struct NRect r;
+    u16 fo, n, i;
+    s16 top, row = -1, left = 0x7FFF, right = -1;
+
+    if (!f || ((FormU16Fn)T12(T12_FrmGetFormId))(f) != kKeyboardFormId) return 0;
+    if (((PtrFn)T8(T8_WinGetActiveWindow))() != ((FormPtrFn)T12(T12_FrmGetWindowHandle))(f)) return 0;
+    fo = ((FormU16Fn)T12(T12_FrmGetFocus))(f);
+    n = ((FormU16Fn)T12(T12_FrmGetNumberOfObjects))(f);
+    if (fo >= n || ((FormIdxFn)T12(T12_FrmGetObjectType))(f, fo) != frmFieldObj) return 0;
+    ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, fo, &r);
+    top = (s16)(r.y + r.h);
+    for (i = 0; i < n; i++) {   /* 가장 왼쪽 단추(Done)의 y = 아래 단추 줄 */
+        if (((FormIdxFn)T12(T12_FrmGetObjectType))(f, i) != frmControlObj) continue;
+        ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, i, &r);
+        if (r.y >= top && r.x < left) { left = r.x; row = r.y; }
+    }
+    for (i = 0; i < n; i++) {
+        if (((FormIdxFn)T12(T12_FrmGetObjectType))(f, i) != frmControlObj) continue;
+        ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, i, &r);
+        if (r.y == row && r.x + r.w > right) {
+            right = (s16)(r.x + r.w);
+            t->y = r.y;
+            t->h = r.h;
+        }
+    }
+    if (right < 0 || right + kTogGap + kTogW > kWinW) return 0;
+    t->x = (s16)(right + kTogGap);
+    t->w = kTogW;
+    for (i = 0; i < n; i++) {   /* 다른 단추와 겹치면 칸 없음 */
+        if (((FormIdxFn)T12(T12_FrmGetObjectType))(f, i) != frmControlObj) continue;
+        ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, i, &r);
+        if (r.x < t->x + t->w && t->x < r.x + r.w && r.y < t->y + t->h && t->y < r.y + r.h) return 0;
+    }
+    return 1;
+}
+
+static void KbdToggleDraw(u32 han)
+{
+    void *f = ((PtrFn)T12(T12_FrmGetActiveForm))(), *old;
+    struct NRect r;
+    u8 of;
+    s16 ty;
+
+    if (!KbdToggleRect(f, &r)) return;
+    old = ((FormPtrFn)T8(T8_WinSetDrawWindow))(((FormPtrFn)T12(T12_FrmGetWindowHandle))(f));
+    of = ((FontFn)T8(T8_FntSetFont))(0);
+    ty = (s16)(r.y + (r.h - 11) / 2);
+    ((EraseFn)T8(T8_WinEraseRectangle))(&r, 0);
+    ((void (*)(u16, const struct NRect *))T8(T8_WinDrawRectangleFrame))(1, &r);   /* simpleFrame */
+    if (han) {
+        char t[2];
+
+        t[0] = (char)0xC7;   /* 한 */
+        t[1] = (char)0xD1;
+        HgDrawChars(t, 2, (s16)(r.x + (r.w - HW) / 2), ty);
+    } else {
+        char a = 'A';
+        s16 w = ((CharsWidthFn)ORIG(O_CharsWidth))(&a, 1);
+
+        ((DrawCharsFn)ORIG(O_DrawChars))(&a, 1, (s16)(r.x + (r.w - w) / 2), ty);
+    }
+    ((FontFn)T8(T8_FntSetFont))(of);
+    ((FormPtrFn)T8(T8_WinSetDrawWindow))(old);
+}
+
+/* v17: 대화상자의 shift 키 — 아래 단추 줄 바로 위 키 줄(24 이내)의 왼쪽 끝(x < 32). VZ90 실측: shift 0~31, y 103~115(창 기준) */
+static int KbdShiftTap(const struct NEvent *ev)
+{
+    struct NRect r;
+
+    if (!KbdToggleRect(((PtrFn)T12(T12_FrmGetActiveForm))(), &r)) return 0;
+    return ev->screenX >= 0 && ev->screenX < 32 && ev->screenY < r.y && ev->screenY >= r.y - 24;
+}
+
+static int KbdToggleTap(const struct NEvent *ev)
+{
+    struct NRect r;
+
+    if (!KbdToggleRect(((PtrFn)T12(T12_FrmGetActiveForm))(), &r)) return 0;
+    return ev->screenX >= r.x && ev->screenX < r.x + r.w && ev->screenY >= r.y && ev->screenY < r.y + r.h;
+}
+
 /* 조합 함수를 부른 뒤: 결과 키를 하나라도 못 넣었으면 조합 끝(다음 키부터 새 글자) */
 static inline void EndIfQFail(u32 *st, u32 before)
 {
@@ -170,6 +263,10 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         c->mark &= ~1u;
         Mark(&c->mark, st[2]);
     }
+    if (c->kbd) {   /* v17: 대화상자가 다 그린 뒤 한/영 칸 */
+        c->kbd = 0;
+        KbdToggleDraw(st[2]);
+    }
     ((GetEventFn)ORIG(O_GetEvent))(ev, timeout);
 #if MN_DIAG
     st[7]++;
@@ -179,6 +276,22 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         (ev->eType == keyDownEvent || ev->eType == penUpEvent || ev->eType == winEnterEvent ||
          ev->eType == frmOpenEvent || ev->eType == frmUpdateEvent))
         c->mark |= 1;   /* 앱이 다시 그렸을 수 있음 → 다음에 '한' 다시 그림 */
+    if (ev->eType == frmOpenEvent || ev->eType == frmUpdateEvent || ev->eType == winEnterEvent ||
+        ev->eType == penUpEvent || ev->eType == keyDownEvent)
+        c->kbd = 1;   /* v17: 키보드 대화상자면 다음에 한/영 칸을 (다시) 그림(아니면 KbdToggleRect가 0) */
+    if (ev->eType == penDownEvent && KbdToggleTap(ev)) {   /* v17: 한/영 칸 */
+        st[2] = !st[2];
+        st[0] = 0;
+        c->kshift = 0;
+        c->mark |= 1;
+        c->kbd = 1;
+        ((void (*)(u16, u16))T12(T12_FrmUpdateForm))(kKeyboardFormId, 0x8000);   /* frmRedrawUpdateCode: 키 글자 다시 */
+        LogC(0, ev, 3);
+        ev->eType = nilEvent;
+        return;
+    }
+    if (ev->eType == penDownEvent && st[2] && KbdShiftTap(ev))
+        c->kshift = 1;   /* v17: 손으로 누른 shift(대화상자 상태가 대문자일 때만 쓰임 — 두 번 눌러 푼 경우는 소문자가 옴) */
     if (ev->eType == penDownEvent) {   /* 커서가 옮겨질 수 있음: 조합 끝(v15: 키보드 대화상자의 키는 이어 감) */
         if (!KbdKeyTap(ev)) st[0] = 0;
         return;
@@ -206,6 +319,11 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
      * 한글 모드에서는 소문자로 본다(아니면 두벌식 Shift 규칙으로 된소리가 됨). 미루기 전에 고쳐 둔다. */
     if (st[2] && ch >= 'A' && ch <= 'Z' && st[3] != 0 && (st[3] & 0xFF00) == 0)
         ch |= 0x20;
+    /* v17: 키보드 대화상자의 대문자(원시 키 없음)는 shift를 손으로 눌렀을 때만 그대로, 아니면(자동 대문자·cap) 기본 자모 */
+    if (st[2] && st[3] == 0 && ch >= 'A' && ch <= 'Z' && !c->kshift && KbdToggleRect(((PtrFn)T12(T12_FrmGetActiveForm))(), &(struct NRect){0, 0, 0, 0}))
+        ch |= 0x20;
+    if (st[3] == 0 && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')))
+        c->kshift = 0;
     st[3] = 0;
     /* 앞 키로 넣은 BS·글자가 아직 앱에 안 감: 이 키를 큐 뒤로 미룸.
      * v5: 큐에 못 넣으면(가득 참) 미루지 않고 그대로 처리 — 키가 사라지는 것보다 순서가 바뀌는 쪽이 낫다 */

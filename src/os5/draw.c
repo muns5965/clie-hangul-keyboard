@@ -8,6 +8,7 @@
  * v3: 큰 글꼴(줄 높이 14 이상)은 24×24 묶음(HgJ24)으로 칸 12, 굵은 글꼴(boldFont·largeBoldFont)은 1픽셀 겹쳐 굵게.
  *   그리기·폭·글자 경계가 같은 칸(HangulCell)을 써야 줄바꿈·커서가 맞는다.
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
+ * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
  */
 #include "os5.h"
@@ -347,6 +348,7 @@ static u8 KbdLabel(const char *chars, s16 len, s16 y) {
     if (fo >= n || ((u16 (*)(void *, u16))T12(T12_FrmGetObjectType))(f, fo) != frmFieldObj) return 0;
     ((void (*)(void *, u16, struct ERect *))T12(T12_FrmGetObjectBounds))(f, fo, &r);
     if (y < r.y + r.h) return 0;
+    if (c >= 'A' && c <= 'Z' && !CtxPtr()->kshift) c |= 0x20;   /* v17: 자동 대문자 등 손으로 누르지 않은 shift는 기본 자모 */
     return Dubeol((u8)(c ^ 0x20));
 }
 

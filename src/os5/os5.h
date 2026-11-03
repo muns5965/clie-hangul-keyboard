@@ -9,6 +9,7 @@
  *   - 앱이 동적 힙(소유자 0)에 복사해 실행한다 → 전역 데이터·상수 표 금지. 상태는 ctx(PC 상대, CtxPtr)에만.
  *   - -ffixed-r9 (r9 = 시스템 표), -fno-tree-switch-conversion (큰 switch가 절대 주소 상수 표가 되지 않게).
  *   - 칸 번호는 TG50·NX70V ROM(Palm OS 5.0 영문)에서 같다. 앱이 설치 전에 원래 값이 알려진 값인지 확인한다(slots.txt).
+ *     v17: VZ90 영문 Mini(Palm OS 5.2.1, CloudpilotEmu PV)도 칸 번호가 같다(PACE 연결 함수 740개 대조).
  */
 #ifndef OS5_H
 #define OS5_H
@@ -45,6 +46,8 @@ struct Ctx {
     const u8 *pack24;    /* +248 24×24 조합형 묶음(HgJ24, 큰 글꼴용, v3) */
     u32 bmp[30];         /* +252 글자 그림(BitmapTypeV3 머리 24바이트 + 24줄 × 4바이트, draw.c) */
     u32 qfail;           /* +372 조합 결과 키를 큐에 못 넣은 수(v5, ime.c) */
+    u32 kbd;             /* +376 v17: 키보드 대화상자 한/영 칸을 다음 이벤트 전에 그림(ime.c) */
+    u32 kshift;          /* +380 v17: 키보드 대화상자에서 손으로 누른 shift(다음 영문자까지) — 아니면 대문자도 기본 자모 */
 };
 struct Ctx *CtxPtr(void);
 
@@ -64,6 +67,7 @@ static inline u32 R9(void) {
 #define T8_FntGetFont             0x3fc
 #define T8_FntLineHeight          0x408
 #define T8_FntSetFont             0x410
+#define T8_WinDrawRectangleFrame  0xb34   /* v17 */
 #define T8_WinEraseRectangle      0xb50
 #define T8_WinGetActiveWindow     0xb64
 #define T8_WinPaintBitmap         0xbc8
@@ -80,6 +84,7 @@ static inline u32 R9(void) {
 #define T12_FrmGetObjectBounds    0x254
 #define T12_FrmGetObjectType      0x26c
 #define T12_FrmGetWindowHandle    0x278
+#define T12_FrmUpdateForm         0x2f0   /* v17: 키 글자 다시 그리기(frmUpdateEvent) */
 
 /* 한글 한 칸(표준 좌표, 2배 밀도): 16×16 글자 = 9(기기 18, 왼쪽 1 띄움), 24×24 글자 = 12(기기 24) */
 #define HW 9

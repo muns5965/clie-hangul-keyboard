@@ -1,5 +1,5 @@
 /*
- * MnHangul5 v16 — Palm OS 5(Sony TG50·NX70V) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v17 — Palm OS 5(Sony TG50·NX70V, CloudpilotEmu의 VZ90 영문 Mini) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
@@ -19,6 +19,10 @@
  *   2바이트 글자는 코드값 순서, 1바이트 글자가 앞, 일치 길이는 글자 경계(text.c).
  * v15: 시스템 키보드 대화상자(Edit → Keyboard)에서 한글 조합 — 키를 펜으로 누를 때마다 조합이 끝나 자모가 낱낱이 들어가던 문제(ime.c).
  * v16: 한글 모드에서 키보드 대화상자의 키 글자를 두벌식 자모로 그린다(shift면 쌍자음·ㅒ·ㅖ, draw.c).
+ * v17: CloudpilotEmu의 VZ90 영문 Mini ROM(Palm OS 5.2.1, 기기 ID 'PvPv' = PV 플랫폼, 문자 인코딩 Palm Latin). 칸 번호는 TG50과 같고
+ *   (PACE 연결 함수 740개 대조), 칸의 원래 값은 에뮬레이터가 다시 조립한 ROM 안(0x10000000~0x10FFFFFF)이면 받는다(DAL 판마다
+ *   주소가 달라질 수 있음; 다른 패치는 RAM 주소라 걸러짐). 일본어 ROM(Shift-JIS)·다른 PV ROM은 인코딩·ROM 판으로 거른다.
+ *   하드웨어 키보드가 없으므로 키보드 대화상자 Int'l 오른쪽 한/영 칸으로 바꾼다(ime.c).
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -33,7 +37,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v16"
+#define kVer "v17"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -146,7 +150,21 @@ static UInt16 Check(const UInt16 *tb, UInt32 t8)
 
     FtrGet(sysFtrCreator, sysFtrNumOEMCompanyID, &co);
     FtrGet(sysFtrCreator, sysFtrNumOEMDeviceID, &dev);
-    if (co != 'sony' || (dev != 'vrna' && dev != 'crdb') || t8 == 0)
+    if (co != 'sony' || t8 == 0)
+        return kNotSupported;
+    if (dev == 'PvPv') {   /* v17: VZ90 영문 Mini(CloudpilotEmu PV): Palm Latin, ROM 5.2 */
+        UInt32 enc = 0, rom = 0;
+
+        FtrGet(sysFtrCreator, sysFtrNumEncoding, &enc);
+        FtrGet(sysFtrCreator, sysFtrNumROMVersion, &rom);
+        if (enc != charEncodingPalmLatin || (rom >> 20) != 0x052)
+            return kNotSupported;
+        for (i = 0; i < tb[0]; i++)
+            if ((SW(*(UInt32 *)(t8 + TbSlot(tb, i))) & 0xFF000000UL) != 0x10000000UL)
+                return kSlotDiffer | (i << 8);
+        return kOk;
+    }
+    if (dev != 'vrna' && dev != 'crdb')
         return kNotSupported;
     for (i = 0; i < tb[0]; i++) {
         UInt32 v = SW(*(UInt32 *)(t8 + TbSlot(tb, i)));
@@ -315,7 +333,7 @@ static void OnMsg(UInt16 r)
     switch (r & 0xff) {
     case kOk:        StrCopy(gMsg, "on"); break;
     case kOnAlready: StrCopy(gMsg, "already on"); break;
-    case kNotSupported:   StrCopy(gMsg, "not supported: TG50/NX70V only"); break;
+    case kNotSupported:   StrCopy(gMsg, "not supported: TG50/NX70V/VZ90 only"); break;
     case kSlotDiffer: StrPrintF(gMsg, "not on: system table differs (#%u)", r >> 8); break;
     case kNoMem:     StrCopy(gMsg, "not on: out of memory"); break;
     case kRelinked:  StrPrintF(gMsg, "on: relinked %u detached", r >> 8); break;
@@ -389,7 +407,7 @@ static void Draw(void)
         UiCheck(kUiRowDebug, "Debug", true);
         return;
     }
-    UiRow(0, "Hangul display + kbd (TG50/NX70V)");
+    UiRow(0, "Hangul for TG50/NX70V/VZ90");
     UiMsg(gMsg);
     if (!block)
         UiRow(kUiRowNow, "Now: off");
@@ -433,11 +451,11 @@ static void Draw(void)
             UInt32 dev = 0;
 
             FtrGet(sysFtrCreator, sysFtrNumOEMDeviceID, &dev);
-            UiPair(kUiRowMods, "Device", dev == 'crdb' ? "NX70V OK" : "TG50 OK");
+            UiPair(kUiRowMods, "Device", dev == 'crdb' ? "NX70V OK" : dev == 'PvPv' ? "VZ90 OK" : "TG50 OK");
         } else
-            UiPair(kUiRowMods, "Device", (c & 0xff) == kNotSupported ? "not TG50/NX70V" : "table differs");
+            UiPair(kUiRowMods, "Device", (c & 0xff) == kNotSupported ? "not TG50/NX70V/VZ90" : "table differs");
     }
-    UiPair(kUiRowMods + 1, "Han/Eng", "Shift+Space");
+    UiPair(kUiRowMods + 1, "Han/Eng", "Shift+Space / Kbd A");
     UiPair(kUiRowMods + 2, "Mark", "\"Han\" at lower right");
     UiPair(kUiRowMods + 3, "CJKOS", UiCjkos() ? "on: turn it off" : "-");
     UiRow(kUiRowUse, "Type in Hangul mode: two-set");
