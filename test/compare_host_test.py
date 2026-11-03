@@ -73,6 +73,7 @@ static s16 mock_compare(const char *s1, u32 n1, u16 *m1, const char *s2, u32 n2,
 #define O_Caseless 1
 #define ORIG(i) ((i) == O_Compare ? (uintptr_t)mock_compare : (uintptr_t)mock_caseless)
 #define Idle() 0
+#define Off() 0
 """
 
 # OS 4 (src/hangul/intl.c): Palm 형, 길이 UInt16, 원래 루틴 Orig(8) Compare·Orig(9) Caseless
