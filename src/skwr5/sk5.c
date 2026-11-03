@@ -4,7 +4,10 @@
  * NX70V·VZ90의 가상 실크(Graffiti 자리, 320×130)에 OS 4 Mn 가상 키보드(src/skwr/skwr.c)와 같은 4줄 자판을 그린다.
  * 조사: docs/OS5_RESEARCH.md 9절. 상태바 4번째 아이콘 → "Silk Plug-In" 목록에서 고르면 켜진다(리셋 없음).
  *
- * 1단계(build 1): 자판 그리기·한/영·123·Shift 전환, 영문·숫자·기호·BS·Enter 보내기. 한글 자모 키는 아직 아무것도 보내지 않는다(2단계에서 조합).
+ * build 1(1단계): 자판 그리기·한/영·123·Shift 전환, 영문·숫자·기호·BS·Enter 보내기.
+ * build 2(2단계): OS 4와 같은 단모음 한글 조합(src/common/hangul_compose.h, 완성형 판정표 src/skwr/ksc_table.h),
+ *   조합 중 커서 이동 감지(src/common/cursor_track.h), 한/A의 '한'을 16×16 그림으로(src/skwr5/data/Sk5Han.bin, MnHangul5 없이도 보임),
+ *   EvtEnqueueKey 결과 확인: 성공·실패를 따로 세고, 조합 중 하나라도 큐에 못 넣으면 조합을 끝낸다(다음 BS가 엉뚱한 글자를 지우지 않게).
  *
  * Silk Manager 약속 (NX70V ROM 역분석 + 시험 플러그인 실측, 9절):
  *   - DB 타입 Slkw, 리소스 code 0의 맨 앞이 진입점: Err entry(UInt32 *slot, UInt8 *ev). Open 때만 slot은 슬롯 주소.
@@ -15,20 +18,25 @@
  *   - 고해상도: WinSetCoordinateSystem(kCoordinatesNative)로 320×130 좌표에 그린다(OS 4는 Sony HR 라이브러리).
  *   - 시작 코드·A5가 없다 → 전역변수·문자열 상수·초기화된 지역 배열 금지, 위치 독립 코드(빌드 스크립트가 검사).
  *
+ * 시험 빌드(SK5_CFLAGS로 켬, 배포 PRC에는 없음): -DSK5_DEBUG 자판 맨 위에 #47·#52·#50·#54를 표시(펜을 뗄 때마다 다시 그림),
+ *   -DSK5_TEST_QFAIL 큐 실패 흉내(넣으려는 키 7개마다 하나를 실패로 처리).
+ *
  * 보내는 키에는 keyCode kSkMark('MS')를 붙인다. MnHangul5 v22는 이 키를 조합하지 않고 그대로 보낸다
  * (MnHangul5가 한글 모드여도 이 키보드의 영문이 두벌식으로 바뀌지 않게).
  *
  * 기록 (feature 'MnS5'):
  *   #0 Open 표시(31~16 'S5', 7~0 빌드), #1~#11 이벤트 1~11 횟수, #12 Silk Library(31~16 SysLibFind 오류, 15~0 참조 번호),
  *   #13 VskSetDrawWindow 결과, #14 그린 크기(31~16 너비, 15~0 높이), #15 Start 크기(같은 형식), #16 Start depth 칸,
- *   #46 눌린 키(0 없음, 줄*16+칸+1), #47 보낸 키 수, #48 마지막 보낸 키(31~16 키 번호, 15~0 코드), #49 자판 상태
+ *   #46 눌린 키(0 없음, 줄*16+칸+1), #47 큐에 넣은 키 수, #48 마지막 키(31~16 키 번호, 15~0 코드), #49 자판 상태,
+ *   #50 조합 상태(31~24 초성, 23~16 중성, 15~8 종성: 호환 자모 - 0x3130, 7~0 화면에 나간 글자 수), #51 조합 중인 앱 LocalID,
+ *   #52 큐에 못 넣은 키 수, #53 이번 키 처리 중 큐 실패(0/1), #54 큐 실패로 조합을 끝낸 수, #81~#87 커서 비교(cursor_track.h)
  */
 
 #include <PalmOS.h>
 
 #define kCr           'MnS5'
 #define kMagic        0x5335UL     /* 'S5' */
-#define kBuild        1
+#define kBuild        2
 
 #define kSkMark       0x4D53       /* 'MS' — MnHangul5 v22 ime.c kSkMark와 같아야 한다 */
 
@@ -51,6 +59,12 @@
 #define kFtrKeyCount  47
 #define kFtrKeyLast   48
 #define kFtrState     49
+#define kFtrComp      50
+#define kFtrCompApp   51
+#define kFtrKeyFail   52
+#define kFtrQFail     53
+#define kFtrQEnd      54
+#define kFtrFld       81   /* #81~#87 조합 중 커서 이동 감지 */
 
 #define kStEng        0x0001
 #define kStNum        0x0002
@@ -296,12 +310,12 @@ static inline UInt16 KeyCode(UInt16 st, UInt16 row, UInt16 col)
     return HanCode(sh, row, col);
 }
 
-/* 키 이름 (OS 4와 같음). 한/A의 '한'은 완성형 2바이트라 한글 표시(MnHangul5)가 켜져 있어야 보인다 */
+/* 키 이름 (OS 4와 같음). 한/A는 '/A'만 글자로, '한'은 그림으로 그린다(DrawKeys) */
 static inline UInt16 KeyLabel(UInt16 code, Char *s)
 {
     switch (code) {
     case kKShift:     s[0] = '^'; return 1;
-    case kKHanEng:    s[0] = (Char)0xC7; s[1] = (Char)0xD1; s[2] = '/'; s[3] = 'A'; return 4;  /* 한/A */
+    case kKHanEng:    s[0] = '/'; s[1] = 'A'; return 2;
     case kKNum:       s[0] = '1'; s[1] = '2'; s[2] = '3'; return 3;
     case chrBackspace: s[0] = 'B'; s[1] = 'S'; return 2;
     case chrLineFeed: s[0] = 'E'; s[1] = 'n'; s[2] = 't'; return 3;
@@ -323,20 +337,24 @@ static inline const UInt8 *Jamo16Ptr(void)
     return p;
 }
 
-/* 자모(KS X 1001 0xA4A1부터 번호 o = 1~94)를 16×16 그림으로, 글자 점 범위를 (cx, cy) 가운데에 맞춰 그린다(네이티브 좌표).
- * 1비트 16×16 그림을 고밀도(kDensityDouble) V3로 감싸 네이티브 1:1로 그린다(저밀도 그대로면 2배로 커진다). */
-static inline Boolean DrawJamo(UInt16 o, Coord cx, Coord cy)
+static inline const UInt8 *Han16Ptr(void)
 {
-    const UInt8   *g;
+    const UInt8 *p;
+
+    asm("lea Han16(%%pc),%0" : "=a" (p));
+    return p;
+}
+
+/* 16×16 1비트 그림 g(줄마다 2바이트)를 글자 점 범위의 가운데가 (cx, cy)에 오게 그린다(네이티브 좌표).
+ * 고밀도(kDensityDouble) V3로 감싸 네이티브 1:1로 그린다(저밀도 그대로면 2배로 커진다). 그린 점 너비를 *pw에(선택) */
+static inline Boolean DrawGlyph16(const UInt8 *g, Coord cx, Coord cy, Coord *pw)
+{
     BitmapPtr      bmp;
     BitmapTypeV3  *v3;
     UInt8         *px;
     Err            e = 0;
     UInt16         rb = 0, r, c, rmin = 16, rmax = 0, cmin = 16, cmax = 0;
 
-    if (o == 0 || o > 94)
-        return false;
-    g = Jamo16Ptr() + (o - 1) * 32;
     for (r = 0; r < 16; r++) {
         UInt16 v = ((UInt16)g[r * 2] << 8) | g[r * 2 + 1];
 
@@ -374,7 +392,17 @@ static inline Boolean DrawJamo(UInt16 o, Coord cx, Coord cy)
     WinDrawBitmap((BitmapPtr)v3, cx - (Coord)((cmin + cmax + 1) / 2), cy - (Coord)((rmin + rmax + 1) / 2));
     BmpDelete((BitmapPtr)v3);
     BmpDelete(bmp);
+    if (pw != NULL)
+        *pw = (Coord)(cmax - cmin + 1);
     return true;
+}
+
+/* 자모(KS X 1001 0xA4A1부터 번호 o = 1~94) */
+static inline Boolean DrawJamo(UInt16 o, Coord cx, Coord cy)
+{
+    if (o == 0 || o > 94)
+        return false;
+    return DrawGlyph16(Jamo16Ptr() + (o - 1) * 32, cx, cy, NULL);
 }
 
 static inline void EndDraw(UInt16 ref, UInt16 old);
@@ -418,74 +446,7 @@ static inline void KeyInner(RectangleType *r)
     RctInsetRectangle(r, 3);
 }
 
-static inline void DrawKeys(void)
-{
-    UInt16        ref, old;
-    Coord         w, h;
-    RectangleType r;
-    FontID        oldFont;
-    UInt16        st = (UInt16)GetFtr(kFtrState);
-    UInt16        row, col;
 
-    if (!BeginDraw(&ref, &old, &w, &h))
-        return;
-    RctSetRectangle(&r, 0, 0, w, h);
-    WinEraseRectangle(&r, 0);
-    oldFont = FntSetFont(stdFont);
-    for (row = 0; row < kRows; row++) {
-        UInt16 n = RowKeys(st, row);
-
-        for (col = 0; col < n; col++) {
-            UInt16 code = KeyCode(st, row, col);
-            Char   lab[4];
-            UInt16 len = KeyLabel(code, lab);
-
-            KeyCell(st, row, col, w, h, &r);
-            KeyInner(&r);
-            WinDrawRectangleFrame(roundFrame, &r);
-            if ((code >> 8) == 0xA4)
-                DrawJamo(code - 0xA4A1 + 1, r.topLeft.x + r.extent.x / 2, r.topLeft.y + r.extent.y / 2);
-            else if (len > 0)
-                WinDrawChars(lab, len, r.topLeft.x + (r.extent.x - FntCharsWidth(lab, len)) / 2,
-                             r.topLeft.y + (r.extent.y - FntLineHeight()) / 2);
-            if ((code == kKShift && (st & kStShift)) || (code == kKNum && (st & kStNum)))
-                WinInvertRectangle(&r, 0);
-        }
-    }
-#ifdef SK5_DEBUG
-    {   /* 시험 빌드: 최근 이벤트 4개(#20~#23: 번호<<24 | x<<12 | y)를 space 칸에 */
-        Char s[40]; UInt16 i, j;
-        for (i = 0; i < 4; i++) {
-            UInt32 v = (i == 0) ? GetFtr(15) : (i == 1) ? GetFtr(16) : (i == 2) ? GetFtr(kFtrKeyLast) : GetFtr(23);
-            for (j = 0; j < 8; j++) { UInt8 d = (UInt8)((v >> (28 - 4 * j)) & 15); s[i * 9 + j] = d < 10 ? '0' + d : 'A' + d - 10; }
-            s[i * 9 + 8] = ' ';
-        }
-        FntSetFont(stdFont);
-        WinDrawChars(s, 35, 2, 2);
-    }
-#endif
-    FntSetFont(oldFont);
-    EndDraw(ref, old);
-    FtrSet(kCr, kFtrDrawn, ((UInt32)(UInt16)w << 16) | (UInt16)h);
-    FtrSet(kCr, kFtrPressed, 0);
-}
-
-/* 눌린 키 안쪽 반전 토글 */
-static inline void InvertKey(UInt16 k)
-{
-    UInt16        ref, old;
-    Coord         w, h;
-    RectangleType r;
-
-    if (k == 0)
-        return;
-    if (!BeginDraw(&ref, &old, &w, &h))
-        return;
-    KeyCell((UInt16)GetFtr(kFtrState), (k - 1) / 16, (k - 1) % 16, w, h, &r);
-    KeyInner(&r);
-    WinInvertRectangle(&r, 0);
-    EndDraw(ref, old);
-}
 
 /* 펜 좌표(+10/+12, 실크 기준 네이티브)가 들어간 키 번호. 크기는 Start 때 받은 값 */
 static inline UInt16 PenKey(const UInt8 *ev)
@@ -500,43 +461,89 @@ static inline UInt16 PenKey(const UInt8 *ev)
 
 /* ---------------- 키 동작 ---------------- */
 
+#include "../common/cursor_track.h"
+
+/* 키 하나를 큐에 넣는다(keyCode kSkMark). 실패하면 세고 '이번 키 처리 중 실패' 표시 */
+static inline void HcSend(UInt16 c)
+{
+    Err e;
+
+#ifdef SK5_TEST_QFAIL
+    /* 시험 빌드: 큐 실패 흉내 — 넣으려는 키 7개마다 하나를 넣지 않고 실패로 처리(#55 0~6 순환) */
+    FtrSet(kCr, 55, GetFtr(55) >= 6 ? 0 : GetFtr(55) + 1);
+    if (GetFtr(55) == 0)
+        e = 1;
+    else
+#endif
+    e = EvtEnqueueKey(c, kSkMark, 0);
+    if (e == errNone) {
+        BumpFtr(kFtrKeyCount);
+        CtDelta(kCr, kFtrFld, c);
+    } else {
+        BumpFtr(kFtrKeyFail);
+        FtrSet(kCr, kFtrQFail, 1);
+    }
+}
+
+#include "../common/hangul_compose.h"
+
 static inline void SendKey(UInt16 c)
 {
-    EvtEnqueueKey(c, kSkMark, 0);
-    BumpFtr(kFtrKeyCount);
+    HcSend(c);
 }
 
-/* 키 동작. 다시 그려야 하면 true */
-static inline Boolean DoKey(UInt16 k)
+static inline void Commit(void)
 {
-    UInt16 st = (UInt16)GetFtr(kFtrState);
-    UInt16 code = KeyCode(st, (k - 1) / 16, (k - 1) % 16);
-    UInt16 nst = st;
-
-    switch (code) {
-    case kKShift:
-        nst ^= kStShift;
-        break;
-    case kKHanEng:
-        nst = (st & kStEng) ^ kStEng;            /* 한↔영, 숫자·Shift 해제 */
-        break;
-    case kKNum:
-        nst = (st ^ kStNum) & ~kStShift;
-        break;
-    default:
-        if ((code >> 8) == 0xA4)                 /* 1단계: 한글 자모는 아직 보내지 않음 */
-            break;
-        SendKey(code);
-        FtrSet(kCr, kFtrKeyLast, ((UInt32)k << 16) | code);
-        if (code != chrBackspace)
-            nst &= ~kStShift;                    /* 글자 하나 보내면 Shift 해제 */
-        break;
-    }
-    if (nst == st)
-        return false;
-    FtrSet(kCr, kFtrState, nst);
-    return true;
+    FtrSet(kCr, kFtrComp, 0);
 }
+
+/* 조합 상태는 #50·#51 (공용 함수는 상태 두 칸을 받음) */
+static inline void SkCompose(UInt8 o)
+{
+    UInt32 st[2];
+
+    st[0] = GetFtr(kFtrComp);
+    st[1] = GetFtr(kFtrCompApp);
+    Compose(st, o);
+    FtrSet(kCr, kFtrComp, st[0]);
+    FtrSet(kCr, kFtrCompApp, st[1]);
+}
+
+/* 조합 중 BS: 자모 하나 되돌리기. 조합 중이 아니면 보통 BS */
+static inline void SkComposeBack(void)
+{
+    UInt32  st[2];
+    Boolean done;
+
+    st[0] = GetFtr(kFtrComp);
+    st[1] = GetFtr(kFtrCompApp);
+    done = ComposeBack(st);
+    FtrSet(kCr, kFtrComp, st[0]);
+    FtrSet(kCr, kFtrCompApp, st[1]);
+    if (!done) {
+        CtUnknown(kCr, kFtrFld);   /* 지울 글자 크기를 모름 */
+        SendKey(chrBackspace);
+    }
+}
+
+/* 이번 키 처리 중 큐에 못 넣은 키가 있으면: 화면 글자와 조합 상태가 어긋났을 수 있으므로 조합을 끝내고 커서 비교도 쉰다 */
+static inline void QFailEnd(void)
+{
+    if (GetFtr(kFtrQFail) == 0)
+        return;
+    FtrSet(kCr, kFtrQFail, 0);
+    if (GetFtr(kFtrComp) != 0)
+        BumpFtr(kFtrQEnd);
+    Commit();
+    CtUnknown(kCr, kFtrFld);
+}
+
+
+/* 큰 함수는 inline으로 두면 Sk5Entry 한 함수가 너무 커져(switch 점프표 16비트 넘침) 따로 둔다.
+ * 진입점이 .text 맨 앞이어야 하므로 선언만 앞에 두고 본문은 Sk5Entry 뒤에 둔다. */
+static void    DrawKeys(void);
+static void    InvertKey(UInt16 k);
+static Boolean DoKey(UInt16 k);
 
 Err Sk5Entry(UInt32 *slot, UInt8 *ev)
 {
@@ -547,14 +554,6 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
     e = ev[0];
     if (e >= 1 && e <= 11)
         BumpFtr(kFtrCount0 + e);
-#ifdef SK5_DEBUG
-    if (e != 8) {
-        {
-            FtrSet(kCr, 20, GetFtr(21)); FtrSet(kCr, 21, GetFtr(22)); FtrSet(kCr, 22, GetFtr(23));
-            FtrSet(kCr, 23, ((UInt32)e << 24) | (GetFtr(kFtrPressed) << 12) | (GetFtr(kFtrKeyCount) & 0xFFF));
-        }
-    }
-#endif
 
     switch (e) {
     case kEvtOpen:
@@ -566,7 +565,14 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
     case kEvtStart:
         FtrSet(kCr, kFtrSize, ((Be32(ev + 10) & 0xFFFF) << 16) | (Be32(ev + 14) & 0xFFFF));
         FtrSet(kCr, kFtrDepth, Be32(ev + 2));
+        Commit();
+        CtReset(kCr, kFtrFld);   /* 키보드를 새로 띄우면 비교 다시 시작 */
         DrawKeys();
+        break;
+
+    case kEvtStop:
+        Commit();
+        CtReset(kCr, kFtrFld);
         break;
 
     case kEvtDraw:
@@ -602,4 +608,125 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
     return 0;
 }
 
+static void DrawKeys(void)
+{
+    UInt16        ref, old;
+    Coord         w, h;
+    RectangleType r;
+    FontID        oldFont;
+    UInt16        st = (UInt16)GetFtr(kFtrState);
+    UInt16        row, col;
+
+    if (!BeginDraw(&ref, &old, &w, &h))
+        return;
+    RctSetRectangle(&r, 0, 0, w, h);
+    WinEraseRectangle(&r, 0);
+    oldFont = FntSetFont(stdFont);
+    for (row = 0; row < kRows; row++) {
+        UInt16 n = RowKeys(st, row);
+
+        for (col = 0; col < n; col++) {
+            UInt16 code = KeyCode(st, row, col);
+            Char   lab[4];
+            UInt16 len = KeyLabel(code, lab);
+
+            KeyCell(st, row, col, w, h, &r);
+            KeyInner(&r);
+            WinDrawRectangleFrame(roundFrame, &r);
+            if ((code >> 8) == 0xA4)
+                DrawJamo(code - 0xA4A1 + 1, r.topLeft.x + r.extent.x / 2, r.topLeft.y + r.extent.y / 2);
+            else if (code == kKHanEng) {   /* '한' 그림 + 간격 1 + '/A' 글자, 묶어서 가운데 */
+                Coord tw = FntCharsWidth(lab, len), gw = 12;
+                Coord x0 = r.topLeft.x + (r.extent.x - (gw + 1 + tw)) / 2;
+
+                DrawGlyph16(Han16Ptr(), x0 + gw / 2, r.topLeft.y + r.extent.y / 2, NULL);
+                WinDrawChars(lab, len, x0 + gw + 1, r.topLeft.y + (r.extent.y - FntLineHeight()) / 2);
+            } else if (len > 0)
+                WinDrawChars(lab, len, r.topLeft.x + (r.extent.x - FntCharsWidth(lab, len)) / 2,
+                             r.topLeft.y + (r.extent.y - FntLineHeight()) / 2);
+            if ((code == kKShift && (st & kStShift)) || (code == kKNum && (st & kStNum)))
+                WinInvertRectangle(&r, 0);
+        }
+    }
+#ifdef SK5_DEBUG
+    {   /* 시험 빌드(SK5_CFLAGS=-DSK5_DEBUG): 맨 위에 큐에 넣은 수 #47, 못 넣은 수 #52, 조합 상태 #50, 큐 실패로 끝낸 수 #54 */
+        Char s[40]; UInt16 i, j;
+        for (i = 0; i < 4; i++) {
+            UInt32 v = (i == 0) ? GetFtr(kFtrKeyCount) : (i == 1) ? GetFtr(kFtrKeyFail) : (i == 2) ? GetFtr(kFtrComp) : GetFtr(kFtrQEnd);
+            for (j = 0; j < 8; j++) { UInt8 d = (UInt8)((v >> (28 - 4 * j)) & 15); s[i * 9 + j] = d < 10 ? '0' + d : 'A' + d - 10; }
+            s[i * 9 + 8] = ' ';
+        }
+        FntSetFont(stdFont);
+        WinDrawChars(s, 35, 2, 2);
+    }
+#endif
+    FntSetFont(oldFont);
+    EndDraw(ref, old);
+    FtrSet(kCr, kFtrDrawn, ((UInt32)(UInt16)w << 16) | (UInt16)h);
+    FtrSet(kCr, kFtrPressed, 0);
+}
+
+/* 눌린 키 안쪽 반전 토글 */
+static void InvertKey(UInt16 k)
+{
+    UInt16        ref, old;
+    Coord         w, h;
+    RectangleType r;
+
+    if (k == 0)
+        return;
+    if (!BeginDraw(&ref, &old, &w, &h))
+        return;
+    KeyCell((UInt16)GetFtr(kFtrState), (k - 1) / 16, (k - 1) % 16, w, h, &r);
+    KeyInner(&r);
+    WinInvertRectangle(&r, 0);
+    EndDraw(ref, old);
+}
+
+/* 키 동작. 다시 그려야 하면 true */
+static Boolean DoKey(UInt16 k)
+{
+    UInt16 st = (UInt16)GetFtr(kFtrState);
+    UInt16 code = KeyCode(st, (k - 1) / 16, (k - 1) % 16);
+    UInt16 nst = st;
+
+    FtrSet(kCr, kFtrQFail, 0);
+    if (CtCheck(kCr, kFtrFld, (GetFtr(kFtrComp) & 0xFF) != 0))
+        Commit();   /* 조합 중 커서가 옮겨졌거나 입력칸이 바뀜 */
+    switch (code) {
+    case kKShift:
+        nst ^= kStShift;
+        break;
+    case kKHanEng:
+        Commit();
+        nst = (st & kStEng) ^ kStEng;            /* 한↔영, 숫자·Shift 해제 */
+        break;
+    case kKNum:
+        Commit();
+        nst = (st ^ kStNum) & ~kStShift;
+        break;
+    case chrBackspace:
+        SkComposeBack();
+        FtrSet(kCr, kFtrKeyLast, ((UInt32)k << 16) | code);
+        break;
+    default:
+        if ((code >> 8) == 0xA4) {               /* 한글 자모 → 조합 */
+            SkCompose((UInt8)(code - 0xA4A1 + 1));
+        } else {
+            Commit();
+            SendKey(code);
+        }
+        FtrSet(kCr, kFtrKeyLast, ((UInt32)k << 16) | code);
+        nst &= ~kStShift;                        /* 글자 하나 보내면 Shift 해제 */
+        break;
+    }
+    QFailEnd();
+    if (nst == st)
+        return false;
+    FtrSet(kCr, kFtrState, nst);
+    return true;
+}
+
+#include "../skwr/ksc_table.h"   /* 완성형 판정표 KscBits·KscCum (tools/gen-ksc-table.py) */
 asm(".text\n.even\nJamo16:\n .incbin \"SyJm0000.bin\", 126, 3008\n.even\n");   /* 낱자모 94자 × 16줄 × 2바이트 (src/sony/data) */
+asm(".text\n.even\nHan16:\n .incbin \"Sk5Han.bin\", 0, 32\n.even\n");           /* '한' 16×16 (tools/gen-sk5-han.py) */

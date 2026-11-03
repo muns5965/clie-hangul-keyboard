@@ -24,7 +24,7 @@ if [ -z "$a" ] || [ "$a" != "$b" ]; then
   exit 1
 fi
 
-m68k-palmos-gcc -palmos5r3 ${SK5_CFLAGS:-} -Wa,-I"$root/src/sony/data" -O2 -Wall -Wno-multichar \
+m68k-palmos-gcc -palmos5r3 ${SK5_CFLAGS:-} -Wa,-I"$root/src/sony/data" -Wa,-I"$root/src/skwr5/data" -I"$root/src/common" -O2 -Wall -Wno-multichar \
   -fno-builtin -nostartfiles -nostdlib \
   -Wl,-e,Sk5Entry \
   "$root/src/skwr5/sk5.c" -o sk5.coff
