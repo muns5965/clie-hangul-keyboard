@@ -48,8 +48,11 @@ struct Ctx {
     u32 qfail;           /* +372 조합 결과 키를 큐에 못 넣은 수(v5, ime.c) */
     u32 kbd;             /* +376 v17: 키보드 대화상자 한/영 칸을 다음 이벤트 전에 그림(ime.c) */
     u32 kshift;          /* +380 v17: 키보드 대화상자에서 손으로 누른 shift(다음 영문자까지) — 아니면 대문자도 기본 자모 */
+    u32 markwin;         /* +384 v19: GSI '한'을 그린 창(그 창에서만 지운다) */
 };
 struct Ctx *CtxPtr(void);
+#define kCtxSpace 416   /* ctx.S의 .space와 같게. v19: 384를 넘겨 뒤 코드를 덮었던 일이 있어 컴파일 때 확인 */
+typedef char CtxFits[(sizeof(struct Ctx) <= kCtxSpace) ? 1 : -1];
 
 static inline u32 R9(void) {
     u32 r;

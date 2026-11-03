@@ -220,11 +220,17 @@ static void Mark(u32 *mark, u32 han)
     struct NRect r;
 
     if (!f) return;
-    if (KbdToggleRect(f, &r)) {   /* 대화상자가 새로 그린 화면이라 지울 것 없음 */
-        *mark &= ~4u;
-        return;
-    }
     w = ((FormPtrFn)T12(T12_FrmGetWindowHandle))(f);
+    if (KbdToggleRect(f, &r)) {   /* v18: 한/영 칸이 상태를 보임 → GSI '한'은 그리지 않음 */
+        /* v19: 이 대화상자 창에 우리가 그린 '한'이 남아 있으면(칸을 그릴 수 없던 때 그림) 그 자리만 지운다.
+         *   다른 창(메모 화면 등)에 그린 표시는 그 창의 것이라 건드리지 않는다(대화상자 GSI의 shift 표시를 지우지 않게). */
+        if ((*mark & 4) && CtxPtr()->markwin == (u32)w)
+            han = 0;
+        else {
+            *mark &= ~4u;
+            return;
+        }
+    }
     if (!w || ((PtrFn)T8(T8_WinGetActiveWindow))() != w) return;
     n = ((FormU16Fn)T12(T12_FrmGetNumberOfObjects))(f);
     for (i = 0; i < n; i++)
@@ -243,6 +249,7 @@ static void Mark(u32 *mark, u32 han)
         HgDrawChars(t, 2, r.x + r.w - HW, r.y);
         ((FontFn)T8(T8_FntSetFont))(of);
         *mark |= 4;
+        CtxPtr()->markwin = (u32)w;
     } else if (*mark & 4) {
         ((EraseFn)T8(T8_WinEraseRectangle))(&r, 0);
         *mark &= ~4u;
@@ -285,8 +292,8 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     if (ev->eType == frmOpenEvent || ev->eType == frmUpdateEvent || ev->eType == winEnterEvent ||
         ev->eType == penUpEvent || ev->eType == keyDownEvent)
         c->kbd = 1;
-    if (ev->eType == frmOpenEvent)
-        c->kshift = 0;   /* v18: 앞 대화상자에서 shift만 누르고 닫은 경우 — 새 화면은 손으로 누른 shift 없음 */   /* v17: 키보드 대화상자면 다음에 한/영 칸을 (다시) 그림(아니면 KbdToggleRect가 0) */
+    if (ev->eType == frmOpenEvent && ev->chr == kKeyboardFormId)   /* chr 자리 = frmOpen.formID */
+        c->kshift = 0;   /* v18: 앞 대화상자에서 shift만 누르고 닫은 경우 — 새 화면은 손으로 누른 shift 없음(v19: 키보드 대화상자만) */   /* v17: 키보드 대화상자면 다음에 한/영 칸을 (다시) 그림(아니면 KbdToggleRect가 0) */
     if (ev->eType == penDownEvent && KbdToggleTap(ev)) {   /* v17: 한/영 칸 */
         st[2] = !st[2];
         st[0] = 0;
