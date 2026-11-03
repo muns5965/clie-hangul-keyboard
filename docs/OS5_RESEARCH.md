@@ -399,8 +399,9 @@ VZ90 영문 Full ROM에는 `aSkw` 타입 DB(크리에이터 `DcmL`, Decuma 필�
 
 ### 9.2 Silk Plug-in 구조 (NX70V·VZ90 공통)
 
-Sony CLIÉ SDK 5.0이 공개한 구조다(`SonySlkw.h`의 이벤트 정의, Programmer's Companion 7장 "Virtual Silkscreen"). 아래 ROM 동작은
-NX70V ROM의 Silk Manager(플러그인 전환 함수)를 역분석한 것이고, VZ90 ROM에도 같은 코드가 있다.
+Sony CLIÉ SDK 5.0은 이벤트 정의(`SonySlkw.h`)와 Silk Manager API(`SonySilkLib.h`, Programmer's Companion 7장 "Virtual Silkscreen")만
+공개한다. 플러그인 DB 타입·진입점 약속은 SDK 문서에 없고, 아래는 NX70V ROM의 Silk Manager(플러그인 전환 함수)를 역분석하고
+시험 플러그인으로 확인한 것이다. VZ90 ROM에도 같은 코드가 있다.
 
 - 플러그인 = DB. 타입 `aSkw`(ARM 모듈 — 모듈을 올려 진입 주소를 얻는 시스템 함수로 부름, 함수 이름은 확인하지 않음) 또는
   **`Slkw`(68k, 리소스 `code 0`의 맨 앞을 진입점으로 호출)**. 상태바용은 `aStw`/`Staw`. 68k 플러그인은 PACE 호출 경로로 불리며
@@ -441,7 +442,7 @@ NX70V ROM의 Silk Manager(플러그인 전환 함수)를 역분석한 것이고,
 | 이벤트 번호 | 1~9 | 1~11(같은 번호) | 그대로 |
 | 이벤트 칸 | Open +2 창 핸들, Start +14 고해상도, 펜 +2/+4 저해상도 | Open·Start +12/+16 크기, 펜 +12/+14 네이티브 | 읽는 자리만 바꿈 |
 | 그릴 창 | Open의 창 핸들 → `WinSetDrawWindow` | `VskSetDrawWindow`/`VskRestoreDrawWindow` | 바꿈 |
-| 고해상도 | Sony HR 라이브러리(`HRWinDrawBitmap` 등 27곳) | `WinSetCoordinateSystem(native)` + 표준 그리기 | 그리기 계층 다시 작성 |
+| 고해상도 | Sony HR 라이브러리 함수 8종(`HRWinDrawBitmap`·`HRWinDrawChars`·`HRFntSetFont` 등) | `WinSetCoordinateSystem(native)` + 표준 그리기 | 그리기 계층 다시 작성 |
 | 등록·업데이트 | 부팅 때만 → 로더+본체 분리, 리셋 | 고를 때 → 로더 불필요할 가능성, 리셋 없음 | 단순해짐 |
 | 조합·자판 | `hangul_compose.h`, `ksc_table.h`, `cursor_track.h`, 자판 배열 | 같은 68k 코드 | 그대로 재사용 |
 | 글자 보내기 | `EvtEnqueueKey`(완성형 2바이트, BS 교체) | 같음(시험 확인) | 그대로 |
