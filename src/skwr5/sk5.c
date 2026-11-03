@@ -8,6 +8,9 @@
  * build 2(2단계): OS 4와 같은 단모음 한글 조합(src/common/hangul_compose.h, 완성형 판정표 src/skwr/ksc_table.h),
  *   조합 중 커서 이동 감지(src/common/cursor_track.h), 한/A의 '한'을 16×16 그림으로(src/skwr5/data/Sk5Han.bin, MnHangul5 없이도 보임),
  *   EvtEnqueueKey 결과 확인: 성공·실패를 따로 세고, 조합 중 하나라도 큐에 못 넣으면 조합을 끝낸다(다음 BS가 엉뚱한 글자를 지우지 않게).
+ * build 3: MnHangul5 v23이 세는 앱 화면 펜 누름 수(Feature 'MnH5' #10 = ARM ctx의 u32 칸 주소)가 바뀌었으면 조합을 끝낸다.
+ *   Address 편집 화면·To Do처럼 표 안의 입력칸은 cursor_track.h가 찾지 못해, 다른 칸을 누른 뒤 앞 글자를 고치는 BS가 새 칸에 갔다(9.7절).
+ *   커서 비교(CtCheck)는 그대로 함께 쓴다(펜 없이 커서가 옮겨진 경우). MnHangul5가 없거나 v22 이하면 이 비교는 하지 않는다.
  *
  * Silk Manager 약속 (NX70V ROM 역분석 + 시험 플러그인 실측, 9절):
  *   - DB 타입 Slkw, 리소스 code 0의 맨 앞이 진입점: Err entry(UInt32 *slot, UInt8 *ev). Open 때만 slot은 슬롯 주소.
@@ -29,14 +32,15 @@
  *   #13 VskSetDrawWindow 결과, #14 그린 크기(31~16 너비, 15~0 높이), #15 Start 크기(같은 형식), #16 Start depth 칸,
  *   #46 눌린 키(0 없음, 줄*16+칸+1), #47 큐에 넣은 키 수, #48 마지막 키(31~16 키 번호, 15~0 코드), #49 자판 상태,
  *   #50 조합 상태(31~24 초성, 23~16 중성, 15~8 종성: 호환 자모 - 0x3130, 7~0 화면에 나간 글자 수), #51 조합 중인 앱 LocalID,
- *   #52 큐에 못 넣은 키 수, #53 이번 키 처리 중 큐 실패(0/1), #54 큐 실패로 조합을 끝낸 수, #81~#87 커서 비교(cursor_track.h)
+ *   #52 큐에 못 넣은 키 수, #53 이번 키 처리 중 큐 실패(0/1), #54 큐 실패로 조합을 끝낸 수, #56 마지막으로 본 앱 화면 펜 수,
+ *   #57 앱 화면 펜으로 조합을 끝낸 수, #81~#87 커서 비교(cursor_track.h)
  */
 
 #include <PalmOS.h>
 
 #define kCr           'MnS5'
 #define kMagic        0x5335UL     /* 'S5' */
-#define kBuild        2
+#define kBuild        3
 
 #define kSkMark       0x4D53       /* 'MS' — MnHangul5 v22 ime.c kSkMark와 같아야 한다 */
 
@@ -64,6 +68,10 @@
 #define kFtrKeyFail   52
 #define kFtrQFail     53
 #define kFtrQEnd      54
+#define kFtrPenSeen   56
+#define kFtrPenEnd    57
+#define kHgCr         'MnH5'   /* MnHangul5 */
+#define kHgFtrPen     10       /* MnHangul5 v23: 앱 화면 펜 수 칸 주소 */
 #define kFtrFld       81   /* #81~#87 조합 중 커서 이동 감지 */
 
 #define kStEng        0x0001
@@ -448,10 +456,12 @@ static inline void KeyInner(RectangleType *r)
 
 
 
-/* 펜 좌표(+10/+12, 실크 기준 네이티브)가 들어간 키 번호. 크기는 Start 때 받은 값 */
+/* 펜 좌표(+10/+12, 실크 기준 네이티브)가 들어간 키 번호. 크기는 마지막으로 그린 자판 크기(#14, 실크 창의 네이티브 크기).
+ * build 3: 전에는 Start 이벤트의 크기(#15)를 썼는데, 실크를 최소화했다 다시 펼칠 때 온 Start의 값이 맞지 않아(시험: 펼친 뒤 키가 안 먹음)
+ * 그린 크기로 바꿨다 */
 static inline UInt16 PenKey(const UInt8 *ev)
 {
-    UInt32 sz = GetFtr(kFtrSize);
+    UInt32 sz = GetFtr(kFtrDrawn);
     Coord  w = (Coord)(sz >> 16), h = (Coord)(sz & 0xFFFF);
 
     if (w <= 0 || h <= 0)
@@ -531,6 +541,16 @@ static inline void SkComposeBack(void)
     }
 }
 
+/* MnHangul5 v23의 앱 화면 펜 누름 수. 없으면 0(바뀌지 않으므로 비교 안 함). ARM 리틀엔디언 값이지만 바뀌었는지만 본다 */
+static inline UInt32 AppPenCount(void)
+{
+    UInt32 p = 0;
+
+    if (FtrGet(kHgCr, kHgFtrPen, &p) != errNone || p == 0 || (p & 3))
+        return 0;
+    return *(volatile UInt32 *)p;
+}
+
 /* 이번 키 처리 중 큐에 못 넣은 키가 있으면: 화면 글자와 조합 상태가 어긋났을 수 있으므로 조합을 끝내고 커서 비교도 쉰다 */
 static inline void QFailEnd(void)
 {
@@ -572,6 +592,7 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
         FtrSet(kCr, kFtrDepth, Be32(ev + 2));
         Commit();
         CtReset(kCr, kFtrFld);   /* 키보드를 새로 띄우면 비교 다시 시작 */
+        FtrSet(kCr, kFtrPenSeen, AppPenCount());
 #ifdef SK5_TEST_QFAIL
         FtrSet(kCr, 55, 0);      /* 시험 빌드: 실패 흉내 계수를 켤 때마다 처음부터 */
 #endif
@@ -657,10 +678,10 @@ static void DrawKeys(void)
         }
     }
 #ifdef SK5_DEBUG
-    {   /* 시험 빌드(SK5_CFLAGS=-DSK5_DEBUG): 맨 위에 큐에 넣은 수 #47, 못 넣은 수 #52, 조합 상태 #50, 큐 실패로 끝낸 수 #54 */
+    {   /* 시험 빌드(SK5_CFLAGS=-DSK5_DEBUG): 맨 위에 큐에 넣은 수 #47, 못 넣은 수 #52, Start 크기 #15, 그린 크기 #14 */
         Char s[40]; UInt16 i, j;
         for (i = 0; i < 4; i++) {
-            UInt32 v = (i == 0) ? GetFtr(kFtrKeyCount) : (i == 1) ? GetFtr(kFtrKeyFail) : (i == 2) ? GetFtr(kFtrComp) : GetFtr(kFtrQEnd);
+            UInt32 v = (i == 0) ? GetFtr(kFtrKeyCount) : (i == 1) ? GetFtr(kFtrKeyFail) : (i == 2) ? GetFtr(kFtrSize) : GetFtr(kFtrDrawn);
             for (j = 0; j < 8; j++) { UInt8 d = (UInt8)((v >> (28 - 4 * j)) & 15); s[i * 9 + j] = d < 10 ? '0' + d : 'A' + d - 10; }
             s[i * 9 + 8] = ' ';
         }
@@ -699,6 +720,16 @@ static Boolean DoKey(UInt16 k)
     UInt16 nst = st;
 
     FtrSet(kCr, kFtrQFail, 0);
+    {   /* build 3: 지난 키 뒤 앱 화면을 눌렀으면(다른 칸·다른 항목일 수 있음) 조합을 끝냄. 이미 보낸 키는 그대로 */
+        UInt32 pc = AppPenCount();
+
+        if (pc != GetFtr(kFtrPenSeen)) {
+            FtrSet(kCr, kFtrPenSeen, pc);
+            if (GetFtr(kFtrComp) != 0)
+                BumpFtr(kFtrPenEnd);
+            Commit();
+        }
+    }
     if (CtCheck(kCr, kFtrFld, (GetFtr(kFtrComp) & 0xFF) != 0))
         Commit();   /* 조합 중 커서가 옮겨졌거나 입력칸이 바뀜 */
     switch (code) {

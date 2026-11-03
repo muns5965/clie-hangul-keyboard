@@ -61,6 +61,7 @@ typedef void (*FormBoundsFn)(void *, u16, struct NRect *);
 typedef void (*EraseFn)(const struct NRect *, u16);
 typedef u8 (*FontFn)(u8);
 typedef void (*LineFn)(s16, s16, s16, s16);
+typedef void (*ExtentFn)(s16 *, s16 *);
 
 /* st[0..1] 조합(hangul_compose.h), st[2] 한글 모드, st[3] 바로 앞 원시 keyCode, st[4] 넣은 키 수, st[5] 앱에 간 수,
    st[6] 미룬 횟수, st[7] 불린 수(진단) */
@@ -213,7 +214,8 @@ static inline const u8 *KscCumPtr(void) { return CtxPtr()->ksc + 1398; }
 
 #if MN_DIAG
 /* 최근 키 24개: 글자<<16 | modifiers<<8 | 한글 모드<<7 | 처리(1 우리 키, 2 원시 0x1720(글자 자리 = keyCode), 3 한/영,
-   4 미룸, 5 그대로, 6 글자 아님, 7 조합, 8 실크 키보드 키(v22)) */
+   4 미룸, 5 그대로, 6 글자 아님, 7 조합, 8 실크 키보드 키(v22),
+   9 실크 영역 펜(v23, 글자 자리 = 앱 화면 높이<<8 | y), 10 앱 화면 펜(v23, 같은 형식)) */
 static void LogC(u16 chr, const struct NEvent *ev, u32 act)
 {
     struct Ctx *c = CtxPtr();
@@ -343,6 +345,17 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     if (ev->eType == penDownEvent && st[2] && KbdShiftTap(ev))
         c->kshift = 1;   /* v17: 손으로 누른 shift(대화상자 상태가 대문자일 때만 쓰임 — 두 번 눌러 푼 경우는 소문자가 옴) */
     if (ev->eType == penDownEvent) {   /* 커서가 옮겨질 수 있음: 조합 끝(v15: 키보드 대화상자의 키는 이어 감) */
+        s16 dw = 0, dh = 0;
+
+        /* v23: 앱 화면 아래(실크 영역·상태바)를 누른 것은 커서를 옮기지 않는다 — Sony 소프트 키보드·MnSk5 키.
+         * 앱 화면 높이는 WinGetDisplayExtent(실크를 최소화하면 커짐). 앱 화면 펜은 수를 세어 MnSk5에 알린다 */
+        ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
+        if (dh > 0 && ev->screenY >= dh) {
+            LogC((u16)(((u16)dh << 8) | (ev->screenY & 0xFF)), ev, 9);
+            return;
+        }
+        c->pen++;
+        LogC((u16)(((u16)dh << 8) | (ev->screenY & 0xFF)), ev, 10);
         if (!KbdKeyTap(ev)) st[0] = 0;
         return;
     }

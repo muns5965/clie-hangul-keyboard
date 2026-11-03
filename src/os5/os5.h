@@ -49,6 +49,7 @@ struct Ctx {
     u32 kbd;             /* +376 v17: 키보드 대화상자 한/영 칸을 다음 이벤트 전에 그림(ime.c) */
     u32 kshift;          /* +380 v17: 키보드 대화상자에서 손으로 누른 shift(다음 영문자까지) — 아니면 대문자도 기본 자모 */
     u32 markwin;         /* +384 v19: GSI '한'을 그린 창(그 창에서만 지운다, 새 폼이 열리면 0) */
+    u32 pen;             /* +388 v23: 앱 화면(실크 영역 밖) 펜 누름 수 — Feature 'MnH5' #10이 이 칸 주소(MnSk5가 읽음) */
 #ifdef MN_TEST_STALE
     u32 test;            /* 시험 빌드만 */
 #endif
@@ -78,6 +79,7 @@ static inline u32 R9(void) {
 #define T8_WinPopDrawState        0xbf0   /* v20 */
 #define T8_WinPushDrawState       0xbf4   /* v20 */
 #define T8_WinGetActiveWindow     0xb64
+#define T8_WinGetDisplayExtent    0xb70   /* v23: 앱 화면 크기(실크 최소화면 커짐), 68k 트랩 0xA20B */
 #define T8_WinPaintBitmap         0xbc8
 #define T8_WinSetDrawMode         0xc34
 #define T8_WinSetDrawWindow       0xc38

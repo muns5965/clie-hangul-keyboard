@@ -1,5 +1,5 @@
 /*
- * MnHangul5 v22 — Palm OS 5(Sony TG50·NX70V, CloudpilotEmu의 VZ90 영문 Mini) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
+ * MnHangul5 v23 — Palm OS 5(Sony TG50·NX70V, CloudpilotEmu의 VZ90 영문 Mini) 한글 표시·입력 설정 앱 (크리에이터 MnH5)
  *
  * 켜기: ARM 코드(armc 1001)·글꼴 묶음(HgJp 1000 = 16×16, 1001 = 24×24)·KS X 1001 표(Ksct 1000)를 동적 힙(소유자 0)에 복사하고,
  *   표 8의 칸(H5Tb 1000 = src/os5/slots.txt)을 그 코드로 바꾼다. 원래 값은 ARM 코드의 ctx에 둔다.
@@ -28,6 +28,7 @@
  * v20: 한/영 칸 테두리가 보이게(단추 테두리 색으로 선 넷, ime.c) — v17~v19는 테두리가 그려지지 않았다.
  * v21: VZ90 판별에 Sony 문자열 정보의 기종 이름("PEG-VZ90")을 더한다 — 'PvPv'는 다른 기종의 PV ROM과 같다.
  * v22: Mn 실크 키보드(MnSk5)가 넣은 키(keyCode 'MS')는 조합하지 않고 그대로 보낸다(ime.c, 미루기 처리 뒤).
+ * v23: 실크 영역 펜은 조합을 끝내지 않음(Sony 소프트 키보드로 두벌식 조합), 앱 화면 펜 수를 ctx에 세고 그 주소를 Feature #10에(MnSk5가 읽음).
  * 리셋: 표는 RAM이라 리셋하면 풀린다. Start at reset(앱 설정 0, 기본 ON)이면 리셋 뒤 다시 켠다.
  *   리셋 실행(sysAppLaunchCmdSystemReset)에서는 리셋 완료 알림(sysNotifyResetFinishedEvent, 모든 앱의 리셋 실행 뒤)만
  *   등록하고, 그 알림에서 켠다. 이때 그리기 3칸은 아직 ROM 함수다(실측: WinDrawChars 0x20a521f8). Sony 모듈이 나중에
@@ -42,7 +43,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v22"
+#define kVer "v23"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -61,6 +62,8 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kCtxRpos 240
 #define kCtxIdle 244
 #define kCtxPack24 248
+#define kCtxPen  388   /* v23 */
+#define kFtrPen  10    /* v23: 앱 화면 펜 수 칸 주소(ARM 리틀엔디언 u32) — MnSk5가 읽어 바뀌면 조합을 끝냄 */
 
 /* 켜기 결과 */
 #define kOk         0
@@ -276,6 +279,7 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
                 MemPtrFree((MemPtr)pack24);
                 r = kNoMem;
             } else {
+                FtrSet(kCr, kFtrPen, block + ctx + kCtxPen);   /* v23: 실패해도 켜기는 계속(MnSk5는 커서 비교만으로 동작) */
                 for (i = 0; i < n; i++)   /* 원래 값 먼저(그대로 복사) */
                     *(UInt32 *)(block + ctx + 4 * TbIdx(tb, i)) = *(UInt32 *)(t8 + TbSlot(tb, i));
                 for (i = 0; i < n; i++)
@@ -328,6 +332,7 @@ static UInt16 Off(void)
             MemPtrFree((MemPtr)v);
         FtrUnregister(kCr, i);
     }
+    FtrUnregister(kCr, kFtrPen);
     return 1;
 }
 
