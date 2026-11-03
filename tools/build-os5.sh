@@ -30,8 +30,11 @@ mkdir -p "$out"
 cd "$out"
 
 # 1) ARM
-AF="-march=armv5te -marm -O2 -ffreestanding -nostdlib -fno-pic -fno-jump-tables -fno-tree-switch-conversion
+AF="${OS5_CFLAGS:-} -march=armv5te -marm -O2 -ffreestanding -nostdlib -fno-pic -fno-jump-tables -fno-tree-switch-conversion
     -fno-builtin -ffixed-r9 -Wall -Werror -DMN_DIAG=$DIAG"
+# ctx.S 예약 크기 = os5.h kCtxSpace (struct Ctx 크기는 os5.h가 컴파일 때 kCtxSpace와 비교)
+sp_s=$(awk '$1=="ctx:" && $2==".space" {print $3}' "$src/ctx.S"); sp_h=$(awk '$1=="#define" && $2=="kCtxSpace" {print $3}' "$src/os5.h")
+[ -n "$sp_s" ] && [ "$sp_s" = "$sp_h" ] || { echo "error: ctx.S .space ($sp_s) != os5.h kCtxSpace ($sp_h)" >&2; exit 1; }
 arm-none-eabi-gcc $AF -c "$src/ctx.S" -o ctx.o
 for f in draw text ime; do
   arm-none-eabi-gcc $AF -c "$src/$f.c" -o $f.o

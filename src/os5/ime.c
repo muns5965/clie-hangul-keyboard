@@ -221,11 +221,22 @@ static void Mark(u32 *mark, u32 han)
 
     if (!f) return;
     w = ((FormPtrFn)T12(T12_FrmGetWindowHandle))(f);
+#ifdef MN_TEST_STALE   /* 시험 빌드만: 대화상자가 열린 뒤 첫 Mark는 칸이 없다고 보고 GSI에 '한'을 그려 잔상을 만든다 */
+    if (CtxPtr()->test < 3 && ((FormU16Fn)T12(T12_FrmGetFormId))(f) == kKeyboardFormId) {
+        struct NEvent z = {0};
+        CtxPtr()->test++;
+        LogC((u16)CtxPtr()->test, &z, 0x40);
+    } else
+#endif
     if (KbdToggleRect(f, &r)) {   /* v18: 한/영 칸이 상태를 보임 → GSI '한'은 그리지 않음 */
         /* v19: 이 대화상자 창에 우리가 그린 '한'이 남아 있으면(칸을 그릴 수 없던 때 그림) 그 자리만 지운다.
          *   다른 창(메모 화면 등)에 그린 표시는 그 창의 것이라 건드리지 않는다(대화상자 GSI의 shift 표시를 지우지 않게). */
-        if ((*mark & 4) && CtxPtr()->markwin == (u32)w)
+        if ((*mark & 4) && CtxPtr()->markwin == (u32)w) {
             han = 0;
+#ifdef MN_TEST_STALE
+            { struct NEvent z = {0}; LogC(0, &z, 0x41); }
+#endif
+        }
         else {
             *mark &= ~4u;
             return;
@@ -250,9 +261,15 @@ static void Mark(u32 *mark, u32 han)
         ((FontFn)T8(T8_FntSetFont))(of);
         *mark |= 4;
         CtxPtr()->markwin = (u32)w;
+#ifdef MN_TEST_STALE
+        { struct NEvent z = {0}; LogC((u16)((r.x << 8) | r.y), &z, 0x42); }
+#endif
     } else if (*mark & 4) {
         ((EraseFn)T8(T8_WinEraseRectangle))(&r, 0);
         *mark &= ~4u;
+#ifdef MN_TEST_STALE
+        { struct NEvent z = {0}; LogC((u16)((r.x << 8) | r.y), &z, 0x43); }
+#endif
     }
     ((FormPtrFn)T8(T8_WinSetDrawWindow))(old);
 }
@@ -292,7 +309,10 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     if (ev->eType == frmOpenEvent || ev->eType == frmUpdateEvent || ev->eType == winEnterEvent ||
         ev->eType == penUpEvent || ev->eType == keyDownEvent)
         c->kbd = 1;
-    if (ev->eType == frmOpenEvent && ev->chr == kKeyboardFormId)   /* chr 자리 = frmOpen.formID */
+    if (ev->eType == frmOpenEvent)   /* v19: 새 폼 — 앞 창 주소가 다시 쓰일 수 있으므로 '그린 창' 기록을 버린다 */
+        c->markwin = 0;
+    /* NEvent.chr은 EventType의 data 공용체 첫 16비트(오프셋 8): keyDown이면 chr, frmOpenEvent면 frmOpen.formID */
+    if (ev->eType == frmOpenEvent && ev->chr == kKeyboardFormId)
         c->kshift = 0;   /* v18: 앞 대화상자에서 shift만 누르고 닫은 경우 — 새 화면은 손으로 누른 shift 없음(v19: 키보드 대화상자만) */   /* v17: 키보드 대화상자면 다음에 한/영 칸을 (다시) 그림(아니면 KbdToggleRect가 0) */
     if (ev->eType == penDownEvent && KbdToggleTap(ev)) {   /* v17: 한/영 칸 */
         st[2] = !st[2];
