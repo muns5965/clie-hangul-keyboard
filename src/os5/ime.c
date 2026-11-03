@@ -128,13 +128,13 @@ static int KbdToggleRect(void *f, struct NRect *t)
             t->h = r.h;
         }
     }
-    if (right < 0 || right + kTogGap + kTogW > kWinW) return 0;
+    if (right < 0 || right + kTogGap + kTogW + 1 > kWinW) return 0;   /* v20: +1 = 칸 바깥 테두리 */
     t->x = (s16)(right + kTogGap);
     t->w = kTogW;
     for (i = 0; i < n; i++) {   /* 다른 단추와 겹치면 칸 없음 */
         if (((FormIdxFn)T12(T12_FrmGetObjectType))(f, i) != frmControlObj) continue;
         ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, i, &r);
-        if (r.x < t->x + t->w && t->x < r.x + r.w && r.y < t->y + t->h && t->y < r.y + r.h) return 0;
+        if (r.x < t->x + t->w + 1 && t->x - 1 < r.x + r.w && r.y < t->y + t->h + 1 && t->y - 1 < r.y + r.h) return 0;   /* 테두리 포함 */
     }
     return 1;
 }

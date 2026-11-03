@@ -371,3 +371,4 @@ B-2 직접 호출(v14):
   ARM 쪽 함수의 인자 형식이 68k와 다른 것으로 보이나 확인하지 않았다. v20은 `WinPushDrawState` → 그리기 색 =
   `UIColorGetTableEntryIndex(UIObjectFrame)`(표 12 `0x540`) → 칸 바깥 1에 `WinDrawLine` 넷(모서리 비움) → `WinPopDrawState`.
   결과: VZ90 영문 Mini(어두운 화면)·TG50·NX70V(밝은 화면) 모두 다른 단추와 같은 색 테두리, `A` ↔ `한` 전환·입력 정상.
+  칸 위치 검사(창 폭·다른 단추와 겹침)에 바깥 테두리 1을 포함했다(창 오른쪽 끝에 붙으면 테두리가 창 밖으로 나갈 수 있어서 — 리뷰 지적).
