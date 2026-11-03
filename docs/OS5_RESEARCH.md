@@ -415,15 +415,19 @@ Sony CLIÉ SDK 5.0은 이벤트 정의(`SonySlkw.h`)와 Silk Manager API(`SonySi
 - 이벤트 번호(`ev` 맨 앞 1바이트): 1 Open, 2 Close, 3 Start, 4 Stop, 5 Draw, 6 DispChange, 7 PenDown, 8 PenMove, 9 PenUp,
   10 TimerFired, 11 DoCommand(SDK 열거형과 같고, NR70V 번호와도 같다).
 
-68k 이벤트 실측(빅엔디언):
+68k 이벤트 실측(빅엔디언, 2바이트 정렬 배치 — NX70V·VZ90 같음):
 
 | 오프셋 | 내용 | NX70V | VZ90 영문 Mini |
 | --- | --- | --- | --- |
 | +0 | 이벤트 번호(1바이트) | | |
 | +1 | (쓰레기 값으로 보임) | 0x01 | 0x0E |
-| +4 | SDK의 `depth` 자리(32비트) | 0x80 | 0x10 |
-| +12, +16 | Open·Start: 너비·높이(32비트) | 320, 130 | 320, 130 |
-| +12, +14 | Pen: x, y(16비트) — **실크 영역 기준 네이티브 좌표**(0~319, 0~129) | 화면 (100,380) → (98,59) | (100,380) → (100,60) |
+| +2 | SDK의 `depth` 자리(32비트) | 0x80 | 0x10 |
+| +6 | `reserved`(32비트) | | |
+| +10, +14 | Open·Start: 너비·높이(32비트) | 320, 130 | 320, 130 |
+| +10, +12 | Pen: x, y(16비트) — **실크 영역 기준 네이티브 좌표**(0~319, 0~129) | 화면 (200,360) → (198,40) | (100,380) → (100,60) |
+
+처음 기록(1b9bbf8까지)은 시험 플러그인이 4바이트씩 붙여 그린 16진수를 잘못 끊어 읽어 depth +4, 크기 +12/+16, 펜 +12/+14로 적었다.
+MnSk5 1단계 시험 빌드에서 칸별로 다시 찍어 위와 같이 바로잡았다(시험 빌드 기록: VZ90 Start 크기 0x0140·0x0082, depth 0x10, 펜 (100,380) → +10 0x0064, +12 0x003C).
 
 그리기·입력 실측:
 - 플러그인이 불릴 때 그리기 창은 실크 창이 아니다(그냥 그리면 아무것도 안 보임). `SysLibFind("Sony Silk Library")` →
@@ -440,7 +444,7 @@ Sony CLIÉ SDK 5.0은 이벤트 정의(`SonySlkw.h`)와 Silk Manager API(`SonySi
 | --- | --- | --- | --- |
 | 진입점·슬롯 | `entry(slot, event, out)` | `entry(slot, ev)` | 거의 같음 |
 | 이벤트 번호 | 1~9 | 1~11(같은 번호) | 그대로 |
-| 이벤트 칸 | Open +2 창 핸들, Start +14 고해상도, 펜 +2/+4 저해상도 | Open·Start +12/+16 크기, 펜 +12/+14 네이티브 | 읽는 자리만 바꿈 |
+| 이벤트 칸 | Open +2 창 핸들, Start +14 고해상도, 펜 +2/+4 저해상도 | Open·Start +10/+14 크기, 펜 +10/+12 네이티브 | 읽는 자리만 바꿈 |
 | 그릴 창 | Open의 창 핸들 → `WinSetDrawWindow` | `VskSetDrawWindow`/`VskRestoreDrawWindow` | 바꿈 |
 | 고해상도 | Sony HR 라이브러리 함수 8종(`HRWinDrawBitmap`·`HRWinDrawChars`·`HRFntSetFont` 등) | `WinSetCoordinateSystem(native)` + 표준 그리기 | 그리기 계층 다시 작성 |
 | 등록·업데이트 | 부팅 때만 → 로더+본체 분리, 리셋 | 고를 때 → 로더 불필요할 가능성, 리셋 없음 | 단순해짐 |
@@ -466,3 +470,16 @@ Sony CLIÉ SDK 5.0은 이벤트 정의(`SonySlkw.h`)와 Silk Manager API(`SonySi
 - 플러그인 아이콘(`SlkwAppIconFamilyID` 1001, 최대 15×9 / 30×18) 표시.
 - 플러그인을 고른 채 리셋했을 때 다시 켜지는지, 고른 채 같은 DB를 설치했을 때(보호 때문에 실패할 것으로 예상).
 - 68k 플러그인의 속도(펜 이동마다 PACE 경유)와 VZ90 실기.
+
+### 9.6 구현: MnSk5 (`src/skwr5/sk5.c`, `tools/build-sk5.sh` → `bin/MnSk5.prc`)
+
+- 타입 `Slkw`, 크리에이터 `MnS5`, 목록 이름 "Mn Keyboard". 68k 하나(로더 없음), OS 4 Mn 가상 키보드와 같은 4줄 자판·배치(320×130 네이티브).
+  그리기는 `VskSetDrawWindow` + `WinSetCoordinateSystem(native)`, 자모 키 이름은 OS 4와 같은 16×16 낱자모 그림을 고밀도(V3) 그림으로 감싸 1:1로 그린다.
+- 보내는 키는 keyCode `0x4D53`('MS'). MnHangul5 v22는 이 키를 미루기 처리(앞서 넣은 BS·글자가 먼저 앱에 가게) 뒤에, 대문자 고치기·
+  두벌식 조합 없이 그대로 보낸다(자기 조합 중이던 글자는 끝냄).
+- 1단계(build 1): 한/A·123·Shift 전환, 영문·숫자·기호·BS·Enter. 한글 자모 키는 아직 보내지 않는다.
+  결과(CloudpilotEmu): VZ90 영문 Mini(MnHangul5 v22 ON) — 메모장 `qwe`·Enter, MnHangul5를 한글 모드로 둔 채 키보드 대화상자에서
+  `ㅈ`(MnHangul5 조합) → 실크 키보드 `q` `w` Shift `S`(그대로 영문·대문자, MnHangul5 조합 끝) → 대화상자 `ㅈ` = `ㅈqwSㅈ`.
+  NX70V(MnHangul5 없음) — `qwe`·Enter·123 `1`·Enter. TG50 MnHangul5 v22 하드웨어 키보드 `Ab` → Shift+Space → `gks` `한`, 조합·BS 정상.
+- 남은 것: 한/A 키의 '한'(완성형 2바이트)이 VZ90에서 MnHangul5를 켜도 보이지 않음(`/A`만 보임, NX70V MnHangul5 없이는 `ÇÑ/A`) —
+  2단계에서 그림으로 그리는 방법을 본다.

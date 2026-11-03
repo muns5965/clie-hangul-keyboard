@@ -17,6 +17,7 @@
 #include "os5.h"
 
 #define kImMark 0x4D48   /* 우리가 넣은 키의 keyCode ('MH', OS 4 MnSonyKbd와 같음) */
+#define kSkMark 0x4D53   /* v22: Mn 실크 키보드(MnSk5, Silk Plug-in)가 넣은 키의 keyCode ('MS') — 조합하지 않고 그대로 보냄 */
 #define kKeyShiftSpace 0x8420
 #define nilEvent 0
 #define penDownEvent 1
@@ -212,7 +213,7 @@ static inline const u8 *KscCumPtr(void) { return CtxPtr()->ksc + 1398; }
 
 #if MN_DIAG
 /* 최근 키 24개: 글자<<16 | modifiers<<8 | 한글 모드<<7 | 처리(1 우리 키, 2 원시 0x1720(글자 자리 = keyCode), 3 한/영,
-   4 미룸, 5 그대로, 6 글자 아님, 7 조합) */
+   4 미룸, 5 그대로, 6 글자 아님, 7 조합, 8 실크 키보드 키(v22)) */
 static void LogC(u16 chr, const struct NEvent *ev, u32 act)
 {
     struct Ctx *c = CtxPtr();
@@ -293,7 +294,7 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     struct Ctx *c = CtxPtr();
     u32 *st = c->st;
     u16 ch;
-    u8 j;
+    u8 j, sk;
 
     if (c->idle) {   /* OFF(표를 되돌릴 수 없을 때): '한'만 지우고 원래 함수로 */
         if (c->mark & 4)
@@ -355,7 +356,8 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         }
         return;
     }
-    if (ch == ' ' && st[3] == kKeyShiftSpace) {   /* Shift+Space: 한/영 */
+    sk = (ev->keyCode == kSkMark);
+    if (!sk && ch == ' ' && st[3] == kKeyShiftSpace) {   /* Shift+Space: 한/영 */
         st[3] = 0;
         st[2] = !st[2];
         st[0] = 0;
@@ -366,12 +368,12 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     }
     /* v7: 자동 대문자(Address 이름 칸 첫 글자 등) — 원시 keyCode에 Shift가 없는데 대문자가 오면
      * 한글 모드에서는 소문자로 본다(아니면 두벌식 Shift 규칙으로 된소리가 됨). 미루기 전에 고쳐 둔다. */
-    if (st[2] && ch >= 'A' && ch <= 'Z' && st[3] != 0 && (st[3] & 0xFF00) == 0)
+    if (!sk && st[2] && ch >= 'A' && ch <= 'Z' && st[3] != 0 && (st[3] & 0xFF00) == 0)
         ch |= 0x20;
     /* v17: 키보드 대화상자의 대문자(원시 키 없음)는 shift를 손으로 눌렀을 때만 그대로, 아니면(자동 대문자·cap) 기본 자모 */
-    if (st[2] && st[3] == 0 && ch >= 'A' && ch <= 'Z' && !c->kshift && KbdToggleRect(((PtrFn)T12(T12_FrmGetActiveForm))(), &(struct NRect){0, 0, 0, 0}))
+    if (!sk && st[2] && st[3] == 0 && ch >= 'A' && ch <= 'Z' && !c->kshift && KbdToggleRect(((PtrFn)T12(T12_FrmGetActiveForm))(), &(struct NRect){0, 0, 0, 0}))
         ch |= 0x20;
-    if (st[3] == 0 && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')))
+    if (!sk && st[3] == 0 && ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')))
         c->kshift = 0;
     st[3] = 0;
     /* 앞 키로 넣은 BS·글자가 아직 앱에 안 감: 이 키를 큐 뒤로 미룸.
@@ -385,6 +387,13 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     }
     st[5] = st[4];
     st[6] = 0;
+    /* v22: 실크 키보드 키는 위의 미루기(우리가 앞서 넣은 BS·글자가 먼저 앱에 가게)를 거친 뒤, 대문자 고치기·조합 없이 그대로 보낸다.
+     * 실크 키보드가 한글을 스스로 조합해 완성형·BS·영문을 보내므로, 우리 조합 중이던 글자는 여기서 끝낸다. */
+    if (sk) {
+        st[0] = 0;
+        Log(ev, 8);
+        return;
+    }
     if ((ev->modifiers & commandKeyMask) || !st[2]) {
         st[0] = 0;
         Log(ev, 5);
