@@ -10,6 +10,7 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v30: 한/A 단추를 탭 줄 가운데에(v29는 왼쪽 위 고정 자리라 '한'이 약 6픽셀 위).
  * v29: Sony 자판 탭 줄 빈자리에 한/A 단추(SkButtonDraw).
  * v28: 밑줄 모드면 한글 칸 아래에 밑줄도 그린다(입력칸을 다시 그리면 한글 아래 밑줄이 빠졌음).
  * v27: RawPaint가 raw 앞 값을 되돌림.
@@ -479,14 +480,26 @@ void SkButtonDraw(void)
 
     if (!(c->skbpen & 0x100)) return;
     c->skbpen &= ~0x100u;
-    if (c->st[2] && c->pack) {
+    if (c->st[2] && c->pack) {   /* 한: 점 범위의 가운데를 단추 칸 가운데에(HgPaintChar와 같은 방식) */
         u32 rows[16];
+        u16 r, k, H = c->pack[3], rmin = 16, rmax = 0, cmin = 16, cmax = 0;
         GlyphRows(c->pack, RankToSyl(c->ksc, (0xC7 - 0xB0) * 94 + (0xD1 - 0xA1)), rows);   /* 한 (KSC C7D1) */
-        PaintRows(rows, c->pack[3], 16, kSkBtnX, kSkBtnY);
-    } else {
+        for (r = 0; r < H && r < 16; r++)
+            if (rows[r]) {
+                if (r < rmin) rmin = r;
+                rmax = r;
+                for (k = 0; k < 16; k++)
+                    if (rows[r] & (0x80000000u >> k)) {
+                        if (k < cmin) cmin = k;
+                        if (k > cmax) cmax = k;
+                    }
+            }
+        if (rmin <= rmax)
+            PaintRows(rows, H, 16, (s16)(kSkBtnCX - (s16)((cmin + cmax + 1) / 2)), (s16)(kSkBtnCY - (s16)((rmin + rmax + 1) / 2)));
+    } else {   /* A: StdInput 글꼴의 글자 칸(폭 × 줄 높이) 가운데를 단추 칸 가운데에 */
         char a = 'A';
-        s16 w = ((CharsWidthFn)ORIG(O_CharsWidth))(&a, 1);
-        RawPaint(c->pcorig, 0, 0, 'A', (s16)(kSkBtnX + (16 - w) / 2), kSkBtnY);
+        s16 w = ((CharsWidthFn)ORIG(O_CharsWidth))(&a, 1), lh = ((LineHeightFn)T8(T8_FntLineHeight))();
+        RawPaint(c->pcorig, 0, 0, 'A', (s16)(kSkBtnCX - w / 2), (s16)(kSkBtnCY - lh / 2));
     }
 }
 
