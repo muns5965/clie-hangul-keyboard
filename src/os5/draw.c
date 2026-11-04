@@ -10,6 +10,7 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v28: 밑줄 모드면 한글 칸 아래에 밑줄도 그린다(입력칸을 다시 그리면 한글 아래 밑줄이 빠졌음).
  * v27: RawPaint가 raw 앞 값을 되돌림.
  * v26: StdInput이 부른 WinPaintChar(s)는 원래 함수로, 그 안의 글자 경계 함수도 원래대로(RawPaint, ctx raw).
  * v25: WinPaintChar도 바꾼다 — Sony 소프트 키보드(StdInput) 키 글자를 한글 모드에서 두벌식 자모로(HgPaintChar).
@@ -206,6 +207,16 @@ static void DrawGlyph(u8 lead, u8 trail, s16 x, s16 y, int erase) {
 #endif
 
     PaintRows(rows, H, gw, nx, ny);
+    {   /* v28: 밑줄 모드(입력칸)면 한글 칸 아래에도 밑줄 — 원래 WinDrawChars는 글자마다 칸 맨 아래 줄(y + 줄 높이 − 1)에 밑줄을 그린다.
+         *   입력칸을 통째로 다시 그릴 때(실크 크기 바뀜·폼 다시 그리기 등) 줄을 지우고 글자와 함께 밑줄을 그리므로, 한글 칸만 밑줄이 빠졌다.
+         *   (v24의 '맨 아래 줄 남기기'는 글자를 하나씩 넣을 때만 막았다.) 1 = 점선(gray), 2·3 = 실선 — 지금 전경색으로 */
+        u16 um = ((DrawModeFn)T8(T8_WinSetUnderlineMode))(0);
+        ((DrawModeFn)T8(T8_WinSetUnderlineMode))(um);
+        if (um) {
+            s16 ly = y + lineH - 1, x2 = x + (s16)HangulCell() - 1;
+            ((void (*)(s16, s16, s16, s16))T8(um == 1 ? T8_WinDrawGrayLine : T8_WinDrawLine))(x, ly, x2, ly);
+        }
+    }
 }
 
 /* ---- 폭 (MnHangul width.c, 한글 칸 = cw = HangulCell()) ---- */

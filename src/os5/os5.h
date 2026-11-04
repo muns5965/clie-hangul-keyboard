@@ -89,6 +89,8 @@ static inline int InStdInput(u32 lr) {
 #define T8_FntLineHeight          0x408
 #define T8_FntSetFont             0x410
 #define T8_WinDrawLine            0xb28   /* v20 */
+#define T8_WinDrawGrayLine        0xb1c   /* v28: 68k 트랩 0xA214 */
+#define T8_WinSetUnderlineMode    0xc54   /* v28: 68k 트랩 0xA225 */
 #define T8_WinEraseRectangle      0xb50
 #define T8_WinPopDrawState        0xbf0   /* v20 */
 #define T8_WinPushDrawState       0xbf4   /* v20 */
