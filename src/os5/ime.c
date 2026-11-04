@@ -8,6 +8,8 @@
  *     소문자 = 기본 자모, 대문자(Shift) = 쌍자음·ㅒ·ㅖ. 조합은 OS 4와 같은 src/common/hangul_compose.h.
  *   - '한' 표시: 입력칸 화면의 그래피티 상태 표시(GSI) 자리에 그린다(GSI가 없는 화면은 표시 없음).
  *     앱이 다 그리고 다음 이벤트를 받으러 올 때(원래 함수 부르기 전) 그린다.
+ *   - v27: 한/영을 바꾸면 Sony 소프트 키보드(StdInput)를 vchrSilkResize 두 번으로 다시 그리게 한다(SkRedraw) — Shift+Space는 Shift를 뗀 뒤.
+ *     '한'은 그 사이 그리지 않고, GSI 자리가 지금 앱 화면 밖이면 그리지 않는다.
  *   - 펜 누름은 커서를 옮길 수 있어 조합을 끝낸다. v15: 시스템 키보드 대화상자(Edit → Keyboard, 폼 32000)의 키 영역
  *     (초점 입력칸 아래 ~ 그 아래 단추 줄 위)을 누른 것은 키 입력이므로 조합을 이어 간다(KbdKeyTap).
  *   v17: 키보드 대화상자 아래 단추 줄의 가장 오른쪽 단추(Int'l) 오른쪽에 한/영 칸('한'/'A', OS 4 MnKbdHan과 같은 자리)을
@@ -265,6 +267,14 @@ static void Mark(u32 *mark, u32 han)
         if (((FormIdxFn)T12(T12_FrmGetObjectType))(f, i) == frmGraffitiStateObj) break;
     if (i == n) return;
     ((FormBoundsFn)T12(T12_FrmGetObjectBounds))(f, i, &r);
+    {   /* v27: GSI 자리가 지금 앱 화면 밖이면(실크 크기가 바뀌고 폼이 아직 자리를 안 옮김) 그리지 않고 다음에 다시 */
+        s16 dw = 0, dh = 0;
+        ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
+        if (dh > 0 && r.y + r.h > dh) {
+            *mark |= 1;
+            return;
+        }
+    }
     old = ((FormPtrFn)T8(T8_WinSetDrawWindow))(w);
     if (han) {
         char t[2];
@@ -291,6 +301,27 @@ static void Mark(u32 *mark, u32 han)
     ((FormPtrFn)T8(T8_WinSetDrawWindow))(old);
 }
 
+/* v27: 한/영을 바꾼 뒤 Sony 소프트 키보드(StdInput) 키 글자를 다시 그리게 한다(docs/OS5_RESEARCH.md 13절).
+ *   vchrSilkResize 두 번 = 실크 최소화 → 복원 → 자판이 자기 경로로 다시 그림(지금 탭·Shift 유지).
+ *   실크가 펼쳐져 있을 때만(앱 화면 높이로 판단) — 접혀 있으면 자판이 안 보이고 실크가 잠깐 커졌다 줄어든다.
+ *   StdInput이 없는 기종(TG50)은 하지 않는다. 넣은 두 이벤트가 지나갈 때까지 '한'은 그리지 않는다(잠깐 커진 앱 화면 아래에 남았음). */
+#define vchrSilkResize 0x1710
+#define kSilkUpMaxH 180     /* 표준 좌표: 실크가 펼쳐지면 앱 화면 160(320×480 기종), 접히면 225 */
+#define kSkWait 0x100      /* skhold: 넣은 두 이벤트는 지나갔고 실크 복원을 기다림 */
+#define kRawShift 0x8400    /* 원시 키 이벤트의 Shift keyCode(누름 0x1720·뗌 0x1721, 시험 로그로 확인) */
+static void SkRedraw(struct Ctx *c)
+{
+    s16 dw = 0, dh = 0;
+    EnqueueKeyFn q = (EnqueueKeyFn)T8(T8_EvtEnqueueKey);
+
+    c->skr = 0;
+    if (!c->sklo) return;
+    ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
+    if (dh <= 0 || dh > kSilkUpMaxH) return;
+    if (q(vchrSilkResize, 0, commandKeyMask) == 0) c->skhold++;
+    if (q(vchrSilkResize, 0, commandKeyMask) == 0) c->skhold++;
+}
+
 void HgGetEvent(struct NEvent *ev, s32 timeout)
 {
     struct Ctx *c = CtxPtr();
@@ -306,7 +337,17 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         ((GetEventFn)ORIG(O_GetEvent))(ev, timeout);
         return;
     }
-    if (c->mark & 1) {
+    if (c->skr == 1)
+        SkRedraw(c);
+    if (c->skhold == kSkWait) {   /* 두 이벤트는 지나감 — 실크가 다시 펼쳐졌으면(앱 화면이 줄었으면) '한'을 다시 그림 */
+        s16 dw = 0, dh = 0;
+        ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
+        if (dh > 0 && dh <= kSilkUpMaxH) {
+            c->skhold = 0;
+            c->mark |= 1;
+        }
+    }
+    if ((c->mark & 1) && !c->skhold) {
         c->mark &= ~1u;
         Mark(&c->mark, st[2]);
     }
@@ -319,6 +360,14 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     st[7]++;
 #endif
     if (!ev) return;
+    if (c->skhold) {
+        if (ev->eType == keyDownEvent && ev->chr == vchrSilkResize && c->skhold != kSkWait) {
+            if (--c->skhold == 0) c->skhold = kSkWait;   /* 복원은 이 이벤트 처리 뒤 — 앱 화면이 줄 때까지 기다림 */
+        } else if (ev->eType == nilEvent || ev->eType == penDownEvent || ev->eType == keyDownEvent) {
+            c->skhold = 0;   /* 큐가 비었거나 사용자가 다시 움직임 → 더 기다리지 않음 */
+            c->mark |= 1;
+        }
+    }
     if ((st[2] || (c->mark & 4)) &&
         (ev->eType == keyDownEvent || ev->eType == penUpEvent || ev->eType == winEnterEvent ||
          ev->eType == frmOpenEvent || ev->eType == frmUpdateEvent))
@@ -339,6 +388,7 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         c->kbd = 1;
         ((void (*)(u16, u16))T12(T12_FrmUpdateForm))(kKeyboardFormId, 0x8000);   /* frmRedrawUpdateCode: 키 글자 다시 */
         LogC(0, ev, 3);
+        c->skr = 1;   /* v27: 뒤의 Sony 자판도 다시 */
         ev->eType = nilEvent;
         return;
     }
@@ -367,6 +417,8 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
             st[3] = ev->keyCode;   /* 원시 keyCode: Shift 있으면 0x84xx (v7) */
             LogC(ev->keyCode, ev, 2);
         }
+        if (c->skr == 2 && (ch == 0x1721 ? ev->keyCode == kRawShift : ch == 0x1720 && !(ev->keyCode & kRawShift)))
+            c->skr = 1;   /* v27: Shift를 뗌(또는 Shift 없는 키를 누름) → 이제 다시 그림. 누른 채 그리면 자판이 대문자로 그려졌음 */
         return;
     }
     sk = (ev->keyCode == kSkMark);
@@ -375,6 +427,7 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         st[2] = !st[2];
         st[0] = 0;
         c->mark |= 1;
+        c->skr = 2;   /* v27: Shift를 뗀 뒤 Sony 자판 다시 그림 */
         Log(ev, 3);
         ev->eType = nilEvent;
         return;

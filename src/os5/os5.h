@@ -54,6 +54,8 @@ struct Ctx {
     u32 pcorig;          /* +392 v25: WinPaintChar 원래 주소(O_PaintChar = 98 = 392/4, 설치 코드가 칸 표의 저장 번호로 씀) */
     u32 sklo, skhi;      /* +396 v25: Sony 표준 입력(StdInput, 'aSkw'/'SkAi') 코드 리소스 'amdc' 0의 범위 — 앱이 켤 때 채움, 없으면 0 */
     u32 raw;             /* +404 v26: StdInput이 부른 글자 그리기 원래 함수를 도는 동안 1 — 글자 경계 함수가 한글로 읽지 않음(text.c Off) */
+    u32 skr;             /* +408 v27: Sony 자판 다시 그리기 — 1 다음 이벤트 전에, 2 하드웨어 Shift를 뗀 뒤(ime.c SkRedraw) */
+    u32 skhold;          /* +412 v27: 넣은 vchrSilkResize 중 아직 지나가지 않은 수 — 그동안 '한'을 그리지 않음 */
 #ifdef MN_TEST_STALE
     u32 test;            /* 시험 빌드만 */
 #endif
