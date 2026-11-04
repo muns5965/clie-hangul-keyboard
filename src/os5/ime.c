@@ -10,6 +10,7 @@
  *     앱이 다 그리고 다음 이벤트를 받으러 올 때(원래 함수 부르기 전) 그린다.
  *   - v27: 한/영을 바꾸면 Sony 소프트 키보드(StdInput)를 vchrSilkResize 두 번으로 다시 그리게 한다(SkRedraw) — Shift+Space는 Shift를 뗀 뒤.
  *     '한'은 그 사이 그리지 않고, GSI 자리가 지금 앱 화면 밖이면 그리지 않는다.
+ *   - v29: Sony 자판 탭 줄 빈자리의 한/A 단추를 누르면 한/영(SkBtnTap, 그리기는 draw.c SkButtonDraw).
  *   - 펜 누름은 커서를 옮길 수 있어 조합을 끝낸다. v15: 시스템 키보드 대화상자(Edit → Keyboard, 폼 32000)의 키 영역
  *     (초점 입력칸 아래 ~ 그 아래 단추 줄 위)을 누른 것은 키 입력이므로 조합을 이어 간다(KbdKeyTap).
  *   v17: 키보드 대화상자 아래 단추 줄의 가장 오른쪽 단추(Int'l) 오른쪽에 한/영 칸('한'/'A', OS 4 MnKbdHan과 같은 자리)을
@@ -24,6 +25,7 @@
 #define nilEvent 0
 #define penDownEvent 1
 #define penUpEvent 2
+#define penMoveEvent 3
 #define winEnterEvent 3
 #define keyDownEvent 4
 #define frmOpenEvent 24
@@ -322,6 +324,40 @@ static void SkRedraw(struct Ctx *c)
     if (q(vchrSilkResize, 0, commandKeyMask) == 0) c->skhold++;
 }
 
+/* v29: Sony 자판 한/A 단추를 눌렀나 — 탭 줄 빈자리(표준 좌표, os5.h kSkBtn*)이고, 지금 실크에 자판의 영문자(`abc`) 탭이 보일 때만.
+ *   보이는지는 화면의 `abc` 탭 자리(기기 38,440) 색으로 본다: 고른 탭은 파랑(VZ90 RGB 99,101,255·NX70V 156,154,255), 아니면 회색 —
+ *   Graffiti 영역이면 그 자리 펜은 글씨 쓰기라 건드리지 않는다.
+ *   화면 창은 앱 화면(320×320)만 덮어 WinGetPixel로는 실크를 못 읽는다. 화면 창 그림의 비트가 LCD 버퍼 맨 앞이고 실크 줄이 같은
+ *   줄 간격으로 그 뒤에 이어지므로(진단 빌드로 확인) 440줄을 읽는다 — VZ90 16비트(한 줄 640바이트), NX70V 8비트 색 번호(320바이트). */
+typedef void *(*WinFn)(void);
+static int SkBtnTap(const struct NEvent *ev)
+{
+    struct Ctx *c = CtxPtr();
+    void *bm;
+    const u8 *bits;
+    s16 w = 0, h = 0;
+    u16 rb = 0;
+    u8 d, rgb[4] = {0, 0, 0, 0};
+
+    if (!c->sklo || ev->screenX < kSkBtnL || ev->screenX >= kSkBtnR || ev->screenY < kSkBtnT || ev->screenY >= kSkBtnB)
+        return 0;
+    bm = ((void *(*)(void *))T8(T8_WinGetBitmap))(((WinFn)T8(T8_WinGetDisplayWindow))());
+    if (!bm) return 0;
+    ((void (*)(void *, s16 *, s16 *, u16 *))T8(T8_BmpGetDimensions))(bm, &w, &h, &rb);
+    d = ((u8 (*)(void *))T8(T8_BmpGetBitDepth))(bm);
+    bits = (const u8 *)((void *(*)(void *))T8(T8_BmpGetBits))(bm);
+    if (w != 320 || !bits) return 0;
+    if (d == 16 && rb == 640) {
+        u16 px = *(const u16 *)(bits + 440 * 640 + 38 * 2);
+        rgb[1] = (u8)((px >> 11) << 3);
+        rgb[3] = (u8)((px & 0x1F) << 3);
+    } else if (d == 8 && rb == 320) {
+        ((void (*)(u8, u8 *))T8(T8_WinIndexToRGB))(bits[440 * 320 + 38], rgb);   /* RGBColorType: index, r, g, b */
+    } else
+        return 0;
+    return rgb[3] >= 224 && rgb[1] <= 180;   /* 파랑: B가 크고 R이 작다(회색은 R = B) */
+}
+
 void HgGetEvent(struct NEvent *ev, s32 timeout)
 {
     struct Ctx *c = CtxPtr();
@@ -360,6 +396,11 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     st[7]++;
 #endif
     if (!ev) return;
+    if ((c->skbpen & 1) && (ev->eType == penMoveEvent || ev->eType == penUpEvent)) {   /* v29: 한/A 단추를 누른 펜 */
+        if (ev->eType == penUpEvent) c->skbpen &= ~1u;
+        ev->eType = nilEvent;
+        return;
+    }
     if (c->skhold) {
         if (ev->eType == keyDownEvent && ev->chr == vchrSilkResize && c->skhold != kSkWait) {
             if (--c->skhold == 0) c->skhold = kSkWait;   /* 복원은 이 이벤트 처리 뒤 — 앱 화면이 줄 때까지 기다림 */
@@ -402,6 +443,15 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
         ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
         if (dh > 0 && ev->screenY >= dh) {
             LogC((u16)(((u16)dh << 8) | (ev->screenY & 0xFF)), ev, 9);
+            if (SkBtnTap(ev)) {   /* v29: 자판 한/A 단추 */
+                st[2] = !st[2];
+                st[0] = 0;
+                c->mark |= 1;
+                c->skr = 1;   /* 자판·단추를 새 모드로 다시 그림(v27) */
+                c->skbpen |= 1;
+                Log(ev, 3);
+                ev->eType = nilEvent;
+            }
             return;
         }
         c->pen++;

@@ -10,6 +10,7 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v29: Sony 자판 탭 줄 빈자리에 한/A 단추(SkButtonDraw).
  * v28: 밑줄 모드면 한글 칸 아래에 밑줄도 그린다(입력칸을 다시 그리면 한글 아래 밑줄이 빠졌음).
  * v27: RawPaint가 raw 앞 값을 되돌림.
  * v26: StdInput이 부른 WinPaintChar(s)는 원래 함수로, 그 안의 글자 경계 함수도 원래대로(RawPaint, ctx raw).
@@ -431,6 +432,8 @@ void HgPaintChar(WChar ch, s16 x, s16 y) {
     struct Ctx *c = CtxPtr();
     u32 lr = (u32)__builtin_return_address(0);
 
+    if (!Idle() && InStdInput(lr) && (ch == 'm' || ch == 'M'))
+        c->skbpen |= 0x100;   /* v29: 영문자 탭의 마지막 줄 — 이 글자를 그린 뒤 한/A 단추도(아래 끝) */
     if (!Idle() && c->st[2] && InStdInput(lr) && ch < 0x80 &&
         ((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z'))) {
         u8 j = Dubeol((u8)(ch ^ 0x20));
@@ -458,12 +461,33 @@ void HgPaintChar(WChar ch, s16 x, s16 y) {
             if (rmin <= rmax) {
                 s16 cx = (s16)(x + cw / 2), cy = (s16)(y + lh / 2);
                 PaintRows(rows, H, 16, (s16)(cx - (s16)((cmin + cmax + 1) / 2)), (s16)(cy - (s16)((rmin + rmax + 1) / 2)));
+                SkButtonDraw();
                 return;
             }
         }
     }
     if (InStdInput(lr)) RawPaint(c->pcorig, 0, 0, ch, x, y);
     else ((DrawCharFn)c->pcorig)(ch, x, y);
+    SkButtonDraw();
+}
+
+/* v29: Sony 자판(영문자 탭)의 탭 줄 빈자리에 지금 모드 — 한글 '한', 영문 'A'. StdInput이 'm'/'M'을 그린 직후 같은 화면 밖 창에 그린다
+ *   (그 창이 실크로 옮겨짐, Sony가 탭 줄 배경으로 덮지 않음 — 15.3). 누름은 ime.c SkBtnTap. */
+void SkButtonDraw(void)
+{
+    struct Ctx *c = CtxPtr();
+
+    if (!(c->skbpen & 0x100)) return;
+    c->skbpen &= ~0x100u;
+    if (c->st[2] && c->pack) {
+        u32 rows[16];
+        GlyphRows(c->pack, RankToSyl(c->ksc, (0xC7 - 0xB0) * 94 + (0xD1 - 0xA1)), rows);   /* 한 (KSC C7D1) */
+        PaintRows(rows, c->pack[3], 16, kSkBtnX, kSkBtnY);
+    } else {
+        char a = 'A';
+        s16 w = ((CharsWidthFn)ORIG(O_CharsWidth))(&a, 1);
+        RawPaint(c->pcorig, 0, 0, 'A', (s16)(kSkBtnX + (16 - w) / 2), kSkBtnY);
+    }
 }
 
 /* WinDrawTruncChars: 글자 경계에서 자르고 "…" */

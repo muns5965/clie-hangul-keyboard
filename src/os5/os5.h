@@ -56,12 +56,13 @@ struct Ctx {
     u32 raw;             /* +404 v26: StdInput이 부른 글자 그리기 원래 함수를 도는 동안 1 — 글자 경계 함수가 한글로 읽지 않음(text.c Off) */
     u32 skr;             /* +408 v27: Sony 자판 다시 그리기 — 1 다음 이벤트 전에, 2 하드웨어 Shift를 뗀 뒤(ime.c SkRedraw) */
     u32 skhold;          /* +412 v27: 넣은 vchrSilkResize 중 아직 지나가지 않은 수 — 그동안 '한'을 그리지 않음 */
+    u32 skbpen;          /* +416 v29: 자판 한/A 단추를 누른 펜 — 뗄 때까지 펜 이벤트를 앱에 넘기지 않음 */
 #ifdef MN_TEST_STALE
     u32 test;            /* 시험 빌드만 */
 #endif
 };
 struct Ctx *CtxPtr(void);
-#define kCtxSpace 416   /* ctx.S의 .space와 같게. v19: 384를 넘겨 뒤 코드를 덮었던 일이 있어 컴파일 때 확인 */
+#define kCtxSpace 432   /* v29: 416 → 432. ctx.S의 .space와 같게. v19: 384를 넘겨 뒤 코드를 덮었던 일이 있어 컴파일 때 확인 */
 typedef char CtxFits[(sizeof(struct Ctx) <= kCtxSpace) ? 1 : -1];
 typedef char PcOrigAt[(__builtin_offsetof(struct Ctx, pcorig) == 4 * O_PaintChar) ? 1 : -1];   /* v25 */
 typedef char SkLoAt[(__builtin_offsetof(struct Ctx, sklo) == 396) ? 1 : -1];                  /* app.c kCtxSkLo */
@@ -91,6 +92,21 @@ static inline int InStdInput(u32 lr) {
 #define T8_WinDrawLine            0xb28   /* v20 */
 #define T8_WinDrawGrayLine        0xb1c   /* v28: 68k 트랩 0xA214 */
 #define T8_WinSetUnderlineMode    0xc54   /* v28: 68k 트랩 0xA225 */
+#define T8_WinGetDisplayWindow    0xb74   /* v29: 68k 트랩 0xA200 */
+#define T8_WinGetBitmap           0xb68   /* v29: 0xA3A2 */
+#define T8_BmpGetBits             0x05c   /* v29: 0xA376 */
+#define T8_BmpGetBitDepth         0x058   /* v29: 0xA44F */
+#define T8_BmpGetDimensions       0x064   /* v29: 0xA44E */
+#define T8_WinIndexToRGB          0xba4   /* v29: 0xA39F */
+/* v29: Sony 자판 탭 줄 빈자리의 한/A 단추(docs/OS5_RESEARCH.md 15절). VZ90 `コード` 오른쪽·NX70V `sym` 오른쪽 — 두 기종 같은 자리.
+ *   그리기는 StdInput 화면 밖 창 좌표(기기 픽셀, 화면 y − 약 325), 누름은 표준 좌표 */
+#define kSkBtnX     257
+#define kSkBtnY     105
+#define kSkBtnL     127
+#define kSkBtnR     139
+#define kSkBtnT     213
+#define kSkBtnB     226
+void SkButtonDraw(void);
 #define T8_WinEraseRectangle      0xb50
 #define T8_WinPopDrawState        0xbf0   /* v20 */
 #define T8_WinPushDrawState       0xbf4   /* v20 */
