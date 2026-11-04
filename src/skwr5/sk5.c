@@ -8,6 +8,9 @@
  * build 2(2단계): OS 4와 같은 단모음 한글 조합(src/common/hangul_compose.h, 완성형 판정표 src/skwr/ksc_table.h),
  *   조합 중 커서 이동 감지(src/common/cursor_track.h), 한/A의 '한'을 16×16 그림으로(src/skwr5/data/Sk5Han.bin, MnHangul5 없이도 보임),
  *   EvtEnqueueKey 결과 확인: 성공·실패를 따로 세고, 조합 중 하나라도 큐에 못 넣으면 조합을 끝낸다(다음 BS가 엉뚱한 글자를 지우지 않게).
+ * build 4: 자판 전체(DrawKeys)를 화면 밖 창에 다 그린 뒤 실크 창으로 한 번에 옮긴다(더블 버퍼링) — 전에는 실크를 지우고 키를 하나씩 그려
+ *   느린 CPU에서 빈 자판·그리다 만 자판이 보였다(CPU 3 MIPS 시험). 화면 밖 창은 그릴 때마다 만들고 지운다(VZ90 16비트 약 83KB).
+ *   만들지 못하면(메모리 부족 등) 전처럼 실크 창에 바로 그린다. 키 누름 반전(InvertKey)은 그 키만이라 그대로.
  * build 3: MnHangul5 v23이 세는 앱 화면 펜 누름 수(Feature 'MnH5' #10 = ARM ctx의 u32 칸 주소)가 바뀌었으면 조합을 끝낸다.
  *   Address 편집 화면·To Do처럼 표 안의 입력칸은 cursor_track.h가 찾지 못해, 다른 칸을 누른 뒤 앞 글자를 고치는 BS가 새 칸에 갔다(9.7절).
  *   커서 비교(CtCheck)는 그대로 함께 쓴다(펜 없이 커서가 옮겨진 경우). MnHangul5가 없거나 v22 이하면 이 비교는 하지 않는다.
@@ -33,14 +36,15 @@
  *   #46 눌린 키(0 없음, 줄*16+칸+1), #47 큐에 넣은 키 수, #48 마지막 키(31~16 키 번호, 15~0 코드), #49 자판 상태,
  *   #50 조합 상태(31~24 초성, 23~16 중성, 15~8 종성: 호환 자모 - 0x3130, 7~0 화면에 나간 글자 수), #51 조합 중인 앱 LocalID,
  *   #52 큐에 못 넣은 키 수, #53 이번 키 처리 중 큐 실패(0/1), #54 큐 실패로 조합을 끝낸 수, #56 마지막으로 본 앱 화면 펜 수,
- *   #57 앱 화면 펜으로 조합을 끝낸 수, #81~#87 커서 비교(cursor_track.h)
+ *   #57 앱 화면 펜으로 조합을 끝낸 수, #58 화면 밖 창으로 그린 수, #59 화면 밖 창을 못 만들어 바로 그린 수(31~16 오류, 15~0 수),
+ *   #81~#87 커서 비교(cursor_track.h)
  */
 
 #include <PalmOS.h>
 
 #define kCr           'MnS5'
 #define kMagic        0x5335UL     /* 'S5' */
-#define kBuild        3
+#define kBuild        4
 
 #define kSkMark       0x4D53       /* 'MS' — MnHangul5 v22 ime.c kSkMark와 같아야 한다 */
 
@@ -70,6 +74,8 @@
 #define kFtrQEnd      54
 #define kFtrPenSeen   56
 #define kFtrPenEnd    57
+#define kFtrOffUsed   58           /* build 4: 화면 밖 창으로 그린 수 */
+#define kFtrOffFail   59           /* build 4: 화면 밖 창을 못 만들어 바로 그린 수(31~16 마지막 오류) */
 #define kHgCr         'MnH5'   /* MnHangul5 */
 #define kHgFtrPen     10       /* MnHangul5 v23: 앱 화면 펜 수 칸 주소 */
 #define kFtrFld       81   /* #81~#87 조합 중 커서 이동 감지 */
@@ -645,9 +651,37 @@ static void DrawKeys(void)
     FontID        oldFont;
     UInt16        st = (UInt16)GetFtr(kFtrState);
     UInt16        row, col;
+    WinHandle     silk, off;
+    Err           oe = errNone;
 
     if (!BeginDraw(&ref, &old, &w, &h))
         return;
+    /* build 4: 화면 밖 창(실크 창과 같은 기기 형식·크기)에 그린 뒤 한 번에 옮김. 못 만들면 실크 창에 바로 */
+    silk = WinGetDrawWindow();
+    off = WinCreateOffscreenWindow(w, h, nativeFormat, &oe);
+#ifdef SK5_TEST_NOOFF   /* 시험 빌드: 화면 밖 창을 못 만든 경우 흉내 */
+    if (off != NULL) {
+        WinDeleteWindow(off, false);
+        off = NULL;
+        oe = memErrNotEnoughSpace;
+    }
+#endif
+    if (off != NULL) {
+        Coord ow = 0, oh = 0;
+
+        WinSetDrawWindow(off);
+        WinGetWindowExtent(&ow, &oh);
+        if (ow != w || oh != h) {   /* 크기가 다르면(좌표계 해석이 다른 경우) 쓰지 않음 */
+            WinSetDrawWindow(silk);
+            WinDeleteWindow(off, false);
+            off = NULL;
+            oe = 0xFFFF;
+        }
+    }
+    if (off != NULL)
+        BumpFtr(kFtrOffUsed);
+    else
+        FtrSet(kCr, kFtrOffFail, ((UInt32)(UInt16)oe << 16) | ((GetFtr(kFtrOffFail) + 1) & 0xFFFF));
     RctSetRectangle(&r, 0, 0, w, h);
     WinEraseRectangle(&r, 0);
     oldFont = FntSetFont(stdFont);
@@ -690,6 +724,12 @@ static void DrawKeys(void)
     }
 #endif
     FntSetFont(oldFont);
+    if (off != NULL) {   /* build 4: 실크 창으로 한 번에 옮기고 화면 밖 창을 지움 */
+        RctSetRectangle(&r, 0, 0, w, h);
+        WinSetDrawWindow(silk);
+        WinCopyRectangle(off, silk, &r, 0, 0, winPaint);
+        WinDeleteWindow(off, false);
+    }
     EndDraw(ref, old);
     FtrSet(kCr, kFtrDrawn, ((UInt32)(UInt16)w << 16) | (UInt16)h);
     FtrSet(kCr, kFtrPressed, 0);
