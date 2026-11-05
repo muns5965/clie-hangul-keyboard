@@ -422,9 +422,26 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     }
     if (c->skr == 1)
         SkRedraw(c);
-    else if (c->skr == 3 && ((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(vchrSilkResize, 0, commandKeyMask) == 0) {
-        c->skr = 0;   /* v33: 못 넣었던 두 번째 vchrSilkResize(실크 다시 펼침) */
-        c->skhold = 1;
+    else if (c->skr == 3 && (c->skhold == kSkWait || c->skhold == 0)) {
+        /* v33: 못 넣었던 두 번째 vchrSilkResize(실크 다시 펼침).
+         * v34: 첫 번째가 지나간 뒤에만 — 그 전에는 실크가 아직 펼쳐져 있어 판단할 수 없다. skhold가 kSkWait(첫 번째가 지나감)이거나
+         *   0(그 뒤 펜·키·빈 큐로 기다림이 끝남 — 큐는 차례대로라 그때는 첫 번째도 지나갔다)일 때 */
+        s16 rw = 0, rh = 0;
+
+        ((ExtentFn)T8(T8_WinGetDisplayExtent))(&rw, &rh);
+        if (rh > 0 && rh <= kSilkUpMaxH)
+            c->skr = 0;   /* v34: 사용자가 이미 펼침 — 넣으면 도로 접힘. '한'은 아래 kSkWait 처리가 다시 그림 */
+#ifdef MN_TEST_RETRYFAIL
+        if (c->skr == 0) c->skchk |= 0x80000000u;   /* 시험 빌드: 취소한 표시 */
+#endif
+        else if (
+#ifdef MN_TEST_RETRYFAIL   /* 시험 빌드: 다시 넣기도 처음 N번은 못 넣은 것처럼(단추를 끈 시험이라 skchk로 셈) */
+                 c->skchk++ >= MN_TEST_RETRYFAIL &&
+#endif
+                 ((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(vchrSilkResize, 0, commandKeyMask) == 0) {
+            c->skr = 0;
+            c->skhold = 1;   /* 남은 것은 방금 넣은 이 하나 */
+        }   /* 못 넣으면 다음 이벤트 때 다시 */
     }
     if (c->skhold == kSkWait) {   /* 두 이벤트는 지나감 — 실크가 다시 펼쳐졌으면(앱 화면이 줄었으면) '한'을 다시 그림 */
         s16 dw = 0, dh = 0;
