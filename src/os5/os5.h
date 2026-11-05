@@ -119,6 +119,7 @@ void SkButtonDraw(void);
 #define T8_WinPaintBitmap         0xbc8
 #define T8_WinSetDrawMode         0xc34
 #define T8_WinSetDrawWindow       0xc38
+#define T8_WinSetBackColor        0xc24   /* v32: 68k 트랩 0xA399 */
 #define T8_WinSetForeColor        0xc3c
 #define T8_WinSetTextColor        0xc4c
 #define T8_WinSetCoordinateSystem 0xc98

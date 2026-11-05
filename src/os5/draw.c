@@ -10,6 +10,7 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v32: 한/A 단추 칸을 배경색으로 지운 뒤 그림(키 글자만 다시 그려질 때 앞 글자와 겹쳤음).
  * v30: 한/A 단추를 탭 줄 가운데에(v29는 왼쪽 위 고정 자리라 '한'이 약 6픽셀 위).
  * v29: Sony 자판 탭 줄 빈자리에 한/A 단추(SkButtonDraw).
  * v28: 밑줄 모드면 한글 칸 아래에 밑줄도 그린다(입력칸을 다시 그리면 한글 아래 밑줄이 빠졌음).
@@ -480,6 +481,16 @@ void SkButtonDraw(void)
 
     if (!(c->skbpen & 0x100)) return;
     c->skbpen &= ~0x100u;
+    {   /* v32: 단추 칸을 그 자리 배경색으로 먼저 지움 — 탭 줄은 그대로 두고 키 글자만 다시 그리면(Shift가 풀릴 때 등) 앞 글자 위에 겹쳤다 */
+        struct ERect er;
+        u16 oc = ((CoordSysFn)T8(T8_WinSetCoordinateSystem))(kCoordinatesNative);
+        u8 bg = ((u8 (*)(s16, s16))T8(T8_WinGetPixel))(kSkBtnCX - 9, kSkBtnCY - 10);   /* 칸 왼쪽 위 모서리(글자 점이 닿지 않는 곳) */
+        u8 ob = ((ColorFn)T8(T8_WinSetBackColor))(bg);
+        er.x = kSkBtnCX - 9; er.y = kSkBtnCY - 10; er.w = 19; er.h = 20;
+        ((EraseFn)T8(T8_WinEraseRectangle))(&er, 0);
+        ((ColorFn)T8(T8_WinSetBackColor))(ob);
+        ((CoordSysFn)T8(T8_WinSetCoordinateSystem))(oc);
+    }
     if (c->st[2] && c->pack) {   /* 한: 점 범위의 가운데를 단추 칸 가운데에(HgPaintChar와 같은 방식) */
         u32 rows[16];
         u16 r, k, H = c->pack[3], rmin = 16, rmax = 0, cmin = 16, cmax = 0;

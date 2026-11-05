@@ -317,6 +317,9 @@ static void SkRedraw(struct Ctx *c)
     EnqueueKeyFn q = (EnqueueKeyFn)T8(T8_EvtEnqueueKey);
 
     c->skr = 0;
+#ifdef MN_TEST_NOREDRAW   /* 시험 빌드: 다시 그리기를 하지 않음(키 글자만 다시 그려지는 경우 흉내) */
+    return;
+#endif
     if (!c->sklo) return;
     ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
     if (dh <= 0 || dh > kSilkUpMaxH) return;
