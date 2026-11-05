@@ -8,6 +8,8 @@
  * build 2(2단계): OS 4와 같은 단모음 한글 조합(src/common/hangul_compose.h, 완성형 판정표 src/skwr/ksc_table.h),
  *   조합 중 커서 이동 감지(src/common/cursor_track.h), 한/A의 '한'을 16×16 그림으로(src/skwr5/data/Sk5Han.bin, MnHangul5 없이도 보임),
  *   EvtEnqueueKey 결과 확인: 성공·실패를 따로 세고, 조합 중 하나라도 큐에 못 넣으면 조합을 끝낸다(다음 BS가 엉뚱한 글자를 지우지 않게).
+ * build 5: 펜을 뗄 때 다시 그리는 자판의 색을 Silk Manager가 부른 그리기(Start·Draw·DispChange)의 색과 같게 한다 — 전에는 앱의 그리기 색을
+ *   그대로 써 VZ90에서 처음은 회색(실크 배경, 색 번호 D8), 키를 누른 뒤는 검정(앱 배경 FF)으로 바뀌었다. NX70V는 둘 다 흰색이라 차이 없었음.
  * build 4: 자판 전체(DrawKeys)를 화면 밖 창에 다 그린 뒤 실크 창으로 한 번에 옮긴다(더블 버퍼링) — 전에는 실크를 지우고 키를 하나씩 그려
  *   느린 CPU에서 빈 자판·그리다 만 자판이 보였다(CPU 3 MIPS 시험). 화면 밖 창은 그릴 때마다 만들고 지운다(VZ90 16비트 약 83KB).
  *   만들지 못하면(메모리 부족 등) 전처럼 실크 창에 바로 그린다. 키 누름 반전(InvertKey)은 그 키만이라 그대로.
@@ -37,14 +39,14 @@
  *   #50 조합 상태(31~24 초성, 23~16 중성, 15~8 종성: 호환 자모 - 0x3130, 7~0 화면에 나간 글자 수), #51 조합 중인 앱 LocalID,
  *   #52 큐에 못 넣은 키 수, #53 이번 키 처리 중 큐 실패(0/1), #54 큐 실패로 조합을 끝낸 수, #56 마지막으로 본 앱 화면 펜 수,
  *   #57 앱 화면 펜으로 조합을 끝낸 수, #58 화면 밖 창으로 그린 수, #59 화면 밖 창을 못 만들어 바로 그린 수(31~16 오류, 15~0 수),
- *   #81~#87 커서 비교(cursor_track.h)
+ *   #64 Silk Manager 그리기의 색(build 5), #81~#87 커서 비교(cursor_track.h)
  */
 
 #include <PalmOS.h>
 
 #define kCr           'MnS5'
 #define kMagic        0x5335UL     /* 'S5' */
-#define kBuild        4
+#define kBuild        5
 
 #define kSkMark       0x4D53       /* 'MS' — MnHangul5 v22 ime.c kSkMark와 같아야 한다 */
 
@@ -76,6 +78,7 @@
 #define kFtrPenEnd    57
 #define kFtrOffUsed   58           /* build 4: 화면 밖 창으로 그린 수 */
 #define kFtrOffFail   59           /* build 4: 화면 밖 창을 못 만들어 바로 그린 수(31~16 마지막 오류) */
+#define kFtrColors    64           /* build 5: Silk Manager가 부른 그리기의 색 번호(24 있음, 23~16 배경, 15~8 전경, 7~0 글자) */
 #define kHgCr         'MnH5'   /* MnHangul5 */
 #define kHgFtrPen     10       /* MnHangul5 v23: 앱 화면 펜 수 칸 주소 */
 #define kFtrFld       81   /* #81~#87 조합 중 커서 이동 감지 */
@@ -572,7 +575,7 @@ static inline void QFailEnd(void)
 
 /* 큰 함수는 inline으로 두면 Sk5Entry 한 함수가 너무 커져(switch 점프표 16비트 넘침) 따로 둔다.
  * 진입점이 .text 맨 앞이어야 하므로 선언만 앞에 두고 본문은 Sk5Entry 뒤에 둔다. */
-static void    DrawKeys(void);
+static void    DrawKeys(Boolean silkCtx);
 static void    InvertKey(UInt16 k);
 static Boolean DoKey(UInt16 k);
 
@@ -602,7 +605,7 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
 #ifdef SK5_TEST_QFAIL
         FtrSet(kCr, 55, 0);      /* 시험 빌드: 실패 흉내 계수를 켤 때마다 처음부터 */
 #endif
-        DrawKeys();
+        DrawKeys(true);
         break;
 
     case kEvtStop:
@@ -612,7 +615,7 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
 
     case kEvtDraw:
     case kEvtDisp:
-        DrawKeys();
+        DrawKeys(true);
         break;
 
     case kEvtPenDown:
@@ -632,10 +635,10 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
             InvertKey(pressed);
             FtrSet(kCr, kFtrPressed, 0);
             if (pressed != 0 && k == pressed && DoKey(k))
-                DrawKeys();
+                DrawKeys(false);
 #ifdef SK5_DEBUG
             else
-                DrawKeys();
+                DrawKeys(false);
 #endif
         }
         break;
@@ -643,7 +646,7 @@ Err Sk5Entry(UInt32 *slot, UInt8 *ev)
     return 0;
 }
 
-static void DrawKeys(void)
+static void DrawKeys(Boolean silkCtx)
 {
     UInt16        ref, old;
     Coord         w, h;
@@ -653,9 +656,29 @@ static void DrawKeys(void)
     UInt16        row, col;
     WinHandle     silk, off;
     Err           oe = errNone;
+    IndexedColorType obk, ofg, otx;
 
     if (!BeginDraw(&ref, &old, &w, &h))
         return;
+    /* build 5: 색 — Silk Manager가 부른 그리기면 그 색을 기억하고, 펜을 뗄 때(앱의 그리기 색)는 기억한 색으로 그린 뒤 되돌린다 */
+    obk = WinSetBackColor(0);
+    ofg = WinSetForeColor(0);
+    otx = WinSetTextColor(0);
+    if (silkCtx)
+        FtrSet(kCr, kFtrColors, 0x01000000UL | ((UInt32)obk << 16) | ((UInt32)ofg << 8) | otx);
+    {
+        UInt32 cv = GetFtr(kFtrColors);
+
+        if (cv & 0x01000000UL) {
+            WinSetBackColor((IndexedColorType)(cv >> 16));
+            WinSetForeColor((IndexedColorType)(cv >> 8));
+            WinSetTextColor((IndexedColorType)cv);
+        } else {
+            WinSetBackColor(obk);
+            WinSetForeColor(ofg);
+            WinSetTextColor(otx);
+        }
+    }
     /* build 4: 화면 밖 창(실크 창과 같은 기기 형식·크기)에 그린 뒤 한 번에 옮김. 못 만들면 실크 창에 바로 */
     silk = WinGetDrawWindow();
     off = WinCreateOffscreenWindow(w, h, nativeFormat, &oe);
@@ -730,6 +753,9 @@ static void DrawKeys(void)
         WinCopyRectangle(off, silk, &r, 0, 0, winPaint);
         WinDeleteWindow(off, false);
     }
+    WinSetBackColor(obk);   /* build 5 */
+    WinSetForeColor(ofg);
+    WinSetTextColor(otx);
     EndDraw(ref, old);
     FtrSet(kCr, kFtrDrawn, ((UInt32)(UInt16)w << 16) | (UInt16)h);
     FtrSet(kCr, kFtrPressed, 0);
