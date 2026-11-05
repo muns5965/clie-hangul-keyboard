@@ -10,6 +10,7 @@
  * v16: 한글 모드에서 시스템 키보드 대화상자(폼 32000)의 키 글자(영문자 한 글자, 입력칸 아래)는 두벌식 자모로 그린다(KbdLabel).
  * v17: 대문자 키 글자는 대화상자에서 shift를 손으로 눌렀을 때만 쌍자음(ime.c kshift), 그 밖(새 글 첫머리 자동 대문자·cap)은 기본 자모.
  *   대화상자는 키 글자를 WinDrawChars로 한 글자씩 그리고, 한/영(Shift+Space)·shift 때 다시 그린다(TG50 실측).
+ * v33: 한/A 단추는 설정(ctx skon)이 켜졌을 때만.
  * v32: 한/A 단추 칸을 배경색으로 지운 뒤 그림(키 글자만 다시 그려질 때 앞 글자와 겹쳤음).
  * v30: 한/A 단추를 탭 줄 가운데에(v29는 왼쪽 위 고정 자리라 '한'이 약 6픽셀 위).
  * v29: Sony 자판 탭 줄 빈자리에 한/A 단추(SkButtonDraw).
@@ -481,6 +482,7 @@ void SkButtonDraw(void)
 
     if (!(c->skbpen & 0x100)) return;
     c->skbpen &= ~0x100u;
+    if (!c->skon) return;   /* v33: 설정에서 끔(기본) */
     {   /* v32: 단추 칸을 그 자리 배경색으로 먼저 지움 — 탭 줄은 그대로 두고 키 글자만 다시 그리면(Shift가 풀릴 때 등) 앞 글자 위에 겹쳤다 */
         struct ERect er;
         u16 oc = ((CoordSysFn)T8(T8_WinSetCoordinateSystem))(kCoordinatesNative);

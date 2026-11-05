@@ -30,6 +30,8 @@
  * v22: Mn 실크 키보드(MnSk5)가 넣은 키(keyCode 'MS')는 조합하지 않고 그대로 보낸다(ime.c, 미루기 처리 뒤).
  * v23: 실크 영역 펜은 조합을 끝내지 않음(Sony 소프트 키보드로 두벌식 조합), 앱 화면 펜 수를 ctx에 세고 그 주소를 Feature #10에(MnSk5가 읽음).
  * v24: 24×24 한글을 기기 1픽셀 위로(draw.c, 같은 칸 영문과 위아래 맞춤), 한글 아래 입력칸 밑줄을 지우지 않음.
+ * v33: Sony 자판 한/A 단추를 설정(Sony kbd Han/A)으로 켜고 끔, 기본 끔 — 누름 판정이 화면 창 그림 범위 밖(LCD 버퍼)을 읽어
+ *   실기기에서 안전한지 확인되기 전까지. 끄면 단추를 그리지도, 버퍼를 읽지도 않는다.
  * v32: 한/A 단추 칸을 그 자리 배경색으로 지운 뒤 그림(앞 글자와 겹침 방지).
  * v31: 한/A 단추 누름 전에 화면 버퍼 배치를 확인(아니면 단추 안 씀), 결과를 Debug 화면 skbtn에.
  *   단추 펜을 더는 막지 않음(막는 동안 다음 키의 뗌까지 막혀 키가 빠졌다).
@@ -49,11 +51,11 @@
  * 코드는 복사본으로 돌기 때문에 켜진 채로 PRC를 지우거나 덮어써도 리셋 전까지 그대로 동작한다.
  *
  * Feature(MnH5): 0 코드 블록, 1 글꼴 16, 2 KSC 표, 3 글꼴 24, 9 리셋 때 켜기 결과(0x10000 | 결과)
- * 앱 설정(MnH5, 저장): 0 Start at reset(기본 1), 2 Debug 화면
+ * 앱 설정(MnH5, 저장): 0 Start at reset(기본 1), 2 Debug 화면, 3 Sony 자판 한/A 단추(v33, 기본 0)
  */
 #include <PalmOS.h>
 
-#define kVer "v32"
+#define kVer "v33"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -75,6 +77,7 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kCtxPen  388   /* v23 */
 #define kCtxSkLo 396   /* v25: StdInput 코드 범위(os5.h sklo·skhi) */
 #define kCtxSkHi 400
+#define kCtxSkOn  424  /* v33: Sony 자판 한/A 단추 켬(앱 설정 3, 기본 0) */
 #define kCtxSkChk 420  /* v31: 한/A 단추 화면 버퍼 확인(비트 0 형식·1 앱 화면 점 일치·2 실크 경계선·3 abc 파랑, 31~16 누른 수) */
 #define kFtrPen  10    /* v23: 앱 화면 펜 수 칸 주소(ARM 리틀엔디언 u32) — MnSk5가 읽어 바뀌면 조합을 끝냄 */
 
@@ -260,6 +263,7 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
 
         r = back != 0 ? (kRelinked | (back << 8)) : *(UInt32 *)(v + ctx + kCtxIdle) ? kOk : kOnAlready;
         *(UInt32 *)(v + ctx + kCtxIdle) = 0;
+        *(UInt32 *)(v + ctx + kCtxSkOn) = SW((UInt32)PrefGet(3, 0));   /* v33 */
         MemHandleUnlock(th);
         DmReleaseResource(th);
         return r;
@@ -300,6 +304,7 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
                 *(UInt32 *)(block + ctx + kCtxSkLo) = SW(lo);
                 *(UInt32 *)(block + ctx + kCtxSkHi) = SW(hi);
             }
+            *(UInt32 *)(block + ctx + kCtxSkOn) = SW((UInt32)PrefGet(3, 0));   /* v33: 한/A 단추(기본 끔) */
             /* v9: 주소 기록(Feature)을 칸을 바꾸기 전에 하고 실패를 확인한다 — 칸만 바뀌고 기록이 없으면 OFF로 끌 수 없다 */
             if (FtrSet(kCr, 1, pack) != errNone || FtrSet(kCr, 2, ksc) != errNone ||
                 FtrSet(kCr, 3, pack24) != errNone || FtrSet(kCr, 0, block) != errNone) {
@@ -493,6 +498,7 @@ static void Draw(void)
     UiButton(kUiXOn, kUiRowBtn, "ON");
     UiButton(kUiXOff, kUiRowBtn, "OFF");
     UiButton(kUiXOn, kUiRowAuto, PrefGet(0, 1) ? "Start at reset: ON" : "Start at reset: off");
+    UiButton(kUiXOn, kUiRowUpd, PrefGet(3, 0) ? "Sony kbd Han/A: ON" : "Sony kbd Han/A: off");
     UiButton(kUiXOn, kUiRowReset, "Soft Reset (hold 3s)");
     WinDrawGrayLine(2, (kUiRowMods + 1) * kUiH - 1, 157, (kUiRowMods + 1) * kUiH - 1);
     {
@@ -575,6 +581,18 @@ UInt32 PilotMain(UInt16 cmd, MemPtr cmdPBP, UInt16 launchFlags)
             } else if (row == kUiRowAuto && e.screenX < 100) {
                 PrefPut(0, PrefGet(0, 1) ? 0 : 1);
                 StrCopy(gMsg, PrefGet(0, 1) ? "start at reset: ON" : "start at reset: off");
+            } else if (row == kUiRowUpd && e.screenX < 120) {   /* v33: Sony 자판 한/A 단추 켜기·끄기 */
+                UInt32    blk = GetF(0);
+                MemHandle th = DmGetResource('H5Tb', 1000);
+
+                PrefPut(3, PrefGet(3, 0) ? 0 : 1);
+                if (blk != 0 && th != NULL) {   /* 켜져 있으면 바로 반영(자판 단추 그림은 다음에 자판을 다시 그릴 때) */
+                    UInt16 ctx = ((UInt16 *)MemHandleLock(th))[1];
+                    *(UInt32 *)(blk + ctx + kCtxSkOn) = SW((UInt32)PrefGet(3, 0));
+                    MemHandleUnlock(th);
+                }
+                if (th) DmReleaseResource(th);
+                StrCopy(gMsg, PrefGet(3, 0) ? "Sony kbd Han/A: ON (test)" : "Sony kbd Han/A: off");
             } else if (row == kUiRowReset && e.screenX < 100) {
                 if (!UiHoldReset(kUiRowReset, "Soft Reset (hold 3s)", NULL))
                     StrCopy(gMsg, "reset cancelled");

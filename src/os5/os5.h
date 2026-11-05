@@ -54,10 +54,11 @@ struct Ctx {
     u32 pcorig;          /* +392 v25: WinPaintChar 원래 주소(O_PaintChar = 98 = 392/4, 설치 코드가 칸 표의 저장 번호로 씀) */
     u32 sklo, skhi;      /* +396 v25: Sony 표준 입력(StdInput, 'aSkw'/'SkAi') 코드 리소스 'amdc' 0의 범위 — 앱이 켤 때 채움, 없으면 0 */
     u32 raw;             /* +404 v26: StdInput이 부른 글자 그리기 원래 함수를 도는 동안 1 — 글자 경계 함수가 한글로 읽지 않음(text.c Off) */
-    u32 skr;             /* +408 v27: Sony 자판 다시 그리기 — 1 다음 이벤트 전에, 2 하드웨어 Shift를 뗀 뒤(ime.c SkRedraw) */
+    u32 skr;             /* +408 v27: Sony 자판 다시 그리기 — 1 다음 이벤트 전에, 2 하드웨어 Shift를 뗀 뒤(ime.c SkRedraw), 3 두 번째 vchrSilkResize 다시 넣기(v33) */
     u32 skhold;          /* +412 v27: 넣은 vchrSilkResize 중 아직 지나가지 않은 수 — 그동안 '한'을 그리지 않음 */
     u32 skbpen;          /* +416 v29: 비트 8 = StdInput이 'm'을 그림(그 뒤 한/A 단추를 그림). v31: 단추 펜을 막던 비트 0은 쓰지 않음 */
     u32 skchk;           /* +420 v31: 한/A 단추 누름 때 화면 버퍼 확인 결과(ime.c SkBtnTap) — 설정 앱 Debug 화면 */
+    u32 skon;            /* +424 v33: 한/A 단추 켬(앱 설정 3, 기본 0) — 0이면 그리지도 판정하지도 않음 */
 #ifdef MN_TEST_STALE
     u32 test;            /* 시험 빌드만 */
 #endif
@@ -68,6 +69,7 @@ typedef char CtxFits[(sizeof(struct Ctx) <= kCtxSpace) ? 1 : -1];
 typedef char PcOrigAt[(__builtin_offsetof(struct Ctx, pcorig) == 4 * O_PaintChar) ? 1 : -1];   /* v25 */
 typedef char SkLoAt[(__builtin_offsetof(struct Ctx, sklo) == 396) ? 1 : -1];                  /* app.c kCtxSkLo */
 typedef char SkChkAt[(__builtin_offsetof(struct Ctx, skchk) == 420) ? 1 : -1];                /* app.c kCtxSkChk */
+typedef char SkOnAt[(__builtin_offsetof(struct Ctx, skon) == 424) ? 1 : -1];                  /* app.c kCtxSkOn */
 
 static inline u32 R9(void) {
     u32 r;

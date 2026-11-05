@@ -323,8 +323,16 @@ static void SkRedraw(struct Ctx *c)
     if (!c->sklo) return;
     ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
     if (dh <= 0 || dh > kSilkUpMaxH) return;
-    if (q(vchrSilkResize, 0, commandKeyMask) == 0) c->skhold++;
-    if (q(vchrSilkResize, 0, commandKeyMask) == 0) c->skhold++;
+    if (q(vchrSilkResize, 0, commandKeyMask) != 0) return;   /* 하나도 못 넣음: 실크는 그대로 — 다시 그리기만 빠짐 */
+    c->skhold++;
+#ifdef MN_TEST_RESIZEFAIL   /* 시험 빌드: 두 번째를 큐에 넣지 못한 경우 흉내 */
+    if (0)
+#endif
+    if (q(vchrSilkResize, 0, commandKeyMask) == 0) {
+        c->skhold++;
+        return;
+    }
+    c->skr = 3;   /* v33: 두 번째를 못 넣음 — 실크가 접힌 채 남지 않게 다음 이벤트 때 다시 넣는다 */
 }
 
 /* v29: Sony 자판 한/A 단추를 눌렀나 — 탭 줄 빈자리(표준 좌표, os5.h kSkBtn*)이고, 지금 실크에 자판의 영문자(`abc`) 탭이 보일 때만.
@@ -359,7 +367,7 @@ static int SkBtnTap(const struct NEvent *ev)
     u16 rb = 0, cs;
     u8 d, a[4] = {0, 0, 0, 0}, b[4] = {0, 0, 0, 0}, e[4] = {0, 0, 0, 0}, chk = 0;
 
-    if (!c->sklo || ev->screenX < kSkBtnL || ev->screenX >= kSkBtnR || ev->screenY < kSkBtnT || ev->screenY >= kSkBtnB)
+    if (!c->skon || !c->sklo || ev->screenX < kSkBtnL || ev->screenX >= kSkBtnR || ev->screenY < kSkBtnT || ev->screenY >= kSkBtnB)
         return 0;
     bm = ((void *(*)(void *))T8(T8_WinGetBitmap))(((WinFn)T8(T8_WinGetDisplayWindow))());
     if (bm) {
@@ -414,6 +422,10 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     }
     if (c->skr == 1)
         SkRedraw(c);
+    else if (c->skr == 3 && ((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(vchrSilkResize, 0, commandKeyMask) == 0) {
+        c->skr = 0;   /* v33: 못 넣었던 두 번째 vchrSilkResize(실크 다시 펼침) */
+        c->skhold = 1;
+    }
     if (c->skhold == kSkWait) {   /* 두 이벤트는 지나감 — 실크가 다시 펼쳐졌으면(앱 화면이 줄었으면) '한'을 다시 그림 */
         s16 dw = 0, dh = 0;
         ((ExtentFn)T8(T8_WinGetDisplayExtent))(&dw, &dh);
