@@ -417,6 +417,11 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
             Mark(&c->mark, 0);
         c->mark = 0;
         st[0] = 0;
+        c->skr = 0;      /* v35: 남은 다시 그리기·재시도 요청을 버림 — 다시 켰을 때 실크가 저절로 펼쳐지지 않게 */
+        c->skhold = 0;
+#ifdef MN_TEST_RETRYUNTILOFF
+        c->skchk |= 0x40000000u;   /* 시험 빌드: 끈 적 있음 표시 — 그 뒤 재시도는 성공 */
+#endif
         ((GetEventFn)ORIG(O_GetEvent))(ev, timeout);
         return;
     }
@@ -430,13 +435,16 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
 
         ((ExtentFn)T8(T8_WinGetDisplayExtent))(&rw, &rh);
         if (rh > 0 && rh <= kSilkUpMaxH)
-            c->skr = 0;   /* v34: 사용자가 이미 펼침 — 넣으면 도로 접힘. '한'은 아래 kSkWait 처리가 다시 그림 */
+            c->skr = 0;   /* v34: 이미 펼쳐져 있어 다시 넣을 필요 없음(사용자·다른 앱·시스템 무엇이든) — 넣으면 도로 접힘. '한'은 아래 kSkWait 처리가 다시 그림 */
 #ifdef MN_TEST_RETRYFAIL
         if (c->skr == 0) c->skchk |= 0x80000000u;   /* 시험 빌드: 취소한 표시 */
 #endif
         else if (
 #ifdef MN_TEST_RETRYFAIL   /* 시험 빌드: 다시 넣기도 처음 N번은 못 넣은 것처럼(단추를 끈 시험이라 skchk로 셈) */
                  c->skchk++ >= MN_TEST_RETRYFAIL &&
+#endif
+#ifdef MN_TEST_RETRYUNTILOFF   /* 시험 빌드: MnHangul5를 끄기 전까지 다시 넣기가 실패하는 것처럼 */
+                 (c->skchk & 0x40000000u) &&
 #endif
                  ((EnqueueKeyFn)T8(T8_EvtEnqueueKey))(vchrSilkResize, 0, commandKeyMask) == 0) {
             c->skr = 0;

@@ -30,8 +30,9 @@
  * v22: Mn 실크 키보드(MnSk5)가 넣은 키(keyCode 'MS')는 조합하지 않고 그대로 보낸다(ime.c, 미루기 처리 뒤).
  * v23: 실크 영역 펜은 조합을 끝내지 않음(Sony 소프트 키보드로 두벌식 조합), 앱 화면 펜 수를 ctx에 세고 그 주소를 Feature #10에(MnSk5가 읽음).
  * v24: 24×24 한글을 기기 1픽셀 위로(draw.c, 같은 칸 영문과 위아래 맞춤), 한글 아래 입력칸 밑줄을 지우지 않음.
+ * v35: 켜고 끌 때 남은 다시 그리기·재시도 요청을 버림(끄기 전 요청이 남아 다시 켜면 실크가 저절로 펼쳐질 수 있었음).
  * v34: 설정을 바꾸면 Sony 자판을 다시 그려 단추를 바로 보이거나 지움. 실크 다시 펼치기 재시도를 첫 번째가 지나간 뒤에만,
- *   사용자가 이미 펼쳤으면 취소(넣으면 도로 접혔음).
+ *   이미 펼쳐져 있으면 취소(넣으면 도로 접혔음).
  * v33: Sony 자판 한/A 단추를 설정(Sony kbd Han/A)으로 켜고 끔, 기본 끔 — 누름 판정이 화면 창 그림 범위 밖(LCD 버퍼)을 읽어
  *   실기기에서 안전한지 확인되기 전까지. 끄면 단추를 그리지도, 버퍼를 읽지도 않는다.
  * v32: 한/A 단추 칸을 그 자리 배경색으로 지운 뒤 그림(앞 글자와 겹침 방지).
@@ -57,7 +58,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v34"
+#define kVer "v35"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -80,6 +81,7 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kCtxSkLo 396   /* v25: StdInput 코드 범위(os5.h sklo·skhi) */
 #define kCtxSkHi 400
 #define kCtxSkR   408  /* v34: 다시 그리기 요청(os5.h skr) */
+#define kCtxSkHold 412 /* v35: 넣은 vchrSilkResize 기다림(os5.h skhold) */
 #define kCtxSkOn  424  /* v33: Sony 자판 한/A 단추 켬(앱 설정 3, 기본 0) */
 #define kCtxSkChk 420  /* v31: 한/A 단추 화면 버퍼 확인(비트 0 형식·1 앱 화면 점 일치·2 실크 경계선·3 abc 파랑, 31~16 누른 수) */
 #define kFtrPen  10    /* v23: 앱 화면 펜 수 칸 주소(ARM 리틀엔디언 u32) — MnSk5가 읽어 바뀌면 조합을 끝냄 */
@@ -267,6 +269,8 @@ static UInt16 On(void)   /* 전역 없음(리셋 알림에서도 부름) */
         r = back != 0 ? (kRelinked | (back << 8)) : *(UInt32 *)(v + ctx + kCtxIdle) ? kOk : kOnAlready;
         *(UInt32 *)(v + ctx + kCtxIdle) = 0;
         *(UInt32 *)(v + ctx + kCtxSkOn) = SW((UInt32)PrefGet(3, 0));   /* v33 */
+        *(UInt32 *)(v + ctx + kCtxSkR) = 0;      /* v35: 끄기 전에 남은 다시 그리기·재시도 요청을 버림 */
+        *(UInt32 *)(v + ctx + kCtxSkHold) = 0;
         MemHandleUnlock(th);
         DmReleaseResource(th);
         return r;
