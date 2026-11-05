@@ -30,6 +30,8 @@
  * v22: Mn 실크 키보드(MnSk5)가 넣은 키(keyCode 'MS')는 조합하지 않고 그대로 보낸다(ime.c, 미루기 처리 뒤).
  * v23: 실크 영역 펜은 조합을 끝내지 않음(Sony 소프트 키보드로 두벌식 조합), 앱 화면 펜 수를 ctx에 세고 그 주소를 Feature #10에(MnSk5가 읽음).
  * v24: 24×24 한글을 기기 1픽셀 위로(draw.c, 같은 칸 영문과 위아래 맞춤), 한글 아래 입력칸 밑줄을 지우지 않음.
+ * v31: 한/A 단추 누름 전에 화면 버퍼 배치를 확인(아니면 단추 안 씀), 결과를 Debug 화면 skbtn에.
+ *   단추 펜을 더는 막지 않음(막는 동안 다음 키의 뗌까지 막혀 키가 빠졌다).
  * v30: 한/A 단추 글자를 탭 줄 가운데에(한은 점 범위, A는 글자 칸 기준).
  * v29: Sony 소프트 키보드 탭 줄 빈자리에 한/A 단추(VZ90 コード 오른쪽·NX70V sym 오른쪽).
  * v28: 입력칸을 다시 그릴 때 한글 아래 밑줄이 빠지던 문제(밑줄 모드면 한글 칸에도 밑줄).
@@ -50,7 +52,7 @@
  */
 #include <PalmOS.h>
 
-#define kVer "v30"
+#define kVer "v31"
 #define kCr 'MnH5'
 #ifndef MN_DIAG
 #define MN_DIAG 1
@@ -72,6 +74,7 @@ UInt32 PceNativeCall(void *nativeFuncP, void *userDataP) SYS_TRAP(0xA45A);   /* 
 #define kCtxPen  388   /* v23 */
 #define kCtxSkLo 396   /* v25: StdInput 코드 범위(os5.h sklo·skhi) */
 #define kCtxSkHi 400
+#define kCtxSkChk 420  /* v31: 한/A 단추 화면 버퍼 확인(비트 0 형식·1 앱 화면 점 일치·2 실크 경계선·3 abc 파랑, 31~16 누른 수) */
 #define kFtrPen  10    /* v23: 앱 화면 펜 수 칸 주소(ARM 리틀엔디언 u32) — MnSk5가 읽어 바뀌면 조합을 끝냄 */
 
 /* 켜기 결과 */
@@ -426,7 +429,7 @@ static void DrawDiag(void)
         UiRow(1, s);
         StrPrintF(s, "han %ld sent %ld seen %ld", SW(st[2]), SW(st[4]), SW(st[5]));
         UiRow(2, s);
-        StrPrintF(s, "events %ld", SW(st[7]));
+        StrPrintF(s, "events %ld skbtn %lx", SW(st[7]), SW(*(UInt32 *)(block + ctx + kCtxSkChk)));
         UiRow(3, s);
 #if MN_DIAG
         {   /* 최근 키(오래된 것부터): 글자<<16 | mod<<8 | 한<<7 | 처리 (src/os5/ime.c) */

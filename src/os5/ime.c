@@ -328,34 +328,70 @@ static void SkRedraw(struct Ctx *c)
  *   보이는지는 화면의 `abc` 탭 자리(기기 38,440) 색으로 본다: 고른 탭은 파랑(VZ90 RGB 99,101,255·NX70V 156,154,255), 아니면 회색 —
  *   Graffiti 영역이면 그 자리 펜은 글씨 쓰기라 건드리지 않는다.
  *   화면 창은 앱 화면(320×320)만 덮어 WinGetPixel로는 실크를 못 읽는다. 화면 창 그림의 비트가 LCD 버퍼 맨 앞이고 실크 줄이 같은
- *   줄 간격으로 그 뒤에 이어지므로(진단 빌드로 확인) 440줄을 읽는다 — VZ90 16비트(한 줄 640바이트), NX70V 8비트 색 번호(320바이트). */
+ *   줄 간격으로 그 뒤에 이어지므로(진단 빌드로 확인) 440줄을 읽는다 — VZ90 16비트(한 줄 640바이트), NX70V 8비트 색 번호(320바이트).
+ * v31: 그 전에 배치가 맞는지 확인한다(아니면 단추를 쓰지 않음 — 실기기에서 버퍼 배치가 다를 때 오동작 대신 '단추 없음'으로).
+ *   ① 앱 화면 안 한 점(300,300)을 버퍼에서 읽은 값 = WinGetPixel(RGB)로 읽은 값(비트 주소·줄 간격·형식 확인)
+ *   ② 실크 탭 줄 위·아래 경계선(기기 265,425·265,450)이 검정이고 탭 줄 안(265,437)은 검정이 아님(실크 줄이 그 자리에 이어짐)
+ *   결과는 ctx skchk(+420)에 남긴다: 비트 0 형식, 1 ①, 2 ②, 3 abc 파랑, 31~16 누른 수 — 설정 앱 Debug 화면에 보임. */
 typedef void *(*WinFn)(void);
+static void FbRGB(const u8 *bits, u8 d, s16 x, s16 y, u8 *rgb)   /* 버퍼의 한 점 → RGBColorType(index, r, g, b) */
+{
+    if (d == 16) {
+        u16 px = *(const u16 *)(bits + y * 640 + x * 2);
+        rgb[1] = (u8)((px >> 11) << 3);
+        rgb[2] = (u8)(((px >> 5) & 0x3F) << 2);
+        rgb[3] = (u8)((px & 0x1F) << 3);
+    } else {
+        rgb[0] = bits[y * 320 + x];
+        ((void (*)(u8, u8 *))T8(T8_WinIndexToRGB))(rgb[0], rgb);
+    }
+}
+static inline int Dark(const u8 *rgb) { return rgb[1] < 40 && rgb[2] < 40 && rgb[3] < 40; }
 static int SkBtnTap(const struct NEvent *ev)
 {
     struct Ctx *c = CtxPtr();
-    void *bm;
+    void *bm, *old;
     const u8 *bits;
     s16 w = 0, h = 0;
-    u16 rb = 0;
-    u8 d, rgb[4] = {0, 0, 0, 0};
+    u16 rb = 0, cs;
+    u8 d, a[4] = {0, 0, 0, 0}, b[4] = {0, 0, 0, 0}, e[4] = {0, 0, 0, 0}, chk = 0;
 
     if (!c->sklo || ev->screenX < kSkBtnL || ev->screenX >= kSkBtnR || ev->screenY < kSkBtnT || ev->screenY >= kSkBtnB)
         return 0;
     bm = ((void *(*)(void *))T8(T8_WinGetBitmap))(((WinFn)T8(T8_WinGetDisplayWindow))());
-    if (!bm) return 0;
-    ((void (*)(void *, s16 *, s16 *, u16 *))T8(T8_BmpGetDimensions))(bm, &w, &h, &rb);
-    d = ((u8 (*)(void *))T8(T8_BmpGetBitDepth))(bm);
-    bits = (const u8 *)((void *(*)(void *))T8(T8_BmpGetBits))(bm);
-    if (w != 320 || !bits) return 0;
-    if (d == 16 && rb == 640) {
-        u16 px = *(const u16 *)(bits + 440 * 640 + 38 * 2);
-        rgb[1] = (u8)((px >> 11) << 3);
-        rgb[3] = (u8)((px & 0x1F) << 3);
-    } else if (d == 8 && rb == 320) {
-        ((void (*)(u8, u8 *))T8(T8_WinIndexToRGB))(bits[440 * 320 + 38], rgb);   /* RGBColorType: index, r, g, b */
-    } else
-        return 0;
-    return rgb[3] >= 224 && rgb[1] <= 180;   /* 파랑: B가 크고 R이 작다(회색은 R = B) */
+    if (bm) {
+        ((void (*)(void *, s16 *, s16 *, u16 *))T8(T8_BmpGetDimensions))(bm, &w, &h, &rb);
+        d = ((u8 (*)(void *))T8(T8_BmpGetBitDepth))(bm);
+        bits = (const u8 *)((void *(*)(void *))T8(T8_BmpGetBits))(bm);
+        if (bits && w == 320 && h == 320 && ((d == 16 && rb == 640) || (d == 8 && rb == 320))) {
+            chk |= 1;
+            old = ((FormPtrFn)T8(T8_WinSetDrawWindow))(((WinFn)T8(T8_WinGetDisplayWindow))());
+            cs = ((u16 (*)(u16))T8(T8_WinSetCoordinateSystem))(0);   /* 기기 좌표 */
+            FbRGB(bits, d, 300, 300, a);
+            if (d == 16) {
+                ((void (*)(s16, s16, u8 *))T8(T8_WinGetPixelRGB))(300, 300, b);
+                if ((a[1] >> 3) == (b[1] >> 3) && (a[2] >> 2) == (b[2] >> 2) && (a[3] >> 3) == (b[3] >> 3)) chk |= 2;
+            } else if (((u8 (*)(s16, s16))T8(T8_WinGetPixel))(300, 300) == a[0])
+                chk |= 2;
+            ((u16 (*)(u16))T8(T8_WinSetCoordinateSystem))(cs);
+            ((FormPtrFn)T8(T8_WinSetDrawWindow))(old);
+#ifdef MN_TEST_FBBAD   /* 시험 빌드: 버퍼 배치가 다른 기기 흉내 — 앱 화면 점이 다르게 읽힘 */
+            chk &= ~2;
+#endif
+            if (chk & 2) {
+                FbRGB(bits, d, 265, 425, a);
+                FbRGB(bits, d, 265, 450, b);
+                FbRGB(bits, d, 265, 437, e);
+                if (Dark(a) && Dark(b) && !Dark(e)) chk |= 4;
+            }
+            if (chk & 4) {
+                FbRGB(bits, d, 38, 440, a);
+                if (a[3] >= 224 && a[1] <= 180) chk |= 8;   /* 파랑: B가 크고 R이 작다(회색은 R = B) */
+            }
+        }
+    }
+    c->skchk = (((c->skchk >> 16) + 1) << 16) | chk;
+    return chk == 15;
 }
 
 void HgGetEvent(struct NEvent *ev, s32 timeout)
@@ -396,11 +432,6 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
     st[7]++;
 #endif
     if (!ev) return;
-    if ((c->skbpen & 1) && (ev->eType == penMoveEvent || ev->eType == penUpEvent)) {   /* v29: 한/A 단추를 누른 펜 */
-        if (ev->eType == penUpEvent) c->skbpen &= ~1u;
-        ev->eType = nilEvent;
-        return;
-    }
     if (c->skhold) {
         if (ev->eType == keyDownEvent && ev->chr == vchrSilkResize && c->skhold != kSkWait) {
             if (--c->skhold == 0) c->skhold = kSkWait;   /* 복원은 이 이벤트 처리 뒤 — 앱 화면이 줄 때까지 기다림 */
@@ -448,9 +479,7 @@ void HgGetEvent(struct NEvent *ev, s32 timeout)
                 st[0] = 0;
                 c->mark |= 1;
                 c->skr = 1;   /* 자판·단추를 새 모드로 다시 그림(v27) */
-                c->skbpen |= 1;
-                Log(ev, 3);
-                ev->eType = nilEvent;
+                Log(ev, 3);   /* v31: 펜은 막지 않고 Sony 자판에 그대로(빈자리라 자판은 아무것도 안 함) — 막으면 다음 키가 빠졌다 */
             }
             return;
         }
